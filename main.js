@@ -2,15 +2,19 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { createWorkspaceFs } = require('./lib/workspaceFs');
+const { PreviewRuntimeManager } = require('./lib/previewRuntimeManager');
+const { TerminalManager } = require('./lib/terminalManager');
 const { TerminalSession, defaultShell } = require('./lib/terminalSession');
 
 const workspaceRoot = process.cwd();
 const workspaceFs = createWorkspaceFs(workspaceRoot);
 let mainWindow;
-let terminalSession;
 let rendererWatcher;
 let rendererChangeDebounce;
+let terminalManager;
+let previewRuntimeManager;
 
 function getStartupTerminalCommand(options = {}) {
   if (process.env.PXCODE_DISABLE_AUTO_TUI === '1') {
@@ -22,7 +26,7 @@ function getStartupTerminalCommand(options = {}) {
     return preferred.trim();
   }
 
-  return 'clear; command -v codex >/dev/null 2>&1 && exec env TERM=xterm-256color codex || echo "codex CLI not found in PATH."';
+  return 'clear; if command -v codex >/dev/null 2>&1; then env TERM=xterm-256color codex resume --last || env TERM=xterm-256color codex; else echo "codex CLI not found in PATH."; fi';
 }
 
 function createWindow() {
@@ -34,10 +38,24 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      webviewTag: true,
     },
   });
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    const isRefreshShortcut =
+      input.type === 'keyDown' &&
+      input.key &&
+      input.key.toLowerCase() === 'r' &&
+      (input.meta || input.control);
+    if (!isRefreshShortcut) return;
+    event.preventDefault();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('app:refreshShortcut');
+    }
+  });
 
   if (process.env.PXCODE_CAPTURE_ON_LOAD === '1') {
     const capturePath = path.join(workspaceRoot, 'screenshots', 'live-capture', `capture-${Date.now()}.png`);
@@ -74,10 +92,44 @@ function watchRendererFiles() {
 
 function attachIpcHandlers() {
   ipcMain.handle('workspace:getRoot', () => workspaceRoot);
+  ipcMain.handle('workspace:resolvePath', (_event, relPath = '.') => {
+    return workspaceFs.resolveWorkspacePath(relPath);
+  });
   ipcMain.handle('terminal:getStartupCommand', (_event, options = {}) => getStartupTerminalCommand(options));
   const terminalSpawnArgs = (startupCommand = '') => {
     if (!startupCommand || !startupCommand.trim()) return [];
     return ['-lc', startupCommand];
+  };
+  const ensureTerminalManager = () => {
+    if (terminalManager) return terminalManager;
+    terminalManager = new TerminalManager({
+      createSession({ cwd, startupCommand }) {
+        return new TerminalSession({
+          shell: defaultShell(),
+          argv: terminalSpawnArgs(startupCommand),
+          cwd: workspaceFs.resolveWorkspacePath(cwd),
+        });
+      },
+      sendData(data) {
+        mainWindow.webContents.send('terminal:data', data);
+      },
+      sendExit(payload) {
+        mainWindow.webContents.send('terminal:exit', payload);
+      },
+    });
+    return terminalManager;
+  };
+  const ensurePreviewRuntimeManager = () => {
+    if (previewRuntimeManager) return previewRuntimeManager;
+    previewRuntimeManager = new PreviewRuntimeManager({
+      shell: defaultShell(),
+      sendStatus(payload) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('preview:status', payload);
+        }
+      },
+    });
+    return previewRuntimeManager;
   };
 
   ipcMain.handle('fs:listDir', async (_event, relPath = '.') => {
@@ -85,7 +137,14 @@ function attachIpcHandlers() {
   });
 
   ipcMain.handle('fs:readFile', async (_event, relPath) => {
-    return workspaceFs.readFile(relPath);
+    try {
+      return await workspaceFs.readFile(relPath);
+    } catch (error) {
+      if (error && error.code === 'ENOENT') {
+        return { path: relPath, content: '' };
+      }
+      throw error;
+    }
   });
 
   ipcMain.handle('fs:writeFile', async (_event, relPath, content) => {
@@ -96,49 +155,55 @@ function attachIpcHandlers() {
     return workspaceFs.mkdir(relPath);
   });
 
+  ipcMain.handle('preview:resolveHtmlFile', async (_event, relPath) => {
+    const absolutePath = workspaceFs.resolveWorkspacePath(relPath);
+    await fsp.access(absolutePath, fs.constants.R_OK);
+    return {
+      path: absolutePath,
+      url: pathToFileURL(absolutePath).href,
+    };
+  });
+
+  ipcMain.handle('preview:syncRuntime', (_event, projectPath = '.', options = {}) => {
+    const manager = ensurePreviewRuntimeManager();
+    const cwd = workspaceFs.resolveWorkspacePath(projectPath);
+    return manager.syncProject(projectPath, {
+      cwd,
+      sourceType: options.sourceType,
+      command: options.command,
+      url: options.url,
+      autoStart: options.autoStart,
+    });
+  });
+
+  ipcMain.handle('preview:startRuntime', (_event, projectPath = '.', options = {}) => {
+    const manager = ensurePreviewRuntimeManager();
+    const cwd = workspaceFs.resolveWorkspacePath(projectPath);
+    return manager.start(projectPath, {
+      cwd,
+      sourceType: options.sourceType || 'server',
+      command: options.command,
+      url: options.url,
+    });
+  });
+
+  ipcMain.handle('preview:stopRuntime', (_event, projectPath = '.') => {
+    ensurePreviewRuntimeManager().stop(projectPath, { keepStoppedState: true });
+    return { ok: true };
+  });
+
   ipcMain.handle('terminal:start', (_event, cwd = '.', options = {}) => {
-    if (terminalSession) return { ok: true, hasPseudoTTY: terminalSession.hasPseudoTTY === true };
-
-    terminalSession = new TerminalSession({
-      shell: defaultShell(),
-      argv: terminalSpawnArgs(options.startupCommand),
-      cwd: workspaceFs.resolveWorkspacePath(cwd),
+    return ensureTerminalManager().start(cwd, {
+      cwd,
+      startupCommand: options.startupCommand,
     });
-
-    terminalSession.onData((data) => {
-      mainWindow.webContents.send('terminal:data', data);
-    });
-
-    terminalSession.onExit(() => {
-      terminalSession = null;
-      mainWindow.webContents.send('terminal:exit');
-    });
-
-    return { ok: true, hasPseudoTTY: terminalSession.hasPseudoTTY === true };
   });
 
   ipcMain.handle('terminal:restart', (_event, cwd = '.', options = {}) => {
-    if (terminalSession) {
-      terminalSession.kill();
-      terminalSession = null;
-    }
-
-    terminalSession = new TerminalSession({
-      shell: defaultShell(),
-      argv: terminalSpawnArgs(options.startupCommand),
-      cwd: workspaceFs.resolveWorkspacePath(cwd),
+    return ensureTerminalManager().restart(cwd, {
+      cwd,
+      startupCommand: options.startupCommand,
     });
-
-    terminalSession.onData((data) => {
-      mainWindow.webContents.send('terminal:data', data);
-    });
-
-    terminalSession.onExit(() => {
-      terminalSession = null;
-      mainWindow.webContents.send('terminal:exit');
-    });
-
-    return { ok: true, hasPseudoTTY: terminalSession.hasPseudoTTY === true };
   });
 
   ipcMain.handle('renderer:watchStart', () => {
@@ -147,22 +212,15 @@ function attachIpcHandlers() {
   });
 
   ipcMain.on('terminal:write', (_event, data) => {
-    if (terminalSession) {
-      terminalSession.write(data);
-    }
+    ensureTerminalManager().write(data);
   });
 
   ipcMain.on('terminal:resize', (_event, cols, rows) => {
-    if (terminalSession) {
-      terminalSession.resize(cols, rows);
-    }
+    ensureTerminalManager().resize(cols, rows);
   });
 
   ipcMain.on('terminal:kill', () => {
-    if (terminalSession) {
-      terminalSession.kill();
-      terminalSession = null;
-    }
+    ensureTerminalManager().kill();
   });
 }
 
@@ -184,8 +242,12 @@ app.on('will-quit', () => {
     rendererWatcher.close();
     rendererWatcher = null;
   }
-  if (terminalSession) {
-    terminalSession.kill();
-    terminalSession = null;
+  if (terminalManager) {
+    terminalManager.kill();
+    terminalManager = null;
+  }
+  if (previewRuntimeManager) {
+    previewRuntimeManager.stopAll();
+    previewRuntimeManager = null;
   }
 });

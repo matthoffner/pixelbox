@@ -3,6 +3,7 @@
 `pixelbox` is an Electron workspace shell for agentic software work:
 - Floating terminal/chat panel
 - Project switcher with in-app preview frame
+- Persistent terminal/Codex session per project
 - Back/forward/reload navigation per project session
 - Integrated shell terminal via `node-pty` with stdio fallback + `xterm`
 

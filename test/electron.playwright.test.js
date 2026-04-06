@@ -217,6 +217,76 @@ test('playwright: electron launches and terminal executes a command', { timeout:
   }
 });
 
+test('playwright: project history navigation restores per-project terminal sessions', { timeout: 180000 }, async (t) => {
+  if (!process.env.RUN_PLAYWRIGHT_E2E) {
+    t.skip('Set RUN_PLAYWRIGHT_E2E=1 to run Electron Playwright tests');
+    return;
+  }
+
+  const launched = await launchApp(t);
+  if (!launched) return;
+
+  const { app, window } = launched;
+
+  try {
+    await window.waitForSelector('.project-btn');
+    const labels = (await window.locator('.project-btn').allTextContents())
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const target = labels.find((name) => name !== 'workspace');
+    if (!target) {
+      t.skip('No non-workspace project available to validate project history');
+      return;
+    }
+
+    const markerA = `__PW_A_${Date.now()}__`;
+    const markerW = `__PW_W_${Date.now()}__`;
+
+    await window.locator(`.project-btn:has-text("${target}")`).first().click();
+    await window.waitForFunction(
+      (label) => {
+        const el = document.getElementById('active-project');
+        return Boolean(el && el.textContent && el.textContent.toLowerCase().includes(label.toLowerCase()));
+      },
+      target,
+      { timeout: 30000 }
+    );
+    await runTypedInTerminal(window, `echo ${markerA}`, markerA, 30000);
+
+    await window.locator('.project-btn:has-text("workspace")').first().click();
+    await window.waitForFunction(() => {
+      const el = document.getElementById('active-project');
+      return Boolean(el && el.textContent && el.textContent.includes('workspace root'));
+    }, undefined, { timeout: 30000 });
+    await runTypedInTerminal(window, `echo ${markerW}`, markerW, 30000);
+
+    await window.click('#preview-back');
+    await window.waitForFunction(
+      (label) => {
+        const el = document.getElementById('active-project');
+        return Boolean(el && el.textContent && el.textContent.toLowerCase().includes(label.toLowerCase()));
+      },
+      target,
+      { timeout: 30000 }
+    );
+
+    const onBackText = await window.evaluate(() => window.__pwTerminalOutput || '');
+    assert.match(onBackText, new RegExp(markerA));
+    assert.doesNotMatch(onBackText, new RegExp(markerW));
+
+    await window.click('#preview-forward');
+    await window.waitForFunction(() => {
+      const el = document.getElementById('active-project');
+      return Boolean(el && el.textContent && el.textContent.includes('workspace root'));
+    }, undefined, { timeout: 30000 });
+
+    const onForwardText = await window.evaluate(() => window.__pwTerminalOutput || '');
+    assert.match(onForwardText, new RegExp(markerW));
+  } finally {
+    await closeApp(app);
+  }
+});
+
 test('playwright: codex edits renderer html and UI updates live', { timeout: 420000 }, async (t) => {
   if (!process.env.RUN_PLAYWRIGHT_E2E) {
     t.skip('Set RUN_PLAYWRIGHT_E2E=1 to run Electron Playwright tests');
@@ -504,6 +574,109 @@ test('playwright: terminal creates a Next.js project and runs dev server', { tim
       shotLabel: 'step-04-openclaw-response',
     }).catch(() => {});
     await captureStepShot(window, shotDir, 'step-04-cleanup');
+    await closeApp(app);
+  }
+});
+
+test('playwright: switch project and run npm dev shows preview', { timeout: 240000 }, async (t) => {
+  if (!process.env.RUN_PLAYWRIGHT_E2E) {
+    t.skip('Set RUN_PLAYWRIGHT_E2E=1 to run Electron Playwright tests');
+    return;
+  }
+
+  const projectName = `pixelbox-smoke-${Date.now()}`;
+  const projectRel = `projects/${projectName}`;
+  const projectAbs = path.join(workspaceRoot, projectRel);
+  const port = 4123;
+  const marker = `pixelbox smoke ${Date.now()}`;
+  const packageJson = {
+    name: projectName,
+    private: true,
+    version: '0.0.1',
+    scripts: {
+      dev: 'node dev-server.js',
+    },
+  };
+  const serverJs = [
+    "const http = require('node:http');",
+    `const port = ${port};`,
+    `const marker = ${JSON.stringify(marker)};`,
+    'const server = http.createServer((_req, res) => {',
+    "  res.setHeader('content-type', 'text/html; charset=utf-8');",
+    "  res.end(`<html><body><h1>${marker}</h1></body></html>`);",
+    '});',
+    'server.listen(port, () => {',
+    "  console.log(`http://127.0.0.1:${port}`);",
+    '});',
+    "process.on('SIGINT', () => server.close(() => process.exit(0)));",
+  ].join('\n');
+
+  await fs.mkdir(projectAbs, { recursive: true });
+  await fs.writeFile(path.join(projectAbs, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
+  await fs.writeFile(path.join(projectAbs, 'dev-server.js'), `${serverJs}\n`, 'utf8');
+
+  const launched = await launchApp(t);
+  if (!launched) return;
+  const { app, window } = launched;
+
+  try {
+    const projectButton = window.locator(`button.project-btn:has-text("${projectName}")`);
+    await projectButton.waitFor({ state: 'visible', timeout: 30000 });
+    await projectButton.click();
+    await window.waitForFunction(
+      (projectPath) => {
+        const el = document.getElementById('active-project');
+        return Boolean(el && el.textContent && el.textContent.includes(projectPath));
+      },
+      projectRel,
+      { timeout: 30000 }
+    );
+
+    await window.click('#terminal');
+    const beforeScriptsCheck = await window.evaluate(() => (window.__pwTerminalOutput || '').length);
+    await window.keyboard.type('npm run', { delay: 2 });
+    await window.keyboard.press('Enter');
+    await window.waitForFunction(
+      ({ baseline }) => {
+        const text = window.__pwTerminalOutput || '';
+        if (text.length <= baseline) return false;
+        const tail = text.slice(-4000).toLowerCase();
+        return tail.includes('scripts available') && tail.includes('dev');
+      },
+      { baseline: beforeScriptsCheck },
+      { timeout: 30000 }
+    );
+
+    await window.click('#terminal');
+    await window.keyboard.type('npm run dev', { delay: 2 });
+    await window.keyboard.press('Enter');
+
+    const expectedUrl = `http://127.0.0.1:${port}`;
+    await window.waitForFunction(
+      (url) => {
+        const label = document.getElementById('preview-url');
+        return Boolean(label && label.textContent && label.textContent.includes(url));
+      },
+      expectedUrl,
+      { timeout: 60000 }
+    );
+
+    await window.waitForFunction(
+      (url) => {
+        const frame = document.getElementById('preview-frame');
+        return Boolean(frame && frame.getAttribute('src') && frame.getAttribute('src').includes(url));
+      },
+      expectedUrl,
+      { timeout: 60000 }
+    );
+
+    const response = await waitForHttp(expectedUrl, 30000);
+    const html = await response.text();
+    assert.match(html, new RegExp(marker));
+  } finally {
+    await window.evaluate(() => {
+      window.api.writeTerminal('\u0003');
+    }).catch(() => {});
     await closeApp(app);
   }
 });

@@ -3,46 +3,77 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PxCode</title>
+    <title>Pixelbox</title>
     <link rel="stylesheet" href="../node_modules/xterm/css/xterm.css" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body class="layout-0">
     <main id="landing">
-      <p class="eyebrow">PxCode</p>
+      <p class="eyebrow">Pixelbox</p>
       <h1 id="headline">Build Directly From The App</h1>
       <p class="description">Create project folders, switch between them, and run a terminal bound to that directory.</p>
 
       <section id="projects-panel" aria-label="Projects">
         <div class="projects-header">
           <strong>Projects</strong>
-          <button id="new-project" type="button">New Project</button>
+          <div class="projects-actions">
+            <button id="new-project" type="button">New Project</button>
+            <button id="projects-minimize" type="button" aria-label="Hide menu">-</button>
+          </div>
         </div>
         <div id="active-project">Active: workspace root</div>
         <div id="projects-list"></div>
+        <section id="running-page-panel" aria-label="Running Page">
+          <div class="running-page-header">
+            <strong>Running Page</strong>
+            <div id="running-page-status">Not configured</div>
+          </div>
+          <label class="running-field">
+            <span>Source</span>
+            <select id="running-page-type">
+              <option value="none">None</option>
+              <option value="html">HTML file</option>
+              <option value="server">Node/server command</option>
+            </select>
+          </label>
+          <label class="running-field" data-source="html">
+            <span>HTML file</span>
+            <input id="running-page-html" type="text" placeholder="generated/landing.html" />
+          </label>
+          <label class="running-field" data-source="server">
+            <span>Server command</span>
+            <input id="running-page-command" type="text" placeholder="npm run dev" />
+          </label>
+          <label class="running-field" data-source="server">
+            <span>Server URL</span>
+            <input id="running-page-url-input" type="text" placeholder="localhost target" />
+          </label>
+          <label id="running-page-autostart-field" class="running-checkbox" data-source="server">
+            <input id="running-page-autostart" type="checkbox" checked />
+            <span>Auto-start when this project opens</span>
+          </label>
+          <div id="running-page-actions">
+            <button id="running-page-save" type="button">Save</button>
+            <button id="running-page-start" type="button">Start</button>
+            <button id="running-page-stop" type="button">Stop</button>
+          </div>
+        </section>
       </section>
 
-      <section id="preview-shell" aria-label="Project Preview">
-        <header id="preview-header">
-          <strong>Preview</strong>
-          <div id="preview-nav">
-            <button id="preview-back" type="button" aria-label="Back">Back</button>
-            <button id="preview-forward" type="button" aria-label="Forward">Forward</button>
-            <button id="preview-reload" type="button" aria-label="Reload">Reload</button>
+      <section id="preview-shell" aria-label="Project View">
+        <div id="preview-viewport">
+          <div id="preview-empty-state">
+            <strong>Nothing live yet</strong>
+            <p>Run your app in the terminal below. It will load here when ready.</p>
           </div>
-        </header>
-        <div id="preview-url">No running page detected for this project yet.</div>
-        <iframe
-          id="preview-frame"
-          title="Project preview"
-          sandbox="allow-same-origin allow-scripts allow-forms"
-          src="about:blank"
-        ></iframe>
+          <div id="preview-frame-host" aria-live="polite"></div>
+        </div>
       </section>
 
       <button id="primary-action" type="button">Open Terminal</button>
     </main>
 
+    <button id="projects-toggle" aria-label="Open menu">Menu</button>
     <button id="chat-toggle" aria-label="Open terminal">Terminal</button>
 
     <section id="chat-panel" class="open" aria-label="Terminal panel">
