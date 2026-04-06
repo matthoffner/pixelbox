@@ -1,0 +1,33 @@
+{
+  "name": "self-hosted-electron-editor",
+  "version": "0.1.0",
+  "description": "Electron app with built-in code editor and terminal",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "dev:capture": "PXCODE_CAPTURE_ON_LOAD=1 electron .",
+    "start": "electron .",
+    "test": "node --test",
+    "test:codex": "RUN_CODEX_E2E=1 node --test test/terminal.codex.e2e.test.js",
+    "test:pw": "node --test test/electron.playwright.test.js",
+    "test:pw:run": "RUN_PLAYWRIGHT_E2E=1 node --test test/electron.playwright.test.js",
+    "test:pw:codex": "RUN_PLAYWRIGHT_E2E=1 RUN_CODEX_E2E=1 node --test test/electron.playwright.test.js",
+    "test:pw:codex-usability": "RUN_PLAYWRIGHT_E2E=1 RUN_CODEX_USABILITY_E2E=1 node --test test/electron.playwright.test.js",
+    "test:pw:codex-trace": "node test/pw_codex_trace.js",
+    "test:pw:codex-tui-trace": "node test/pw_codex_tui_trace.js",
+    "test:pw:codex-loop": "node test/pw_codex_thread_loop.js",
+    "test:pw:codex-next-long": "node test/pw_codex_long_session_next.js",
+    "test:pw:openclaw": "RUN_PLAYWRIGHT_E2E=1 RUN_OPENCLAW_E2E=1 node --test test/electron.playwright.test.js",
+    "test:pw:next": "RUN_PLAYWRIGHT_E2E=1 RUN_NEXT_SMOKE=1 node --test test/electron.playwright.test.js"
+  },
+  "dependencies": {
+    "electron": "^30.0.0",
+    "monaco-editor": "^0.52.0",
+    "node-pty": "^1.0.0",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.59.1"
+  }
+}

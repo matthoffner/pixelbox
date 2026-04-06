@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Northstar | Launch Faster</title>
+  <meta name="description" content="Northstar helps modern teams ship campaigns and products in days, not months." />
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --ink: #12263a;
+      --muted: #4b5f74;
+      --card: #fffaf4;
+      --line: #dacdbd;
+      --accent: #ee6c4d;
+      --accent-2: #2a9d8f;
+      --accent-3: #f4a261;
+      --shadow: 0 16px 45px rgba(18, 38, 58, 0.15);
+      --radius: 18px;
+      --max: 1120px;
+      --serif: "Fraunces", "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+      --sans: "Avenir Next", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(900px 500px at -10% -10%, rgba(238,108,77,0.22), transparent 60%),
+        radial-gradient(900px 600px at 110% 0%, rgba(42,157,143,0.18), transparent 60%),
+        linear-gradient(180deg, #f8f4ee 0%, var(--bg) 35%, #efe8dc 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .grain::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.07;
+      background-image:
+        radial-gradient(circle at 20% 30%, #000 0.4px, transparent 0.8px),
+        radial-gradient(circle at 70% 60%, #000 0.4px, transparent 0.8px),
+        radial-gradient(circle at 40% 80%, #000 0.4px, transparent 0.8px);
+      background-size: 18px 18px, 22px 22px, 26px 26px;
+      z-index: -1;
+    }
+
+    .container {
+      width: min(100% - 2.2rem, var(--max));
+      margin: 0 auto;
+    }
+
+    header {
+      padding: 1rem 0;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(8px);
+      background: rgba(248, 244, 238, 0.78);
+      border-bottom: 1px solid rgba(218, 205, 189, 0.7);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--ink);
+      text-decoration: none;
+    }
+
+    .mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(140deg, var(--accent), var(--accent-2));
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 1rem;
+      box-shadow: 0 8px 18px rgba(18, 38, 58, 0.2);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.95rem;
+      transition: color 180ms ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--ink);
+    }
+
+    .btn {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 0.7rem 1.1rem;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: var(--sans);
+    }
+
+    .btn:focus-visible {
+      outline: 3px solid rgba(42,157,143,0.45);
+      outline-offset: 2px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #d8583b);
+      color: #fff;
+      box-shadow: 0 8px 22px rgba(238,108,77,0.35);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(238,108,77,0.45);
+    }
+
+    .btn-ghost {
+      color: var(--ink);
+      border-color: rgba(18, 38, 58, 0.2);
+      background: rgba(255,255,255,0.45);
+    }
+
+    .btn-ghost:hover {
+      transform: translateY(-2px);
+      background: rgba(255,255,255,0.85);
+    }
+
+    .hero {
+      padding: clamp(2.5rem, 5vw, 5rem) 0 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-wrap {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: clamp(1.2rem, 3vw, 2.8rem);
+      align-items: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.55);
+      color: var(--muted);
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    h1 {
+      margin: 1rem 0 0.8rem;
+      font-family: var(--serif);
+      font-size: clamp(2.2rem, 5.4vw, 4.3rem);
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      text-wrap: balance;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(1rem, 1.5vw, 1.18rem);
+      line-height: 1.65;
+      max-width: 56ch;
+    }
+
+    .cta-row {
+      margin-top: 1.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .proof {
+      margin-top: 1rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .hero-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1.1rem;
+      position: relative;
+      transform: rotate(-1.2deg);
+      animation: floatIn 900ms cubic-bezier(.2,.75,.15,1) forwards;
+      opacity: 0;
+    }
+
+    .hero-card::before {
+      content: "";
+      position: absolute;
+      right: -12px;
+      bottom: -12px;
+      width: 110px;
+      height: 110px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(42,157,143,0.18), transparent 68%);
+      z-index: -1;
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 0.88rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .bars {
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .bar {
+      background: #f2e9dc;
+      border-radius: 10px;
+      overflow: hidden;
+      height: 12px;
+      border: 1px solid #e3d7c7;
+    }
+
+    .bar > span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent-2), #4fb9ac);
+      transform-origin: left;
+      animation: grow 1.3s ease forwards;
+    }
+
+    .metric-grid {
+      margin-top: 0.9rem;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.65rem;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0.65rem;
+      background: rgba(255,255,255,0.75);
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 1.05rem;
+      font-family: var(--serif);
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .logos {
+      padding: 1.3rem 0 0.2rem;
+    }
+
+    .logo-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 0.6rem;
+    }
+
+    .logo {
+      background: rgba(255,255,255,0.5);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      min-height: 56px;
+      display: grid;
+      place-items: center;
+      color: #5d6f81;
+      font-weight: 800;
+      letter-spacing: 0.07em;
+      font-size: 0.76rem;
+      text-transform: uppercase;
+    }
+
+    .section {
+      padding: clamp(2.2rem, 4vw, 4rem) 0;
+    }
+
+    .section h2 {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: clamp(1.6rem, 3.5vw, 2.7rem);
+      letter-spacing: -0.015em;
+    }
+
+    .section-intro {
+      margin-top: 0.6rem;
+      color: var(--muted);
+      max-width: 65ch;
+      line-height: 1.65;
+    }
+
+    .features {
+      margin-top: 1.3rem;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.95rem;
+    }
+
+    .feature {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1rem;
+      transform: translateY(14px);
+      opacity: 0;
+      transition: transform 500ms ease, opacity 500ms ease;
+    }
+
+    .feature.reveal {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      font-size: 0.95rem;
+      color: #fff;
+      margin-bottom: 0.75rem;
+    }
+
+    .i1 { background: linear-gradient(135deg, var(--accent-2), #1f7f74); }
+    .i2 { background: linear-gradient(135deg, var(--accent), #cf5337); }
+    .i3 { background: linear-gradient(135deg, var(--accent-3), #e58f3d); }
+
+    .feature h3 {
+      margin: 0;
+      font-size: 1.05rem;
+      letter-spacing: -0.01em;
+    }
+
+    .feature p {
+      margin: 0.55rem 0 0;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 0.95rem;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.3rem;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1.1rem;
+    }
+
+    .panel h3 {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+
+    .panel ul {
+      list-style: none;
+      margin: 0.85rem 0 0;
+      padding: 0;
+      display: grid;
+      gap: 0.6rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .panel li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.55rem;
+      line-height: 1.5;
+    }
+
+    .tick {
+      width: 1.1rem;
+      flex: 0 0 1.1rem;
+      color: var(--accent-2);
+      font-weight: 900;
+    }
+
+    .testimonial {
+      margin-top: 1.2rem;
+      background: linear-gradient(140deg, rgba(255,255,255,0.8), rgba(255,250,244,0.88));
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1.1rem;
+    }
+
+    blockquote {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: 1.2rem;
+      line-height: 1.45;
+      letter-spacing: -0.01em;
+      text-wrap: pretty;
+    }
+
+    .cite {
+      margin-top: 0.7rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .cta {
+      padding: clamp(2.2rem, 5vw, 3.8rem) 0;
+    }
+
+    .cta-box {
+      background: linear-gradient(140deg, #17324a, #12263a);
+      color: #e8f1f8;
+      border-radius: 18px;
+      padding: clamp(1.3rem, 3.2vw, 2.4rem);
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 1rem;
+      align-items: center;
+      box-shadow: 0 16px 34px rgba(18, 38, 58, 0.28);
+    }
+
+    .cta-box h2 {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: clamp(1.6rem, 3.4vw, 2.5rem);
+      letter-spacing: -0.015em;
+      color: #fff;
+    }
+
+    .cta-box p {
+      margin: 0.6rem 0 0;
+      color: #c7d7e4;
+      line-height: 1.65;
+      max-width: 48ch;
+    }
+
+    .cta-actions {
+      display: flex;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 0.7rem;
+    }
+
+    .cta .btn-primary {
+      background: linear-gradient(135deg, #ee6c4d, #ff8769);
+    }
+
+    .cta .btn-ghost {
+      color: #fff;
+      border-color: rgba(255,255,255,0.35);
+      background: rgba(255,255,255,0.08);
+    }
+
+    footer {
+      padding: 1.2rem 0 2rem;
+      color: #5f6f80;
+      font-size: 0.9rem;
+    }
+
+    .foot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      border-top: 1px solid rgba(218, 205, 189, 0.9);
+      padding-top: 1rem;
+    }
+
+    @keyframes floatIn {
+      0% {
+        opacity: 0;
+        transform: translateY(14px) rotate(-2.5deg) scale(0.98);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) rotate(-1.2deg) scale(1);
+      }
+    }
+
+    @keyframes grow {
+      from {
+        transform: scaleX(0.12);
+      }
+      to {
+        transform: scaleX(1);
+      }
+    }
+
+    @media (max-width: 980px) {
+      .hero-wrap,
+      .cta-box,
+      .split {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-card {
+        transform: rotate(0deg);
+      }
+
+      .cta-actions {
+        justify-content: flex-start;
+      }
+
+      .logo-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .features {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 640px) {
+      .logo-row,
+      .features {
+        grid-template-columns: 1fr;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .hero {
+        padding-top: 2rem;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
+      }
+
+      .feature {
+        opacity: 1;
+        transform: none;
+      }
+    }
+  </style>
+</head>
+<body class="grain">
+  <header>
+    <div class="container nav" aria-label="Main navigation">
+      <a class="brand" href="#top" aria-label="Northstar home">
+        <span class="mark" aria-hidden="true">N</span>
+        <span>Northstar</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#results">Results</a>
+        <a href="#pricing">Pricing</a>
+        <a class="btn btn-primary" href="#demo">Book Demo</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="container hero-wrap">
+        <div>
+          <span class="eyebrow">Now shipping in 40+ countries</span>
+          <h1>Turn strategy decks into launched products in 14 days.</h1>
+          <p>
+            Northstar gives lean teams the operating system for growth: campaign planning,
+            content workflows, approvals, and launch analytics in one focused workspace.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="#demo">Start Free Trial</a>
+            <a class="btn btn-ghost" href="#features">See It In Action</a>
+          </div>
+          <div class="proof" role="list" aria-label="Key proof points">
+            <span role="listitem">4.9/5 customer satisfaction</span>
+            <span role="listitem">No credit card required</span>
+            <span role="listitem">Migration in under 48h</span>
+          </div>
+        </div>
+
+        <aside class="hero-card" aria-label="Performance snapshot">
+          <div class="card-top">
+            <span>Q2 Launch Velocity</span>
+            <span>+187%</span>
+          </div>
+          <div class="bars" aria-hidden="true">
+            <div class="bar"><span style="width: 82%"></span></div>
+            <div class="bar"><span style="width: 74%; animation-delay: 90ms"></span></div>
+            <div class="bar"><span style="width: 92%; animation-delay: 180ms"></span></div>
+            <div class="bar"><span style="width: 66%; animation-delay: 260ms"></span></div>
+          </div>
+          <div class="metric-grid">
+            <div class="metric"><strong>2.4x</strong><span>Faster campaign cycles</span></div>
+            <div class="metric"><strong>38%</strong><span>Lower acquisition cost</span></div>
+            <div class="metric"><strong>91%</strong><span>On-time launch rate</span></div>
+            <div class="metric"><strong>12h</strong><span>Average weekly time saved</span></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="logos container" aria-label="Trusted by teams">
+      <div class="logo-row">
+        <div class="logo">Lumen</div>
+        <div class="logo">Harbor</div>
+        <div class="logo">Fieldwork</div>
+        <div class="logo">Aster</div>
+        <div class="logo">Pioneer Co.</div>
+      </div>
+    </section>
+
+    <section id="features" class="section">
+      <div class="container">
+        <h2>Built for teams that need momentum, not more meetings.</h2>
+        <p class="section-intro">
+          Swap fragmented docs and status threads for one command center built for launch weeks.
+          Northstar keeps creative, operations, and leadership aligned from first brief to post-mortem.
+        </p>
+
+        <div class="features">
+          <article class="feature">
+            <div class="icon i1" aria-hidden="true">↗</div>
+            <h3>Campaign Control Tower</h3>
+            <p>View every launch timeline, blocker, and dependency in a single rolling board.</p>
+          </article>
+          <article class="feature">
+            <div class="icon i2" aria-hidden="true">⚑</div>
+            <h3>Approval Automation</h3>
+            <p>Route copy, legal, and design approvals automatically with full revision history.</p>
+          </article>
+          <article class="feature">
+            <div class="icon i3" aria-hidden="true">◎</div>
+            <h3>Live Performance Layer</h3>
+            <p>Connect channels and see launch impact in real time without exporting spreadsheets.</p>
+          </article>
+        </div>
+
+        <div class="split" id="results">
+          <article class="panel">
+            <h3>What teams get in week one</h3>
+            <ul>
+              <li><span class="tick">✓</span><span>Structured launch templates for product, paid, and lifecycle campaigns.</span></li>
+              <li><span class="tick">✓</span><span>Cross-functional dashboards tailored for executives, managers, and makers.</span></li>
+              <li><span class="tick">✓</span><span>Automated reporting that updates before your Monday standup.</span></li>
+            </ul>
+          </article>
+          <article class="panel" id="pricing">
+            <h3>Simple pricing that scales</h3>
+            <ul>
+              <li><span class="tick">✓</span><span>Starter: $49/month per team for up to 10 active campaigns.</span></li>
+              <li><span class="tick">✓</span><span>Growth: $149/month with advanced automations and integrations.</span></li>
+              <li><span class="tick">✓</span><span>Enterprise: custom security, SSO, and dedicated success architect.</span></li>
+            </ul>
+          </article>
+        </div>
+
+        <article class="testimonial" aria-label="Customer testimonial">
+          <blockquote>
+            "Northstar replaced three tools and cut our launch prep from six weeks to twelve days.
+            The team now spends time improving ideas, not chasing status updates."
+          </blockquote>
+          <div class="cite">Riley Chen, VP Growth at Harbor Labs</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="cta" id="demo">
+      <div class="container cta-box">
+        <div>
+          <h2>Make your next launch the smooth one.</h2>
+          <p>
+            Book a 20-minute walkthrough and get a tailored rollout plan for your current stack.
+            No slides, no pressure, just practical steps your team can use this week.
+          </p>
+        </div>
+        <div class="cta-actions">
+          <a href="#top" class="btn btn-primary">Book My Demo</a>
+          <a href="#features" class="btn btn-ghost">Explore Features</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container foot">
+      <span>© 2026 Northstar Inc.</span>
+      <span>Built for fast-moving teams.</span>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const items = document.querySelectorAll('.feature');
+      if (!('IntersectionObserver' in window)) {
+        items.forEach((el) => el.classList.add('reveal'));
+        return;
+      }
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('reveal');
+              observer.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.25 }
+      );
+
+      items.forEach((el, idx) => {
+        el.style.transitionDelay = String(idx * 80) + 'ms';
+        observer.observe(el);
+      });
+    })();
+  </script>
+</body>
+</html>

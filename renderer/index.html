@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PxCode</title>
+    <link rel="stylesheet" href="../node_modules/xterm/css/xterm.css" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="layout-0">
+    <main id="landing">
+      <p class="eyebrow">PxCode</p>
+      <h1 id="headline">Build Directly From The App</h1>
+      <p class="description">Create project folders, switch between them, and run a terminal bound to that directory.</p>
+
+      <section id="projects-panel" aria-label="Projects">
+        <div class="projects-header">
+          <strong>Projects</strong>
+          <button id="new-project" type="button">New Project</button>
+        </div>
+        <div id="active-project">Active: workspace root</div>
+        <div id="projects-list"></div>
+      </section>
+
+      <section id="preview-shell" aria-label="Project Preview">
+        <header id="preview-header">
+          <strong>Preview</strong>
+          <div id="preview-nav">
+            <button id="preview-back" type="button" aria-label="Back">Back</button>
+            <button id="preview-forward" type="button" aria-label="Forward">Forward</button>
+            <button id="preview-reload" type="button" aria-label="Reload">Reload</button>
+          </div>
+        </header>
+        <div id="preview-url">No running page detected for this project yet.</div>
+        <iframe
+          id="preview-frame"
+          title="Project preview"
+          sandbox="allow-same-origin allow-scripts allow-forms"
+          src="about:blank"
+        ></iframe>
+      </section>
+
+      <button id="primary-action" type="button">Open Terminal</button>
+    </main>
+
+    <button id="chat-toggle" aria-label="Open terminal">Terminal</button>
+
+    <section id="chat-panel" class="open" aria-label="Terminal panel">
+      <header id="chat-header">
+        <span>Directory Terminal</span>
+        <button id="chat-minimize" aria-label="Minimize terminal">-</button>
+      </header>
+      <div id="terminal" aria-label="Terminal output" tabindex="0"></div>
+    </section>
+
+    <script src="../node_modules/xterm/lib/xterm.js"></script>
+    <script src="../node_modules/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

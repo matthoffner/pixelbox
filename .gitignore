@@ -1,0 +1,17 @@
+node_modules/
+npm-debug.log*
+.DS_Store
+
+# Local runtime/session artifacts
+logs/
+screenshots/
+projects/
+.openclaw/
+
+# Local agent context files
+AGENTS.md
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
