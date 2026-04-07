@@ -2,6 +2,11 @@
 
 Pixelbox is a local AI software workspace: one app where you can switch projects, run agent terminals, and view the running app in-place.
 
+<<<<<<< Updated upstream
+=======
+![Pixelbox Screenshot](docs/images/pixelbox-ui.png)
+
+>>>>>>> Stashed changes
 ## Vision
 
 Pixelbox should feel like an AI-native operating surface for software creation:

@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('api', {
   readFile: (path) => ipcRenderer.invoke('fs:readFile', path),
   writeFile: (path, content) => ipcRenderer.invoke('fs:writeFile', path, content),
   mkdir: (path) => ipcRenderer.invoke('fs:mkdir', path),
+  removeDir: (path) => ipcRenderer.invoke('fs:removeDir', path),
   resolvePreviewHtmlFile: (path) => ipcRenderer.invoke('preview:resolveHtmlFile', path),
   syncPreviewRuntime: (projectPath, options = {}) => ipcRenderer.invoke('preview:syncRuntime', projectPath, options),
   startPreviewRuntime: (projectPath, options = {}) => ipcRenderer.invoke('preview:startRuntime', projectPath, options),

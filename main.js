@@ -155,6 +155,10 @@ function attachIpcHandlers() {
     return workspaceFs.mkdir(relPath);
   });
 
+  ipcMain.handle('fs:removeDir', async (_event, relPath) => {
+    return workspaceFs.removeDir(relPath);
+  });
+
   ipcMain.handle('preview:resolveHtmlFile', async (_event, relPath) => {
     const absolutePath = workspaceFs.resolveWorkspacePath(relPath);
     await fsp.access(absolutePath, fs.constants.R_OK);

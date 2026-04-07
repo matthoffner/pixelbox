@@ -20,6 +20,10 @@ const terminalEl = document.getElementById('terminal');
 const projectsListEl = document.getElementById('projects-list');
 const activeProjectEl = document.getElementById('active-project');
 const newProjectBtn = document.getElementById('new-project');
+const newProjectFormEl = document.getElementById('new-project-form');
+const newProjectNameEl = document.getElementById('new-project-name');
+const newProjectCreateEl = document.getElementById('new-project-create');
+const newProjectCancelEl = document.getElementById('new-project-cancel');
 const projectsToggleEl = document.getElementById('projects-toggle');
 const projectsMinimizeEl = document.getElementById('projects-minimize');
 const headlineEl = document.getElementById('headline');
@@ -45,6 +49,7 @@ let reloadTimer;
 let selectedProjectPath = '.';
 let startResult;
 let projectsPanelHidden = true;
+const hiddenProjects = new Set();
 const projectPreviewState = new Map();
 const projectRuntimeConfig = new Map();
 const projectRuntimeStatus = new Map();
@@ -60,6 +65,26 @@ const previewFrameEl = document.createElement('webview');
 previewFrameEl.id = 'preview-frame';
 previewFrameEl.setAttribute('allowpopups', 'true');
 previewFrameHostEl.appendChild(previewFrameEl);
+
+function loadHiddenProjects() {
+  try {
+    const raw = window.localStorage.getItem('pixelbox.hiddenProjects');
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    for (const entry of parsed) {
+      if (typeof entry === 'string' && entry.startsWith('projects/')) {
+        hiddenProjects.add(entry);
+      }
+    }
+  } catch {}
+}
+
+function persistHiddenProjects() {
+  try {
+    window.localStorage.setItem('pixelbox.hiddenProjects', JSON.stringify([...hiddenProjects]));
+  } catch {}
+}
 
 function defaultRuntimeConfig() {
   return {
@@ -288,12 +313,66 @@ function closePanel() {
 }
 
 function projectButton(label, relPath, active, clickHandler) {
+  const row = document.createElement('div');
+  row.className = 'project-item';
+
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = `project-btn${active ? ' active' : ''}`;
   btn.textContent = label;
   btn.addEventListener('click', () => clickHandler(relPath));
-  return btn;
+  row.appendChild(btn);
+
+  if (relPath !== '.') {
+    const hideBtn = document.createElement('button');
+    hideBtn.type = 'button';
+    hideBtn.className = 'project-action';
+    hideBtn.textContent = 'Hide';
+    hideBtn.title = 'Hide project from list';
+    hideBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      hiddenProjects.add(relPath);
+      persistHiddenProjects();
+      if (selectedProjectPath === relPath) {
+        selectProject('.', { recordHistory: true }).catch(() => {});
+      } else {
+        renderProjects().catch(() => {});
+      }
+    });
+    row.appendChild(hideBtn);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'project-action danger';
+    removeBtn.textContent = 'Remove';
+    removeBtn.title = 'Delete project folder';
+    removeBtn.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const ok = window.confirm(`Remove project "${label}" and delete its files?`);
+      if (!ok) return;
+      try {
+        await window.api.removeDir(relPath);
+        hiddenProjects.delete(relPath);
+        persistHiddenProjects();
+        projectPreviewState.delete(relPath);
+        projectRuntimeConfig.delete(relPath);
+        projectRuntimeStatus.delete(relPath);
+        projectTerminalOutput.delete(relPath);
+        projectSessionBootstrapped.delete(relPath);
+        projectSessionExited.delete(relPath);
+        if (selectedProjectPath === relPath) {
+          await selectProject('.', { recordHistory: true });
+        } else {
+          await renderProjects();
+        }
+      } catch (error) {
+        window.alert(`Failed to remove project: ${error && error.message ? error.message : 'unknown error'}`);
+      }
+    });
+    row.appendChild(removeBtn);
+  }
+
+  return row;
 }
 
 function renderRunningPageFields(sourceType) {
@@ -483,7 +562,8 @@ async function renderProjects() {
   projectsListEl.innerHTML = '';
   projectsListEl.appendChild(projectButton('workspace', '.', selectedProjectPath === '.', selectProject));
 
-  for (const project of projects) {
+  const visibleProjects = projects.filter((project) => !hiddenProjects.has(project.path));
+  for (const project of visibleProjects) {
     projectsListEl.appendChild(
       projectButton(project.name, project.path, selectedProjectPath === project.path, selectProject)
     );
@@ -520,7 +600,7 @@ async function selectProject(relPath, options = {}) {
 }
 
 async function createProject() {
-  const value = window.prompt('Project name');
+  const value = newProjectNameEl.value;
   if (!value) return;
   const projectName = sanitizeProjectName(value);
   if (!projectName) {
@@ -529,10 +609,19 @@ async function createProject() {
   }
 
   const relPath = `projects/${projectName}`;
+  const existing = await window.api.listDir('projects');
+  if (existing.some((entry) => entry.type === 'directory' && entry.path === relPath)) {
+    window.alert('Project already exists. Choose a different name.');
+    return;
+  }
   await window.api.mkdir(relPath);
   await window.api.writeFile(`${relPath}/README.md`, `# ${projectName}\n\nCreated from Pixelbox.\n`);
   await ensurePixelboxProjectContext(relPath);
   await ensureAgentHandoffFile(relPath);
+  hiddenProjects.delete(relPath);
+  persistHiddenProjects();
+  newProjectNameEl.value = '';
+  newProjectFormEl.hidden = true;
   await selectProject(relPath, { recordHistory: true });
 }
 
@@ -598,7 +687,28 @@ window.api.onRendererChanged(() => {
 toggle.addEventListener('click', openPanel);
 primaryAction.addEventListener('click', openPanel);
 minimize.addEventListener('click', closePanel);
-newProjectBtn.addEventListener('click', createProject);
+newProjectBtn.addEventListener('click', () => {
+  newProjectFormEl.hidden = false;
+  requestAnimationFrame(() => newProjectNameEl.focus());
+});
+newProjectCreateEl.addEventListener('click', () => {
+  createProject().catch(() => {});
+});
+newProjectCancelEl.addEventListener('click', () => {
+  newProjectFormEl.hidden = true;
+  newProjectNameEl.value = '';
+});
+newProjectNameEl.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    createProject().catch(() => {});
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    newProjectFormEl.hidden = true;
+    newProjectNameEl.value = '';
+  }
+});
 projectsToggleEl.addEventListener('click', () => {
   projectsPanelHidden = false;
   renderProjectsPanelVisibility();
@@ -658,6 +768,7 @@ window.addEventListener('resize', () => {
 });
 
 (async () => {
+  loadHiddenProjects();
   await window.api.startRendererWatch();
   openPanel();
   await renderProjects();

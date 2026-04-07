@@ -156,12 +156,67 @@ input {
 
 #projects-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
 }
 
 .project-btn.active {
   outline: 2px solid color-mix(in srgb, white 35%, var(--cta));
+}
+
+.project-item {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.project-item .project-btn {
+  flex: 1;
+  text-align: left;
+}
+
+.project-action {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 6px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.project-action:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--cta), white 20%);
+}
+
+.project-action.danger:hover {
+  border-color: color-mix(in srgb, var(--danger), white 20%);
+  color: #ffd5e0;
+}
+
+#new-project-form {
+  display: grid;
+  gap: 8px;
+}
+
+.new-project-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.new-project-form-actions button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.new-project-form-actions button:hover {
+  background: color-mix(in srgb, var(--cta), transparent 60%);
 }
 
 #running-page-panel {
