@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
+const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { createWorkspaceFs } = require('./lib/workspaceFs');
@@ -8,13 +9,33 @@ const { PreviewRuntimeManager } = require('./lib/previewRuntimeManager');
 const { TerminalManager } = require('./lib/terminalManager');
 const { TerminalSession, defaultShell } = require('./lib/terminalSession');
 
-const workspaceRoot = process.cwd();
+function resolveWorkspaceRoot() {
+  const fromEnv = process.env.PIXELBOX_WORKSPACE_ROOT || process.env.PXCODE_WORKSPACE_ROOT;
+  if (fromEnv && fromEnv.trim()) {
+    return path.resolve(fromEnv.trim());
+  }
+
+  if (app.isPackaged) {
+    return path.join(os.homedir(), 'pixelbox-workspace');
+  }
+
+  return process.cwd();
+}
+
+const workspaceRoot = resolveWorkspaceRoot();
+fs.mkdirSync(workspaceRoot, { recursive: true });
 const workspaceFs = createWorkspaceFs(workspaceRoot);
+const appIconPath = path.join(__dirname, 'assets', 'pixelbox-icon.png');
+app.setName('Pixelbox');
 let mainWindow;
 let rendererWatcher;
 let rendererChangeDebounce;
 let terminalManager;
 let previewRuntimeManager;
+let previewHtmlWatcher;
+let previewHtmlWatcherKey = '';
+let previewHtmlWatcherPath = '';
+let previewHtmlChangeDebounce;
 
 function getStartupTerminalCommand(options = {}) {
   if (process.env.PXCODE_DISABLE_AUTO_TUI === '1') {
@@ -33,6 +54,10 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    title: 'Pixelbox',
+    icon: appIconPath,
+    titleBarStyle: 'hiddenInset',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -43,6 +68,7 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  mainWindow.setMenuBarVisibility(false);
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
     const isRefreshShortcut =
@@ -88,6 +114,45 @@ function watchRendererFiles() {
       mainWindow.webContents.send('renderer:changed');
     }, 100);
   });
+}
+
+function clearPreviewHtmlWatcher() {
+  if (previewHtmlWatcher) {
+    previewHtmlWatcher.close();
+    previewHtmlWatcher = null;
+  }
+  previewHtmlWatcherKey = '';
+  previewHtmlWatcherPath = '';
+  clearTimeout(previewHtmlChangeDebounce);
+}
+
+function watchPreviewHtmlFile(key, absolutePath) {
+  const nextPath = path.resolve(absolutePath);
+  if (previewHtmlWatcher && previewHtmlWatcherKey === key && previewHtmlWatcherPath === nextPath) {
+    return { ok: true, watching: true };
+  }
+
+  clearPreviewHtmlWatcher();
+
+  previewHtmlWatcherKey = key;
+  previewHtmlWatcherPath = nextPath;
+  previewHtmlWatcher = fs.watch(nextPath, () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    clearTimeout(previewHtmlChangeDebounce);
+    previewHtmlChangeDebounce = setTimeout(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('preview:htmlChanged', {
+        key,
+        path: nextPath,
+      });
+    }, 100);
+  });
+
+  previewHtmlWatcher.on('error', () => {
+    clearPreviewHtmlWatcher();
+  });
+
+  return { ok: true, watching: true };
 }
 
 function attachIpcHandlers() {
@@ -196,6 +261,16 @@ function attachIpcHandlers() {
     return { ok: true };
   });
 
+  ipcMain.handle('preview:watchHtml', (_event, projectPath = '.', relPath) => {
+    const absolutePath = workspaceFs.resolveWorkspacePath(relPath);
+    return watchPreviewHtmlFile(projectPath, absolutePath);
+  });
+
+  ipcMain.handle('preview:clearHtmlWatch', () => {
+    clearPreviewHtmlWatcher();
+    return { ok: true };
+  });
+
   ipcMain.handle('terminal:start', (_event, cwd = '.', options = {}) => {
     return ensureTerminalManager().start(cwd, {
       cwd,
@@ -215,12 +290,12 @@ function attachIpcHandlers() {
     return { ok: true };
   });
 
-  ipcMain.on('terminal:write', (_event, data) => {
-    ensureTerminalManager().write(data);
+  ipcMain.on('terminal:write', (_event, data, key) => {
+    ensureTerminalManager().write(data, key);
   });
 
-  ipcMain.on('terminal:resize', (_event, cols, rows) => {
-    ensureTerminalManager().resize(cols, rows);
+  ipcMain.on('terminal:resize', (_event, cols, rows, key) => {
+    ensureTerminalManager().resize(cols, rows, key);
   });
 
   ipcMain.on('terminal:kill', () => {
@@ -229,6 +304,11 @@ function attachIpcHandlers() {
 }
 
 app.whenReady().then(() => {
+  app.setName('Pixelbox');
+  Menu.setApplicationMenu(null);
+  if (process.platform === 'darwin' && app.dock && fs.existsSync(appIconPath)) {
+    app.dock.setIcon(appIconPath);
+  }
   attachIpcHandlers();
   createWindow();
 
@@ -254,4 +334,5 @@ app.on('will-quit', () => {
     previewRuntimeManager.stopAll();
     previewRuntimeManager = null;
   }
+  clearPreviewHtmlWatcher();
 });

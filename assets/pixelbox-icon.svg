@@ -1,0 +1,82 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="140" y1="120" x2="888" y2="924" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#12264A"/>
+      <stop offset="0.48" stop-color="#0B1730"/>
+      <stop offset="1" stop-color="#070D1C"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(278 238) rotate(42.5) scale(598 538)">
+      <stop stop-color="#5FB8FF" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#5FB8FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(758 800) rotate(-136.1) scale(446 402)">
+      <stop stop-color="#63F2D0" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#63F2D0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="frame" x1="300" y1="270" x2="724" y2="754" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EAF6FF"/>
+      <stop offset="0.46" stop-color="#A4D8FF"/>
+      <stop offset="1" stop-color="#7AF0DA"/>
+    </linearGradient>
+    <linearGradient id="pixel" x1="418" y1="426" x2="615" y2="638" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7FBFF"/>
+      <stop offset="1" stop-color="#A8E9FF"/>
+    </linearGradient>
+    <filter id="shadow" x="180" y="180" width="664" height="664" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="28"/>
+      <feGaussianBlur stdDeviation="28"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.0117647 0 0 0 0 0.0470588 0 0 0 0 0.113725 0 0 0 0.28 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1_2"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1_2" result="shape"/>
+    </filter>
+  </defs>
+
+  <rect x="72" y="72" width="880" height="880" rx="224" fill="url(#bg)"/>
+  <rect x="72" y="72" width="880" height="880" rx="224" fill="url(#glowA)"/>
+  <rect x="72" y="72" width="880" height="880" rx="224" fill="url(#glowB)"/>
+  <rect x="72" y="72" width="880" height="880" rx="224" stroke="rgba(255,255,255,0.08)"/>
+
+  <g opacity="0.22">
+    <path d="M212 330H812" stroke="#8DBBFF" stroke-width="2"/>
+    <path d="M212 512H812" stroke="#8DBBFF" stroke-width="2"/>
+    <path d="M212 694H812" stroke="#8DBBFF" stroke-width="2"/>
+    <path d="M330 212V812" stroke="#8DBBFF" stroke-width="2"/>
+    <path d="M512 212V812" stroke="#8DBBFF" stroke-width="2"/>
+    <path d="M694 212V812" stroke="#8DBBFF" stroke-width="2"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="238" y="238" width="548" height="548" rx="156" fill="rgba(255,255,255,0.02)"/>
+    <path
+      d="M356 334C343.85 334 334 343.85 334 356V668C334 680.15 343.85 690 356 690H470"
+      stroke="url(#frame)"
+      stroke-width="40"
+      stroke-linecap="round"
+    />
+    <path
+      d="M554 690H668C680.15 690 690 680.15 690 668V554"
+      stroke="url(#frame)"
+      stroke-width="40"
+      stroke-linecap="round"
+    />
+    <path
+      d="M690 470V356C690 343.85 680.15 334 668 334H554"
+      stroke="url(#frame)"
+      stroke-width="40"
+      stroke-linecap="round"
+    />
+    <path
+      d="M470 334H512"
+      stroke="url(#frame)"
+      stroke-width="40"
+      stroke-linecap="round"
+    />
+
+    <rect x="430" y="430" width="72" height="72" rx="22" fill="url(#pixel)"/>
+    <rect x="522" y="430" width="72" height="72" rx="22" fill="url(#pixel)" opacity="0.92"/>
+    <rect x="430" y="522" width="72" height="72" rx="22" fill="url(#pixel)" opacity="0.84"/>
+    <rect x="522" y="522" width="72" height="72" rx="22" fill="url(#pixel)" opacity="0.18" stroke="url(#frame)" stroke-width="18"/>
+  </g>
+</svg>

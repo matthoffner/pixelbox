@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('api', {
   syncPreviewRuntime: (projectPath, options = {}) => ipcRenderer.invoke('preview:syncRuntime', projectPath, options),
   startPreviewRuntime: (projectPath, options = {}) => ipcRenderer.invoke('preview:startRuntime', projectPath, options),
   stopPreviewRuntime: (projectPath) => ipcRenderer.invoke('preview:stopRuntime', projectPath),
+  watchPreviewHtml: (projectPath, path) => ipcRenderer.invoke('preview:watchHtml', projectPath, path),
+  clearPreviewHtmlWatch: () => ipcRenderer.invoke('preview:clearHtmlWatch'),
   startTerminal: (cwd, options = {}) => ipcRenderer.invoke('terminal:start', cwd, options),
   restartTerminal: (cwd, options = {}) => ipcRenderer.invoke('terminal:restart', cwd, options),
   startOrRestartTerminal: (cwd, restart = false, options = {}) =>
@@ -19,8 +21,8 @@ contextBridge.exposeInMainWorld('api', {
       ? ipcRenderer.invoke('terminal:restart', cwd, options)
       : ipcRenderer.invoke('terminal:start', cwd, options)),
   getStartupTerminalCommand: (options = {}) => ipcRenderer.invoke('terminal:getStartupCommand', options),
-  writeTerminal: (data) => ipcRenderer.send('terminal:write', data),
-  resizeTerminal: (cols, rows) => ipcRenderer.send('terminal:resize', cols, rows),
+  writeTerminal: (data, key) => ipcRenderer.send('terminal:write', data, key),
+  resizeTerminal: (cols, rows, key) => ipcRenderer.send('terminal:resize', cols, rows, key),
   killTerminal: () => ipcRenderer.send('terminal:kill'),
   startRendererWatch: () => ipcRenderer.invoke('renderer:watchStart'),
   onTerminalData: (callback) => {
@@ -34,6 +36,9 @@ contextBridge.exposeInMainWorld('api', {
   },
   onPreviewStatus: (callback) => {
     ipcRenderer.on('preview:status', (_event, payload) => callback(payload));
+  },
+  onPreviewHtmlChanged: (callback) => {
+    ipcRenderer.on('preview:htmlChanged', (_event, payload) => callback(payload));
   },
   onAppRefreshShortcut: (callback) => {
     ipcRenderer.on('app:refreshShortcut', () => callback());

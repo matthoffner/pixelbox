@@ -1,0 +1,4 @@
+version: 1
+display_name: Pixelbox Electron Debug
+short_description: Debug Pixelbox Electron terminal/preview behavior with Playwright.
+default_prompt: Diagnose and fix this Pixelbox Electron issue with a screenshot-driven loop and clear interventions.

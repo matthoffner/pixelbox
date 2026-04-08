@@ -9,6 +9,12 @@
   --cta: #2f7dc0;
   --cta-hover: #4393d8;
   --danger: #ad4665;
+  --terminal-width: 680px;
+  --terminal-height: 520px;
+  --terminal-min-width: 420px;
+  --terminal-gap: 16px;
+  --titlebar-safe-top: 28px;
+  --projects-panel-width: 340px;
 }
 
 * {
@@ -117,8 +123,10 @@ h1 {
 #new-project,
 #primary-action,
 #chat-toggle,
+#projects-toggle,
 .project-btn,
 #chat-minimize,
+#projects-minimize,
 #running-page-actions button,
 #preview-nav button,
 select,
@@ -133,6 +141,7 @@ input {
 #new-project,
 #primary-action,
 #chat-toggle,
+#projects-toggle,
 .project-btn,
 #running-page-actions button {
   border: 1px solid var(--border);
@@ -266,7 +275,9 @@ input:focus-visible,
 #new-project:focus-visible,
 #primary-action:focus-visible,
 #chat-toggle:focus-visible,
+#projects-toggle:focus-visible,
 #chat-minimize:focus-visible,
+#projects-minimize:focus-visible,
 .project-btn:focus-visible,
 #running-page-actions button:focus-visible,
 #preview-nav button:focus-visible {
@@ -291,30 +302,28 @@ input:focus-visible,
   border-radius: 20px;
   padding: 14px;
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto 1fr;
   gap: 10px;
   min-height: 640px;
 }
 
 #preview-nav {
-  display: flex;
-  gap: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 10px;
+  margin-right: 2px;
+  border-right: 1px solid color-mix(in srgb, var(--border), white 8%);
+}
+
+#preview-header {
+  display: none;
 }
 
 #preview-nav button {
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-  border-radius: 10px;
-  cursor: pointer;
-  width: 36px;
-  height: 34px;
-  padding: 0;
-  font-size: 15px;
-  line-height: 1;
-  display: inline-grid;
-  place-items: center;
-  font-weight: 700;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
 }
 
 #preview-nav button:hover:not(:disabled) {
@@ -371,10 +380,6 @@ input:focus-visible,
   background: #0c1420;
 }
 
-body.terminal-active #preview-frame {
-  pointer-events: none;
-}
-
 #primary-action {
   margin: 0;
   padding: 12px 18px;
@@ -382,12 +387,82 @@ body.terminal-active #preview-frame {
   justify-self: start;
 }
 
-#chat-toggle {
+#control-rail {
   position: fixed;
+  top: calc(10px + var(--titlebar-safe-top));
   right: 20px;
-  bottom: 20px;
-  z-index: 20;
-  padding: 10px 16px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--border), white 8%);
+  background: color-mix(in srgb, var(--surface), black 14%);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
+}
+
+.projects-fab {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 70;
+}
+
+body:not(.projects-panel-hidden) .projects-fab {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--border), white 8%);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.icon-button svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.85;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.rail-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+}
+
+.panel-icon-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+
+.icon-button:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--cta), transparent 62%);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.icon-button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--cta), black 4%);
+  border-color: color-mix(in srgb, white 20%, var(--cta));
+  color: white;
 }
 
 #chat-panel {
@@ -395,11 +470,14 @@ body.terminal-active #preview-frame {
   right: 20px;
   bottom: 20px;
   z-index: 40;
-  width: min(680px, calc(100vw - 32px));
+  width: clamp(420px, 46vw, 680px);
+  max-width: calc(100vw - 32px);
   height: min(56vh, 520px);
+  max-height: calc(100vh - 32px - var(--titlebar-safe-top));
   border-radius: 16px;
   backdrop-filter: blur(10px);
   display: none;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 48px 1fr;
   overflow: hidden;
 }
@@ -409,24 +487,43 @@ body.terminal-active #preview-frame {
 }
 
 #chat-header {
-  display: flex;
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 14px;
+  column-gap: 10px;
+  min-width: 0;
+  padding: 0 12px;
   font-size: 13px;
   letter-spacing: 0.03em;
   border-bottom: 1px solid var(--border);
   color: var(--muted);
+  overflow: clip;
 }
 
-#chat-minimize {
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-  border-radius: 8px;
-  width: 28px;
-  height: 28px;
-  cursor: pointer;
+#chat-header > span,
+#chat-title-group {
+  min-width: 0;
+}
+
+#chat-header > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-header-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-self: end;
+  flex: 0 0 auto;
+  min-width: max-content;
+  white-space: nowrap;
+  position: relative;
+  z-index: 3;
 }
 
 #terminal {
@@ -434,10 +531,29 @@ body.terminal-active #preview-frame {
   padding: 10px;
 }
 
+#chat-resize-handle {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  right: 2px;
+  bottom: 2px;
+  cursor: nwse-resize;
+  opacity: 0.75;
+}
+
+#chat-resize-handle::before {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid color-mix(in srgb, var(--muted), white 25%);
+  border-bottom: 2px solid color-mix(in srgb, var(--muted), white 25%);
+}
+
 #new-project:hover,
 #primary-action:hover,
-#chat-toggle:hover,
-#chat-minimize:hover,
 .project-btn:hover,
 #running-page-actions button:hover {
   background: var(--cta-hover);
@@ -468,6 +584,15 @@ body.terminal-active #preview-frame {
     grid-row: 3;
     min-height: 520px;
   }
+
+  #chat-panel {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: auto;
+    height: min(48vh, 420px);
+    max-width: none;
+  }
 }
 
 @media (max-width: 700px) {
@@ -485,12 +610,20 @@ body.terminal-active #preview-frame {
     left: 10px;
     bottom: 10px;
     width: auto;
-    height: 62vh;
+    height: min(58vh, 380px);
+    border-radius: 14px;
   }
 
-  #chat-toggle {
+  #control-rail {
+    top: 10px;
     right: 10px;
-    bottom: 10px;
+    left: 10px;
+    justify-content: flex-end;
+  }
+
+  #preview-nav {
+    gap: 8px;
+    padding-right: 8px;
   }
 
   #preview-header,
@@ -522,6 +655,8 @@ h1,
   width: 100vw;
   height: 100vh;
   min-height: 100vh;
+  grid-template-rows: 1fr;
+  gap: 0;
   border: 0;
   border-radius: 0;
   padding: 0;
@@ -533,22 +668,9 @@ h1,
   border-radius: 0;
 }
 
-#projects-toggle {
-  position: fixed;
-  top: 72px;
-  left: 16px;
-  z-index: 45;
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface), black 18%);
-  color: var(--text);
-  border-radius: 12px;
-  cursor: pointer;
-}
-
 #projects-panel {
   position: fixed;
-  top: 72px;
+  top: calc(72px + var(--titlebar-safe-top));
   left: 16px;
   width: min(340px, calc(100vw - 32px));
   max-height: calc(100vh - 88px);
@@ -562,24 +684,180 @@ h1,
   align-items: center;
 }
 
-#projects-minimize {
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-  border-radius: 10px;
-  width: 30px;
-  height: 30px;
-  cursor: pointer;
-}
-
 body.projects-panel-hidden #projects-panel {
   display: none;
 }
 
-body.projects-panel-hidden #projects-toggle {
-  display: inline-flex;
+body.terminal-dock-float #chat-panel {
+  width: min(var(--terminal-width), calc(100vw - 32px));
+  height: min(var(--terminal-height), calc(100vh - 32px));
 }
 
-body:not(.projects-panel-hidden) #projects-toggle {
+body.terminal-dock-right #chat-panel {
+  right: 0;
+  top: 0;
+  bottom: 0;
+  height: 100vh;
+  max-height: none;
+  width: clamp(var(--terminal-min-width), min(var(--terminal-width), 70vw), calc(100vw - 8px));
+  max-width: calc(100vw - 8px);
+  border-radius: 0;
+}
+
+body.terminal-dock-right #chat-header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 4px 0 0;
+}
+
+body.terminal-dock-right #chat-header > span {
   display: none;
+}
+
+body.terminal-dock-right .chat-header-actions {
+  gap: 3px;
+  width: auto;
+  min-width: 0;
+  justify-content: flex-end;
+  margin-left: 0;
+}
+
+body.terminal-active.terminal-dock-right #control-rail {
+  right: calc(clamp(var(--terminal-min-width), min(var(--terminal-width), 70vw), calc(100vw - 8px)) + 20px);
+  max-width: calc(100vw - clamp(var(--terminal-min-width), min(var(--terminal-width), 70vw), calc(100vw - 8px)) - 40px);
+}
+
+body.terminal-dock-right #chat-resize-handle {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  height: auto;
+  cursor: ew-resize;
+  z-index: 5;
+}
+
+body.terminal-dock-right #chat-resize-handle::before {
+  top: 50%;
+  left: 2px;
+  right: auto;
+  bottom: auto;
+  width: 0;
+  height: 40px;
+  border-right: 1px solid color-mix(in srgb, var(--muted), white 30%);
+  border-bottom: 0;
+}
+
+body.terminal-dock-bottom #chat-panel {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: min(var(--terminal-height), 75vh);
+  max-height: none;
+  max-width: none;
+  border-radius: 0;
+}
+
+body.terminal-dock-bottom #chat-resize-handle {
+  top: 0;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+body.terminal-dock-bottom #chat-resize-handle::before {
+  top: 2px;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  width: 40px;
+  height: 0;
+  border-top: 1px solid color-mix(in srgb, var(--muted), white 30%);
+  border-right: 0;
+  border-bottom: 0;
+  transform: translateX(-50%);
+}
+
+/* Split-pane reflow for docked terminal (chat panel stays fixed outside #landing) */
+body.terminal-active.terminal-dock-right #landing {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+body.terminal-active.terminal-dock-right #preview-shell {
+  width: calc(100vw - clamp(var(--terminal-min-width), min(var(--terminal-width), 70vw), calc(100vw - 8px)));
+  height: 100vh;
+}
+
+body.terminal-active.terminal-dock-right #preview-viewport {
+  width: 100%;
+  height: 100%;
+}
+
+body.terminal-active.terminal-dock-bottom #landing {
+  padding-bottom: min(var(--terminal-height), 75vh);
+  padding-left: 0;
+}
+
+body.terminal-active.terminal-dock-bottom #preview-shell {
+  width: 100vw;
+  height: calc(100vh - min(var(--terminal-height), 75vh));
+  min-height: 0;
+}
+
+body.terminal-active.terminal-dock-bottom #preview-viewport {
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 900px) {
+  #chat-header {
+    column-gap: 8px;
+    padding: 0 10px;
+  }
+
+  .panel-icon-button {
+    width: 28px;
+    height: 28px;
+  }
+
+  .panel-icon-button svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  body.terminal-active.terminal-dock-right #control-rail {
+    right: calc(clamp(var(--terminal-min-width), min(var(--terminal-width), 70vw), calc(100vw - 8px)) + 10px);
+    max-width: calc(100vw - clamp(var(--terminal-min-width), min(var(--terminal-width), 70vw), calc(100vw - 8px)) - 20px);
+  }
+}
+
+@media (max-width: 720px) {
+  #chat-header {
+    column-gap: 6px;
+    padding: 0 8px;
+  }
+
+  #chat-header > span {
+    font-size: 12px;
+  }
+
+  .chat-header-actions {
+    gap: 3px;
+  }
+
+  .panel-icon-button {
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+  }
+
+  .panel-icon-button svg {
+    width: 14px;
+    height: 14px;
+  }
 }

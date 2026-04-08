@@ -18,7 +18,11 @@
           <strong>Projects</strong>
           <div class="projects-actions">
             <button id="new-project" type="button">New Project</button>
-            <button id="projects-minimize" type="button" aria-label="Hide menu">-</button>
+            <button id="projects-minimize" class="icon-button panel-icon-button" type="button" aria-label="Hide menu">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 12h12" />
+              </svg>
+            </button>
           </div>
         </div>
         <div id="new-project-form" hidden>
@@ -68,6 +72,12 @@
       </section>
 
       <section id="preview-shell" aria-label="Project View">
+        <div id="preview-header">
+          <div id="preview-meta">
+            <div id="preview-subtitle">Preview</div>
+            <div id="preview-url">about:blank</div>
+          </div>
+        </div>
         <div id="preview-viewport">
           <div id="preview-empty-state">
             <strong>Nothing live yet</strong>
@@ -80,15 +90,71 @@
       <button id="primary-action" type="button">Open Terminal</button>
     </main>
 
-    <button id="projects-toggle" aria-label="Open menu">Menu</button>
-    <button id="chat-toggle" aria-label="Open terminal">Terminal</button>
+    <div id="control-rail" aria-label="Workspace controls">
+      <div id="preview-nav" aria-label="Preview navigation">
+        <button id="preview-back" class="icon-button rail-button" type="button" aria-label="Go back" title="Back">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14.5 5.5L8 12l6.5 6.5" />
+          </svg>
+        </button>
+        <button id="preview-forward" class="icon-button rail-button" type="button" aria-label="Go forward" title="Forward">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9.5 5.5L16 12l-6.5 6.5" />
+          </svg>
+        </button>
+        <button id="preview-reload" class="icon-button rail-button" type="button" aria-label="Reload preview" title="Reload">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <path d="M21 3v6h-6" />
+          </svg>
+        </button>
+      </div>
+      <button id="chat-toggle" class="icon-button rail-button" aria-label="Toggle terminal" title="Terminal">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 7l5 5-5 5" />
+          <path d="M12.5 17H19" />
+        </svg>
+      </button>
+    </div>
+
+    <button id="projects-toggle" class="icon-button rail-button projects-fab" aria-label="Toggle menu" title="Projects">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 6.5h16" />
+        <path d="M4 12h16" />
+        <path d="M4 17.5h16" />
+      </svg>
+    </button>
 
     <section id="chat-panel" class="open" aria-label="Terminal panel">
       <header id="chat-header">
         <span>Directory Terminal</span>
-        <button id="chat-minimize" aria-label="Minimize terminal">-</button>
+        <div class="chat-header-actions">
+          <button id="chat-dock-float" class="icon-button panel-icon-button" aria-label="Float terminal" title="Float">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="6" y="7" width="12" height="10" rx="2" />
+            </svg>
+          </button>
+          <button id="chat-dock-right" class="icon-button panel-icon-button" aria-label="Dock terminal right" title="Dock right">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 6h10v12H7z" />
+              <path d="M14 6v12" />
+            </svg>
+          </button>
+          <button id="chat-dock-bottom" class="icon-button panel-icon-button" aria-label="Dock terminal bottom" title="Dock bottom">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 7h12v10H6z" />
+              <path d="M6 14h12" />
+            </svg>
+          </button>
+          <button id="chat-minimize" class="icon-button panel-icon-button" aria-label="Minimize terminal" title="Hide terminal">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 12h12" />
+            </svg>
+          </button>
+        </div>
       </header>
       <div id="terminal" aria-label="Terminal output" tabindex="0"></div>
+      <div id="chat-resize-handle" aria-hidden="true"></div>
     </section>
 
     <script src="../node_modules/xterm/lib/xterm.js"></script>

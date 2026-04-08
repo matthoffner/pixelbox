@@ -2,6 +2,9 @@ const term = new Terminal({
   fontSize: 13,
   cursorBlink: true,
   disableStdin: false,
+  scrollback: 5000,
+  fastScrollModifier: 'alt',
+  fastScrollSensitivity: 5,
   theme: {
     background: '#0f1e33',
     foreground: '#e4eeff',
@@ -13,8 +16,13 @@ term.loadAddon(fitAddon);
 term.open(document.getElementById('terminal'));
 
 const panel = document.getElementById('chat-panel');
+const chatHeaderEl = document.getElementById('chat-header');
 const toggle = document.getElementById('chat-toggle');
 const minimize = document.getElementById('chat-minimize');
+const chatDockFloatEl = document.getElementById('chat-dock-float');
+const chatDockRightEl = document.getElementById('chat-dock-right');
+const chatDockBottomEl = document.getElementById('chat-dock-bottom');
+const chatResizeHandleEl = document.getElementById('chat-resize-handle');
 const primaryAction = document.getElementById('primary-action');
 const terminalEl = document.getElementById('terminal');
 const projectsListEl = document.getElementById('projects-list');
@@ -31,6 +39,8 @@ const previewFrameHostEl = document.getElementById('preview-frame-host');
 const previewBackEl = document.getElementById('preview-back');
 const previewForwardEl = document.getElementById('preview-forward');
 const previewReloadEl = document.getElementById('preview-reload');
+const previewSubtitleEl = document.getElementById('preview-subtitle');
+const previewUrlEl = document.getElementById('preview-url');
 const previewEmptyStateEl = document.getElementById('preview-empty-state');
 const runningPageTypeEl = document.getElementById('running-page-type');
 const runningPageHtmlEl = document.getElementById('running-page-html');
@@ -58,8 +68,20 @@ const projectSessionBootstrapped = new Set();
 const projectSessionExited = new Set();
 const projectSelectionHistory = ['.'];
 let projectSelectionIndex = 0;
+let terminalRenderBuffer = '';
+let terminalFlushRaf = 0;
+let terminalResizePointer = null;
+let terminalDragPointer = null;
+let terminalMouseDrag = null;
+const terminalLayoutState = {
+  mode: 'float',
+  width: 680,
+  height: 520,
+};
 const PIXELBOX_CONTEXT_START = '<!-- PIXELBOX_CONTEXT_START -->';
 const PIXELBOX_CONTEXT_END = '<!-- PIXELBOX_CONTEXT_END -->';
+const TERMINAL_MIN_WIDTH = 420;
+const LAST_SELECTED_PROJECT_KEY = 'pixelbox.lastSelectedProject';
 
 const previewFrameEl = document.createElement('webview');
 previewFrameEl.id = 'preview-frame';
@@ -84,6 +106,54 @@ function persistHiddenProjects() {
   try {
     window.localStorage.setItem('pixelbox.hiddenProjects', JSON.stringify([...hiddenProjects]));
   } catch {}
+}
+
+function loadLastSelectedProject() {
+  try {
+    const value = window.localStorage.getItem(LAST_SELECTED_PROJECT_KEY);
+    if (!value) return '.';
+    if (value === '.' || value.startsWith('projects/')) return value;
+  } catch {}
+  return '.';
+}
+
+function persistLastSelectedProject(projectPath) {
+  try {
+    window.localStorage.setItem(LAST_SELECTED_PROJECT_KEY, projectPath);
+  } catch {}
+}
+
+function loadTerminalLayoutState() {
+  try {
+    const raw = window.localStorage.getItem('pixelbox.terminalLayout');
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed && (parsed.mode === 'float' || parsed.mode === 'right' || parsed.mode === 'bottom')) {
+      terminalLayoutState.mode = parsed.mode;
+    }
+    if (parsed && Number.isFinite(parsed.width)) {
+      terminalLayoutState.width = Math.min(1100, Math.max(TERMINAL_MIN_WIDTH, Math.floor(parsed.width)));
+    }
+    if (parsed && Number.isFinite(parsed.height)) {
+      terminalLayoutState.height = Math.min(900, Math.max(260, Math.floor(parsed.height)));
+    }
+  } catch {}
+}
+
+function persistTerminalLayoutState() {
+  try {
+    window.localStorage.setItem('pixelbox.terminalLayout', JSON.stringify(terminalLayoutState));
+  } catch {}
+}
+
+function renderTerminalDockMode() {
+  document.body.classList.remove('terminal-dock-float', 'terminal-dock-right', 'terminal-dock-bottom');
+  document.body.classList.add(`terminal-dock-${terminalLayoutState.mode}`);
+  document.documentElement.style.setProperty('--terminal-width', `${terminalLayoutState.width}px`);
+  document.documentElement.style.setProperty('--terminal-height', `${terminalLayoutState.height}px`);
+  if (chatDockFloatEl) chatDockFloatEl.setAttribute('aria-pressed', String(terminalLayoutState.mode === 'float'));
+  if (chatDockRightEl) chatDockRightEl.setAttribute('aria-pressed', String(terminalLayoutState.mode === 'right'));
+  if (chatDockBottomEl) chatDockBottomEl.setAttribute('aria-pressed', String(terminalLayoutState.mode === 'bottom'));
 }
 
 function defaultRuntimeConfig() {
@@ -211,8 +281,16 @@ function currentPreviewUrl(state) {
 }
 
 function updateProjectNavigationControls() {
-  if (previewBackEl) previewBackEl.disabled = projectSelectionIndex <= 0;
-  if (previewForwardEl) previewForwardEl.disabled = projectSelectionIndex >= projectSelectionHistory.length - 1;
+  const projectBackAvailable = projectSelectionIndex > 0;
+  const projectForwardAvailable = projectSelectionIndex < projectSelectionHistory.length - 1;
+  const webBackAvailable = typeof previewFrameEl.canGoBack === 'function' ? previewFrameEl.canGoBack() : false;
+  const webForwardAvailable = typeof previewFrameEl.canGoForward === 'function' ? previewFrameEl.canGoForward() : false;
+  if (previewBackEl) {
+    previewBackEl.disabled = !(webBackAvailable || projectBackAvailable);
+  }
+  if (previewForwardEl) {
+    previewForwardEl.disabled = !(webForwardAvailable || projectForwardAvailable);
+  }
 }
 
 function updatePreviewControls(state) {
@@ -220,8 +298,46 @@ function updatePreviewControls(state) {
   updateProjectNavigationControls();
 }
 
+function previewDisplayUrl(rawUrl) {
+  const url = sanitizePreviewUrl(rawUrl);
+  if (!url) return 'about:blank';
+  return url.replace(/^file:\/\/\/?/, '/');
+}
+
+function setPreviewMeta(rawUrl, subtitle = 'Preview') {
+  if (previewSubtitleEl) previewSubtitleEl.textContent = subtitle;
+  if (previewUrlEl) previewUrlEl.textContent = previewDisplayUrl(rawUrl);
+}
+
+function cacheBustedUrl(rawUrl) {
+  const url = sanitizePreviewUrl(rawUrl);
+  if (!url) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}pxcode_reload=${Date.now()}`;
+}
+
+async function refreshSelectedHtmlPreview() {
+  const config = projectRuntimeConfig.get(selectedProjectPath) || defaultRuntimeConfig();
+  if (config.sourceType !== 'html' || !config.htmlPath) return false;
+  const basePath = selectedProjectPath === '.' ? config.htmlPath : `${selectedProjectPath}/${config.htmlPath}`;
+  const resolved = await window.api.resolvePreviewHtmlFile(basePath);
+  const state = ensurePreviewState(selectedProjectPath);
+  const cleanUrl = resolved.url;
+  if (state.index >= 0) {
+    state.history[state.index] = cleanUrl;
+    await persistPreviewState(selectedProjectPath);
+  }
+  previewFrameEl.src = cacheBustedUrl(cleanUrl);
+  setPreviewMeta(cleanUrl, 'HTML preview');
+  updatePreviewControls(state);
+  return true;
+}
+
 function renderProjectsPanelVisibility() {
   document.body.classList.toggle('projects-panel-hidden', projectsPanelHidden);
+  if (projectsToggleEl) {
+    projectsToggleEl.setAttribute('aria-pressed', String(!projectsPanelHidden));
+  }
 }
 
 function renderPreviewForProject(projectPath) {
@@ -230,6 +346,7 @@ function renderPreviewForProject(projectPath) {
   if (!url) {
     previewFrameEl.src = 'about:blank';
     previewEmptyStateEl.style.display = 'grid';
+    setPreviewMeta('', 'Preview');
     updatePreviewControls(state);
     return;
   }
@@ -238,6 +355,9 @@ function renderPreviewForProject(projectPath) {
   if (previewFrameEl.src !== url) {
     previewFrameEl.src = url;
   }
+  const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+  const subtitle = config.sourceType === 'html' ? 'HTML preview' : 'Live preview';
+  setPreviewMeta(url, subtitle);
   updatePreviewControls(state);
 }
 
@@ -254,9 +374,43 @@ async function persistPreviewState(projectPath) {
   await window.api.writeFile(configPathForProject(projectPath), `${JSON.stringify(payload, null, 2)}\n`);
 }
 
+async function promoteDetectedServerPreview(projectPath, url) {
+  const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+  if (currentConfig.sourceType !== 'none') {
+    if (!currentConfig.serverUrl || currentConfig.serverUrl !== url) {
+      projectRuntimeConfig.set(projectPath, {
+        ...currentConfig,
+        serverUrl: url,
+      });
+    }
+    return;
+  }
+
+  let serverCommand = '';
+  try {
+    const packagePath = projectPath === '.' ? 'package.json' : `${projectPath}/package.json`;
+    const { content } = await window.api.readFile(packagePath);
+    if (content) {
+      const parsed = JSON.parse(content);
+      if (parsed?.scripts?.dev && typeof parsed.scripts.dev === 'string') {
+        serverCommand = 'npm run dev';
+      }
+    }
+  } catch {}
+
+  projectRuntimeConfig.set(projectPath, {
+    ...currentConfig,
+    sourceType: 'server',
+    serverCommand,
+    serverUrl: url,
+    autoStart: true,
+  });
+}
+
 async function pushPreviewUrl(projectPath, rawUrl, options = {}) {
   const url = sanitizePreviewUrl(rawUrl);
   if (!/^https?:\/\//i.test(url) && !url.startsWith('file://')) return;
+  await promoteDetectedServerPreview(projectPath, url);
   const state = ensurePreviewState(projectPath);
   const current = currentPreviewUrl(state);
   if (current === url) return;
@@ -278,6 +432,18 @@ function appendTerminalOutput(projectPath, data) {
   }
 }
 
+function queueTerminalWrite(data) {
+  if (!data) return;
+  terminalRenderBuffer += data;
+  if (terminalFlushRaf) return;
+  terminalFlushRaf = requestAnimationFrame(() => {
+    terminalFlushRaf = 0;
+    if (!terminalRenderBuffer) return;
+    term.write(terminalRenderBuffer);
+    terminalRenderBuffer = '';
+  });
+}
+
 function syncTerminalSize() {
   fitAddon.fit();
 
@@ -289,7 +455,38 @@ function syncTerminalSize() {
     term.resize(fallbackCols, fallbackRows);
   }
 
-  window.api.resizeTerminal(term.cols, term.rows);
+  window.api.resizeTerminal(term.cols, term.rows, selectedProjectPath);
+}
+
+function setTerminalDockMode(mode) {
+  if (!['float', 'right', 'bottom'].includes(mode)) return;
+  terminalLayoutState.mode = mode;
+  if (mode !== 'float') {
+    panel.style.left = '';
+    panel.style.top = '';
+    panel.style.right = '';
+    panel.style.bottom = '';
+  }
+  renderTerminalDockMode();
+  persistTerminalLayoutState();
+  requestAnimationFrame(() => {
+    if (panel.classList.contains('open')) {
+      syncTerminalSize();
+      focusTerminal();
+    }
+  });
+}
+
+function toggleTerminalDockMode(mode) {
+  if (mode === 'float') {
+    setTerminalDockMode('float');
+    return;
+  }
+  if (terminalLayoutState.mode === mode) {
+    setTerminalDockMode('float');
+    return;
+  }
+  setTerminalDockMode(mode);
 }
 
 function focusTerminal() {
@@ -298,8 +495,10 @@ function focusTerminal() {
 
 function openPanel() {
   panel.classList.add('open');
-  toggle.style.display = 'none';
   document.body.classList.add('terminal-active');
+  if (toggle) {
+    toggle.setAttribute('aria-pressed', 'true');
+  }
   requestAnimationFrame(() => {
     syncTerminalSize();
     focusTerminal();
@@ -308,8 +507,10 @@ function openPanel() {
 
 function closePanel() {
   panel.classList.remove('open');
-  toggle.style.display = 'inline-flex';
   document.body.classList.remove('terminal-active');
+  if (toggle) {
+    toggle.setAttribute('aria-pressed', 'false');
+  }
 }
 
 function projectButton(label, relPath, active, clickHandler) {
@@ -453,6 +654,9 @@ async function applyRuntimeConfig(projectPath, config, options = {}) {
     replacePreviewHistory(projectPath, [resolved.url], 0);
     projectRuntimeStatus.set(projectPath, { running: false, sourceType: 'html', url: resolved.url });
     await window.api.stopPreviewRuntime(projectPath);
+    if (projectPath === selectedProjectPath) {
+      await window.api.watchPreviewHtml(projectPath, basePath);
+    }
   } else if (config.sourceType === 'server') {
     if (!config.serverCommand) {
       throw new Error('Server command is required');
@@ -472,10 +676,16 @@ async function applyRuntimeConfig(projectPath, config, options = {}) {
       url: config.serverUrl,
       autoStart: options.forceStart ? true : config.autoStart,
     });
+    if (projectPath === selectedProjectPath) {
+      await window.api.clearPreviewHtmlWatch();
+    }
   } else {
     replacePreviewHistory(projectPath, [], -1);
     projectRuntimeStatus.set(projectPath, { running: false, sourceType: 'none', url: '' });
     await window.api.stopPreviewRuntime(projectPath);
+    if (projectPath === selectedProjectPath) {
+      await window.api.clearPreviewHtmlWatch();
+    }
   }
 
   await persistPreviewState(projectPath);
@@ -533,8 +743,13 @@ async function bootTerminalForPath(relPath, shouldRunStartup = false, forceStart
 
   window.__pwTerminalOutput = projectTerminalOutput.get(relPath) || '';
   term.reset();
+  terminalRenderBuffer = '';
+  if (terminalFlushRaf) {
+    cancelAnimationFrame(terminalFlushRaf);
+    terminalFlushRaf = 0;
+  }
   if (window.__pwTerminalOutput) {
-    term.write(window.__pwTerminalOutput);
+    queueTerminalWrite(window.__pwTerminalOutput);
   }
 
   requestAnimationFrame(() => {
@@ -578,25 +793,37 @@ async function renderProjects() {
 
 async function selectProject(relPath, options = {}) {
   const { recordHistory = true } = options;
-  selectedProjectPath = relPath;
+  const projectPath = relPath;
+  selectedProjectPath = projectPath;
+  persistLastSelectedProject(projectPath);
   if (recordHistory) {
-    recordProjectSelection(relPath);
+    recordProjectSelection(projectPath);
   } else {
     updateProjectNavigationControls();
   }
 
   await renderProjects();
-  await ensurePixelboxProjectContext(selectedProjectPath);
-  await ensureAgentHandoffFile(selectedProjectPath);
-  await bootTerminalForPath(selectedProjectPath, true, projectSessionExited.has(selectedProjectPath));
-  const config = await loadRuntimeConfig(selectedProjectPath);
-  renderRuntimeConfig(selectedProjectPath);
+  const bootPromise = bootTerminalForPath(projectPath, true, projectSessionExited.has(projectPath));
+  const configPromise = loadRuntimeConfig(projectPath);
+  const setupPromise = Promise.all([
+    ensurePixelboxProjectContext(projectPath),
+    ensureAgentHandoffFile(projectPath),
+  ]);
+
+  await bootPromise;
+  const config = await configPromise;
+  if (selectedProjectPath !== projectPath) {
+    await setupPromise;
+    return;
+  }
+  renderRuntimeConfig(projectPath);
   try {
-    await applyRuntimeConfig(selectedProjectPath, config);
+    await applyRuntimeConfig(projectPath, config);
   } catch (error) {
     runningPageStatusEl.textContent = error.message;
-    renderPreviewForProject(selectedProjectPath);
+    renderPreviewForProject(projectPath);
   }
+  await setupPromise;
 }
 
 async function createProject() {
@@ -628,7 +855,7 @@ async function createProject() {
 window.api.onTerminalData(({ key, data }) => {
   appendTerminalOutput(key, data);
   if (key === selectedProjectPath) {
-    term.write(data);
+    queueTerminalWrite(data);
   }
 
   const cleanData = stripAnsi(data);
@@ -656,16 +883,23 @@ window.api.onPreviewStatus(({ key, running, url, configuredUrl, sourceType }) =>
   }
 });
 
+window.api.onPreviewHtmlChanged(({ key }) => {
+  if (key !== selectedProjectPath) return;
+  const config = projectRuntimeConfig.get(key) || defaultRuntimeConfig();
+  if (config.sourceType !== 'html') return;
+  refreshSelectedHtmlPreview().catch(() => {});
+});
+
 term.onData((data) => {
   if (projectSessionExited.has(selectedProjectPath)) {
     bootTerminalForPath(selectedProjectPath, true, true)
       .then(() => {
-        window.api.writeTerminal(data);
+        window.api.writeTerminal(data, selectedProjectPath);
       })
       .catch(() => {});
     return;
   }
-  window.api.writeTerminal(data);
+  window.api.writeTerminal(data, selectedProjectPath);
 });
 
 window.api.onTerminalExit(({ key }) => {
@@ -673,7 +907,7 @@ window.api.onTerminalExit(({ key }) => {
   projectSessionExited.add(key);
   appendTerminalOutput(key, '\r\n[terminal exited]');
   if (key === selectedProjectPath) {
-    term.writeln('\r\n[terminal exited]');
+    queueTerminalWrite('\r\n[terminal exited]\r\n');
   }
 });
 
@@ -684,9 +918,24 @@ window.api.onRendererChanged(() => {
   }, 120);
 });
 
-toggle.addEventListener('click', openPanel);
+toggle.addEventListener('click', () => {
+  if (panel.classList.contains('open')) {
+    closePanel();
+    return;
+  }
+  openPanel();
+});
 primaryAction.addEventListener('click', openPanel);
 minimize.addEventListener('click', closePanel);
+if (chatDockFloatEl) {
+  chatDockFloatEl.addEventListener('click', () => toggleTerminalDockMode('float'));
+}
+if (chatDockRightEl) {
+  chatDockRightEl.addEventListener('click', () => toggleTerminalDockMode('right'));
+}
+if (chatDockBottomEl) {
+  chatDockBottomEl.addEventListener('click', () => toggleTerminalDockMode('bottom'));
+}
 newProjectBtn.addEventListener('click', () => {
   newProjectFormEl.hidden = false;
   requestAnimationFrame(() => newProjectNameEl.focus());
@@ -710,7 +959,7 @@ newProjectNameEl.addEventListener('keydown', (event) => {
   }
 });
 projectsToggleEl.addEventListener('click', () => {
-  projectsPanelHidden = false;
+  projectsPanelHidden = !projectsPanelHidden;
   renderProjectsPanelVisibility();
 });
 projectsMinimizeEl.addEventListener('click', () => {
@@ -719,6 +968,135 @@ projectsMinimizeEl.addEventListener('click', () => {
 });
 terminalEl.addEventListener('mousedown', focusTerminal);
 panel.addEventListener('mousedown', focusTerminal);
+if (chatResizeHandleEl) {
+  chatResizeHandleEl.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    const rect = panel.getBoundingClientRect();
+    terminalResizePointer = {
+      id: event.pointerId,
+      mode: terminalLayoutState.mode,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: rect.width,
+      startHeight: rect.height,
+    };
+    chatResizeHandleEl.setPointerCapture(event.pointerId);
+  });
+
+  chatResizeHandleEl.addEventListener('pointermove', (event) => {
+    if (!terminalResizePointer || event.pointerId !== terminalResizePointer.id) return;
+    if (terminalResizePointer.mode === 'right') {
+      const delta = terminalResizePointer.startX - event.clientX;
+      terminalLayoutState.width = Math.min(1200, Math.max(TERMINAL_MIN_WIDTH, Math.floor(terminalResizePointer.startWidth + delta)));
+    } else if (terminalResizePointer.mode === 'bottom') {
+      const delta = terminalResizePointer.startY - event.clientY;
+      terminalLayoutState.height = Math.min(920, Math.max(240, Math.floor(terminalResizePointer.startHeight + delta)));
+    } else {
+      const deltaX = terminalResizePointer.startX - event.clientX;
+      const deltaY = terminalResizePointer.startY - event.clientY;
+      terminalLayoutState.width = Math.min(window.innerWidth - 24, Math.max(TERMINAL_MIN_WIDTH, Math.floor(terminalResizePointer.startWidth + deltaX)));
+      terminalLayoutState.height = Math.min(window.innerHeight - 24, Math.max(240, Math.floor(terminalResizePointer.startHeight + deltaY)));
+    }
+    renderTerminalDockMode();
+    syncTerminalSize();
+  });
+
+  const finishResize = (event) => {
+    if (!terminalResizePointer || event.pointerId !== terminalResizePointer.id) return;
+    try {
+      chatResizeHandleEl.releasePointerCapture(event.pointerId);
+    } catch {}
+    terminalResizePointer = null;
+    persistTerminalLayoutState();
+  };
+
+  chatResizeHandleEl.addEventListener('pointerup', finishResize);
+  chatResizeHandleEl.addEventListener('pointercancel', finishResize);
+}
+
+if (chatHeaderEl) {
+  const beginTerminalDrag = (clientX, clientY, pointerId = null) => {
+    if (terminalLayoutState.mode !== 'float') {
+      setTerminalDockMode('float');
+    }
+    const rect = panel.getBoundingClientRect();
+    terminalDragPointer = {
+      id: pointerId,
+      offsetX: clientX - rect.left,
+      offsetY: clientY - rect.top,
+    };
+  };
+
+  const moveTerminalDrag = (clientX, clientY) => {
+    if (!terminalDragPointer) return;
+    const maxLeft = Math.max(0, window.innerWidth - panel.offsetWidth);
+    const maxTop = Math.max(0, window.innerHeight - panel.offsetHeight);
+    const nextLeft = Math.min(maxLeft, Math.max(0, clientX - terminalDragPointer.offsetX));
+    const nextTop = Math.min(maxTop, Math.max(0, clientY - terminalDragPointer.offsetY));
+    panel.style.left = `${Math.round(nextLeft)}px`;
+    panel.style.top = `${Math.round(nextTop)}px`;
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    syncTerminalSize();
+  };
+
+  chatHeaderEl.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    if (event.target && event.target.closest('button')) return;
+    event.preventDefault();
+    beginTerminalDrag(event.clientX, event.clientY, event.pointerId);
+    chatHeaderEl.setPointerCapture(event.pointerId);
+  });
+
+  chatHeaderEl.addEventListener('pointermove', (event) => {
+    if (!terminalDragPointer || event.pointerId !== terminalDragPointer.id) return;
+    moveTerminalDrag(event.clientX, event.clientY);
+  });
+
+  const finishDrag = (event) => {
+    if (!terminalDragPointer || event.pointerId !== terminalDragPointer.id) return;
+    try {
+      chatHeaderEl.releasePointerCapture(event.pointerId);
+    } catch {}
+    terminalDragPointer = null;
+  };
+
+  chatHeaderEl.addEventListener('pointerup', finishDrag);
+  chatHeaderEl.addEventListener('pointercancel', finishDrag);
+
+  chatHeaderEl.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) return;
+    if (event.target && event.target.closest('button')) return;
+    event.preventDefault();
+    beginTerminalDrag(event.clientX, event.clientY, 'mouse');
+    terminalMouseDrag = true;
+  });
+
+  window.addEventListener('mousemove', (event) => {
+    if (!terminalMouseDrag) return;
+    moveTerminalDrag(event.clientX, event.clientY);
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!terminalMouseDrag) return;
+    terminalMouseDrag = null;
+    terminalDragPointer = null;
+  });
+
+  chatHeaderEl.addEventListener('dblclick', (event) => {
+    if (event.target && event.target.closest('button')) return;
+    if (terminalLayoutState.mode !== 'float') {
+      setTerminalDockMode('float');
+    }
+  });
+}
+
+window.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  if (!panel.classList.contains('open')) return;
+  if (terminalLayoutState.mode === 'float') return;
+  setTerminalDockMode('float');
+});
 runningPageTypeEl.addEventListener('change', () => renderRunningPageFields(runningPageTypeEl.value));
 runningPageSaveEl.addEventListener('click', () => {
   saveRunningPageConfig().catch(() => {});
@@ -731,14 +1109,26 @@ runningPageStopEl.addEventListener('click', () => {
 });
 if (previewBackEl) {
   previewBackEl.addEventListener('click', () => {
-    if (projectSelectionIndex <= 0) return;
+    if (typeof previewFrameEl.goBack === 'function' && previewFrameEl.canGoBack()) {
+      previewFrameEl.goBack();
+      return;
+    }
+    if (projectSelectionIndex <= 0) {
+      return;
+    }
     projectSelectionIndex -= 1;
     selectProject(projectSelectionHistory[projectSelectionIndex], { recordHistory: false }).catch(() => {});
   });
 }
 if (previewForwardEl) {
   previewForwardEl.addEventListener('click', () => {
-    if (projectSelectionIndex >= projectSelectionHistory.length - 1) return;
+    if (typeof previewFrameEl.goForward === 'function' && previewFrameEl.canGoForward()) {
+      previewFrameEl.goForward();
+      return;
+    }
+    if (projectSelectionIndex >= projectSelectionHistory.length - 1) {
+      return;
+    }
     projectSelectionIndex += 1;
     selectProject(projectSelectionHistory[projectSelectionIndex], { recordHistory: false }).catch(() => {});
   });
@@ -748,12 +1138,33 @@ function reloadActivePreview() {
   const state = ensurePreviewState(selectedProjectPath);
   const url = currentPreviewUrl(state);
   if (!url) return;
+  const config = projectRuntimeConfig.get(selectedProjectPath) || defaultRuntimeConfig();
+  if (config.sourceType === 'html') {
+    refreshSelectedHtmlPreview().catch(() => {});
+    return;
+  }
   if (typeof previewFrameEl.reload === 'function') {
     previewFrameEl.reload();
+    setPreviewMeta(url, 'Live preview');
     return;
   }
   previewFrameEl.src = url;
+  setPreviewMeta(url, 'Live preview');
 }
+
+previewFrameEl.addEventListener('did-navigate', (event) => {
+  setPreviewMeta(event.url, 'Live preview');
+  updateProjectNavigationControls();
+});
+
+previewFrameEl.addEventListener('did-navigate-in-page', (event) => {
+  setPreviewMeta(event.url, 'Live preview');
+  updateProjectNavigationControls();
+});
+
+previewFrameEl.addEventListener('dom-ready', () => {
+  updateProjectNavigationControls();
+});
 
 if (previewReloadEl) {
   previewReloadEl.addEventListener('click', reloadActivePreview);
@@ -769,18 +1180,14 @@ window.addEventListener('resize', () => {
 
 (async () => {
   loadHiddenProjects();
+  loadTerminalLayoutState();
+  renderTerminalDockMode();
   await window.api.startRendererWatch();
   openPanel();
+  selectedProjectPath = loadLastSelectedProject();
+  projectSelectionHistory[0] = selectedProjectPath;
+  projectSelectionIndex = 0;
   await renderProjects();
-  await bootTerminalForPath(selectedProjectPath, true);
-  await loadRuntimeConfig(selectedProjectPath);
-  renderRuntimeConfig(selectedProjectPath);
-  try {
-    await applyRuntimeConfig(selectedProjectPath, projectRuntimeConfig.get(selectedProjectPath) || defaultRuntimeConfig());
-  } catch (error) {
-    runningPageStatusEl.textContent = error.message;
-    renderPreviewForProject(selectedProjectPath);
-  }
-  updateProjectNavigationControls();
+  await selectProject(selectedProjectPath, { recordHistory: false });
   renderProjectsPanelVisibility();
 })();

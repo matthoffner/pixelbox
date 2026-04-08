@@ -1,0 +1,6 @@
+[     154ms] TypeError: Cannot read properties of undefined (reading 'onTerminalData')
+    at http://localhost:4173/renderer/app.js:855:12
+[     166ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:4173/favicon.ico:0
+[   91642ms] TypeError: Cannot read properties of undefined (reading 'onTerminalData')
+    at http://localhost:4173/renderer/app.js:855:12
+[ 6096493ms] [ERROR] Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist. @ http://localhost:4173/renderer/index.html:0

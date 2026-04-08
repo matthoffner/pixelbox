@@ -3,22 +3,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Northstar | Launch Faster</title>
-  <meta name="description" content="Northstar helps modern teams ship campaigns and products in days, not months." />
+  <title>Pixelbox | Local AI Software Workspace</title>
+  <meta
+    name="description"
+    content="Pixelbox is a local AI software workspace for switching projects, running agent terminals, and viewing the app live in one place."
+  />
   <style>
     :root {
-      --bg: #f4efe7;
-      --ink: #12263a;
-      --muted: #4b5f74;
-      --card: #fffaf4;
-      --line: #dacdbd;
-      --accent: #ee6c4d;
-      --accent-2: #2a9d8f;
-      --accent-3: #f4a261;
-      --shadow: 0 16px 45px rgba(18, 38, 58, 0.15);
-      --radius: 18px;
-      --max: 1120px;
-      --serif: "Fraunces", "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+      --bg: #08111f;
+      --bg-2: #0d1a2e;
+      --panel: rgba(10, 18, 33, 0.76);
+      --panel-strong: rgba(14, 24, 43, 0.92);
+      --line: rgba(147, 179, 255, 0.16);
+      --text: #edf3ff;
+      --muted: #99abc7;
+      --blue: #67b7ff;
+      --cyan: #63f4d3;
+      --amber: #ffbc6a;
+      --rose: #ff7f96;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+      --radius: 24px;
+      --max: 1180px;
+      --mono: "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
       --sans: "Avenir Next", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
@@ -30,753 +36,711 @@
     body {
       margin: 0;
       padding: 0;
-      scroll-behavior: smooth;
+      min-height: 100%;
     }
 
     body {
       font-family: var(--sans);
-      color: var(--ink);
+      color: var(--text);
       background:
-        radial-gradient(900px 500px at -10% -10%, rgba(238,108,77,0.22), transparent 60%),
-        radial-gradient(900px 600px at 110% 0%, rgba(42,157,143,0.18), transparent 60%),
-        linear-gradient(180deg, #f8f4ee 0%, var(--bg) 35%, #efe8dc 100%);
-      min-height: 100vh;
+        radial-gradient(circle at top left, rgba(103, 183, 255, 0.22), transparent 34%),
+        radial-gradient(circle at 85% 12%, rgba(99, 244, 211, 0.14), transparent 28%),
+        radial-gradient(circle at 20% 85%, rgba(255, 127, 150, 0.12), transparent 24%),
+        linear-gradient(180deg, var(--bg) 0%, #091221 40%, var(--bg-2) 100%);
       overflow-x: hidden;
     }
 
-    .grain::before {
+    body::before {
       content: "";
       position: fixed;
       inset: 0;
       pointer-events: none;
-      opacity: 0.07;
       background-image:
-        radial-gradient(circle at 20% 30%, #000 0.4px, transparent 0.8px),
-        radial-gradient(circle at 70% 60%, #000 0.4px, transparent 0.8px),
-        radial-gradient(circle at 40% 80%, #000 0.4px, transparent 0.8px);
-      background-size: 18px 18px, 22px 22px, 26px 26px;
-      z-index: -1;
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: radial-gradient(circle at center, black 46%, transparent 88%);
+      opacity: 0.35;
+    }
+
+    a {
+      color: inherit;
     }
 
     .container {
-      width: min(100% - 2.2rem, var(--max));
+      width: min(calc(100% - 32px), var(--max));
       margin: 0 auto;
     }
 
     header {
-      padding: 1rem 0;
       position: sticky;
       top: 0;
-      z-index: 20;
-      backdrop-filter: blur(8px);
-      background: rgba(248, 244, 238, 0.78);
-      border-bottom: 1px solid rgba(218, 205, 189, 0.7);
+      z-index: 30;
+      backdrop-filter: blur(18px);
+      background: rgba(8, 17, 31, 0.72);
+      border-bottom: 1px solid rgba(147, 179, 255, 0.12);
     }
 
     .nav {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 1rem;
+      gap: 16px;
+      padding: 16px 0;
     }
 
     .brand {
       display: inline-flex;
       align-items: center;
-      gap: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      color: var(--ink);
+      gap: 12px;
       text-decoration: none;
+      font-weight: 800;
+      letter-spacing: 0.04em;
     }
 
-    .mark {
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
-      background: linear-gradient(140deg, var(--accent), var(--accent-2));
-      display: grid;
-      place-items: center;
-      color: #fff;
-      font-size: 1rem;
-      box-shadow: 0 8px 18px rgba(18, 38, 58, 0.2);
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      display: block;
+      border-radius: 12px;
+      box-shadow: 0 10px 28px rgba(103, 183, 255, 0.2);
     }
 
     .nav-links {
       display: flex;
-      gap: 1rem;
       align-items: center;
+      gap: 18px;
       flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 0.95rem;
     }
 
     .nav-links a {
       text-decoration: none;
-      color: var(--muted);
-      font-weight: 600;
-      font-size: 0.95rem;
-      transition: color 180ms ease;
     }
 
     .nav-links a:hover {
-      color: var(--ink);
+      color: var(--text);
     }
 
-    .btn {
-      border: 1px solid transparent;
-      border-radius: 999px;
-      padding: 0.7rem 1.1rem;
-      font-weight: 700;
-      text-decoration: none;
+    .button {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 0.35rem;
-      transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
-      cursor: pointer;
-      white-space: nowrap;
-      font-family: var(--sans);
+      gap: 8px;
+      min-height: 46px;
+      padding: 0 18px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+      transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
     }
 
-    .btn:focus-visible {
-      outline: 3px solid rgba(42,157,143,0.45);
-      outline-offset: 2px;
+    .button:hover {
+      transform: translateY(-1px);
     }
 
-    .btn-primary {
-      background: linear-gradient(135deg, var(--accent), #d8583b);
-      color: #fff;
-      box-shadow: 0 8px 22px rgba(238,108,77,0.35);
+    .button-primary {
+      color: #07111d;
+      background: linear-gradient(135deg, var(--cyan), #8bc9ff);
+      box-shadow: 0 14px 34px rgba(99, 244, 211, 0.2);
     }
 
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 28px rgba(238,108,77,0.45);
-    }
-
-    .btn-ghost {
-      color: var(--ink);
-      border-color: rgba(18, 38, 58, 0.2);
-      background: rgba(255,255,255,0.45);
-    }
-
-    .btn-ghost:hover {
-      transform: translateY(-2px);
-      background: rgba(255,255,255,0.85);
+    .button-secondary {
+      border: 1px solid rgba(147, 179, 255, 0.22);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
     }
 
     .hero {
-      padding: clamp(2.5rem, 5vw, 5rem) 0 2rem;
-      position: relative;
-      overflow: hidden;
+      padding: 56px 0 40px;
     }
 
-    .hero-wrap {
+    .hero-grid {
       display: grid;
-      grid-template-columns: 1.05fr 0.95fr;
-      gap: clamp(1.2rem, 3vw, 2.8rem);
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 28px;
       align-items: center;
     }
 
     .eyebrow {
       display: inline-flex;
       align-items: center;
-      gap: 0.45rem;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.55);
-      color: var(--muted);
-      padding: 0.35rem 0.65rem;
+      gap: 8px;
+      padding: 8px 12px;
       border-radius: 999px;
+      border: 1px solid rgba(147, 179, 255, 0.16);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
       font-size: 0.82rem;
-      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.1em;
+      font-weight: 800;
     }
 
     h1 {
-      margin: 1rem 0 0.8rem;
-      font-family: var(--serif);
-      font-size: clamp(2.2rem, 5.4vw, 4.3rem);
-      line-height: 1.05;
-      letter-spacing: -0.02em;
-      text-wrap: balance;
+      margin: 18px 0 16px;
+      font-size: clamp(2.8rem, 7vw, 5.9rem);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+      max-width: 10ch;
     }
 
-    .hero p {
+    .hero-copy {
       margin: 0;
+      max-width: 58ch;
       color: var(--muted);
-      font-size: clamp(1rem, 1.5vw, 1.18rem);
-      line-height: 1.65;
-      max-width: 56ch;
+      font-size: clamp(1.04rem, 1.6vw, 1.18rem);
+      line-height: 1.7;
     }
 
-    .cta-row {
-      margin-top: 1.5rem;
+    .hero-actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.75rem;
-      align-items: center;
+      gap: 12px;
+      margin-top: 22px;
     }
 
-    .proof {
-      margin-top: 1rem;
+    .hero-proof {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 20px;
       color: var(--muted);
       font-size: 0.95rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
+    }
+
+    .hero-proof span {
+      display: inline-flex;
       align-items: center;
+      gap: 8px;
     }
 
-    .hero-card {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 1.1rem;
+    .hero-proof span::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--cyan);
+      box-shadow: 0 0 16px rgba(99, 244, 211, 0.5);
+    }
+
+    .workspace-card {
       position: relative;
-      transform: rotate(-1.2deg);
-      animation: floatIn 900ms cubic-bezier(.2,.75,.15,1) forwards;
-      opacity: 0;
+      padding: 20px;
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(16, 28, 51, 0.94), rgba(10, 18, 33, 0.92));
+      border: 1px solid rgba(147, 179, 255, 0.14);
+      box-shadow: var(--shadow);
+      overflow: hidden;
     }
 
-    .hero-card::before {
+    .workspace-card::after {
       content: "";
       position: absolute;
-      right: -12px;
-      bottom: -12px;
-      width: 110px;
-      height: 110px;
-      border-radius: 999px;
-      background: radial-gradient(circle, rgba(42,157,143,0.18), transparent 68%);
-      z-index: -1;
+      inset: auto -10% -36% auto;
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle, rgba(103, 183, 255, 0.28), transparent 62%);
     }
 
-    .card-top {
+    .window-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      margin-bottom: 16px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .dot:nth-child(1) {
+      background: #ff7e79;
+    }
+
+    .dot:nth-child(2) {
+      background: #ffbd4a;
+    }
+
+    .dot:nth-child(3) {
+      background: #29c76f;
+    }
+
+    .shell {
+      display: grid;
+      gap: 14px;
+    }
+
+    .shell-pane {
+      border-radius: 18px;
+      border: 1px solid rgba(147, 179, 255, 0.12);
+      background: rgba(255, 255, 255, 0.03);
+      overflow: hidden;
+    }
+
+    .pane-head {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      padding: 10px 14px;
       color: var(--muted);
-      font-weight: 700;
-      font-size: 0.88rem;
-      margin-bottom: 0.8rem;
-    }
-
-    .bars {
-      display: grid;
-      gap: 0.65rem;
-    }
-
-    .bar {
-      background: #f2e9dc;
-      border-radius: 10px;
-      overflow: hidden;
-      height: 12px;
-      border: 1px solid #e3d7c7;
-    }
-
-    .bar > span {
-      display: block;
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, var(--accent-2), #4fb9ac);
-      transform-origin: left;
-      animation: grow 1.3s ease forwards;
-    }
-
-    .metric-grid {
-      margin-top: 0.9rem;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.65rem;
-    }
-
-    .metric {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 0.65rem;
-      background: rgba(255,255,255,0.75);
-    }
-
-    .metric strong {
-      display: block;
-      font-size: 1.05rem;
-      font-family: var(--serif);
-    }
-
-    .metric span {
-      color: var(--muted);
-      font-size: 0.85rem;
-    }
-
-    .logos {
-      padding: 1.3rem 0 0.2rem;
-    }
-
-    .logo-row {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 0.6rem;
-    }
-
-    .logo {
-      background: rgba(255,255,255,0.5);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      min-height: 56px;
-      display: grid;
-      place-items: center;
-      color: #5d6f81;
-      font-weight: 800;
-      letter-spacing: 0.07em;
-      font-size: 0.76rem;
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
+      border-bottom: 1px solid rgba(147, 179, 255, 0.1);
+    }
+
+    .pane-body {
+      padding: 14px;
+    }
+
+    .project-list,
+    .terminal-lines,
+    .preview-status {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .project-list li,
+    .terminal-lines li,
+    .preview-status li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(147, 179, 255, 0.08);
+    }
+
+    .project-list li:last-child,
+    .terminal-lines li:last-child,
+    .preview-status li:last-child {
+      border-bottom: 0;
+    }
+
+    .project-name {
+      font-weight: 700;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(103, 183, 255, 0.12);
+      color: #cde5ff;
+      font-size: 0.78rem;
+      white-space: nowrap;
+    }
+
+    .terminal-lines {
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      color: #d7e5ff;
+    }
+
+    .terminal-lines .prompt {
+      color: var(--cyan);
+    }
+
+    .terminal-lines .muted {
+      color: #7f96bb;
+    }
+
+    .terminal-lines .hot {
+      color: var(--amber);
+    }
+
+    .preview-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(99, 244, 211, 0.1);
+      color: #c6fff3;
+      font-size: 0.78rem;
+      white-space: nowrap;
     }
 
     .section {
-      padding: clamp(2.2rem, 4vw, 4rem) 0;
+      padding: 34px 0;
     }
 
-    .section h2 {
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .section-head h2 {
       margin: 0;
-      font-family: var(--serif);
-      font-size: clamp(1.6rem, 3.5vw, 2.7rem);
-      letter-spacing: -0.015em;
+      font-size: clamp(1.8rem, 3vw, 2.8rem);
+      line-height: 1;
+      letter-spacing: -0.04em;
     }
 
-    .section-intro {
-      margin-top: 0.6rem;
+    .section-head p {
+      margin: 0;
       color: var(--muted);
-      max-width: 65ch;
+      max-width: 56ch;
       line-height: 1.65;
     }
 
-    .features {
-      margin-top: 1.3rem;
+    .grid-3 {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.95rem;
+      gap: 16px;
     }
 
-    .feature {
-      background: var(--card);
+    .card {
+      border-radius: 20px;
+      padding: 22px;
+      background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 1rem;
-      transform: translateY(14px);
-      opacity: 0;
-      transition: transform 500ms ease, opacity 500ms ease;
+      box-shadow: var(--shadow);
     }
 
-    .feature.reveal {
-      transform: translateY(0);
-      opacity: 1;
-    }
-
-    .icon {
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
-      display: grid;
-      place-items: center;
-      font-size: 0.95rem;
-      color: #fff;
-      margin-bottom: 0.75rem;
-    }
-
-    .i1 { background: linear-gradient(135deg, var(--accent-2), #1f7f74); }
-    .i2 { background: linear-gradient(135deg, var(--accent), #cf5337); }
-    .i3 { background: linear-gradient(135deg, var(--accent-3), #e58f3d); }
-
-    .feature h3 {
-      margin: 0;
-      font-size: 1.05rem;
-      letter-spacing: -0.01em;
-    }
-
-    .feature p {
-      margin: 0.55rem 0 0;
-      color: var(--muted);
-      line-height: 1.6;
-      font-size: 0.95rem;
-    }
-
-    .split {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
-      margin-top: 1.3rem;
-    }
-
-    .panel {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 1.1rem;
-    }
-
-    .panel h3 {
-      margin: 0;
-      font-size: 1.05rem;
-    }
-
-    .panel ul {
-      list-style: none;
-      margin: 0.85rem 0 0;
-      padding: 0;
-      display: grid;
-      gap: 0.6rem;
-      color: var(--muted);
-      font-size: 0.95rem;
-    }
-
-    .panel li {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.55rem;
-      line-height: 1.5;
-    }
-
-    .tick {
-      width: 1.1rem;
-      flex: 0 0 1.1rem;
-      color: var(--accent-2);
-      font-weight: 900;
-    }
-
-    .testimonial {
-      margin-top: 1.2rem;
-      background: linear-gradient(140deg, rgba(255,255,255,0.8), rgba(255,250,244,0.88));
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 1.1rem;
-    }
-
-    blockquote {
-      margin: 0;
-      font-family: var(--serif);
+    .card h3 {
+      margin: 0 0 12px;
       font-size: 1.2rem;
-      line-height: 1.45;
-      letter-spacing: -0.01em;
-      text-wrap: pretty;
     }
 
-    .cite {
-      margin-top: 0.7rem;
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.68;
+    }
+
+    .code-strip {
+      display: grid;
+      gap: 14px;
+      padding: 20px;
+      border-radius: 22px;
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      font-family: var(--mono);
+    }
+
+    .code-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(147, 179, 255, 0.1);
+      color: #d6e5ff;
+    }
+
+    .code-row:last-child {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+
+    .code-row strong {
+      color: var(--cyan);
+      font-weight: 700;
+    }
+
+    .footer {
+      padding: 24px 0 48px;
       color: var(--muted);
       font-size: 0.92rem;
     }
 
-    .cta {
-      padding: clamp(2.2rem, 5vw, 3.8rem) 0;
-    }
-
-    .cta-box {
-      background: linear-gradient(140deg, #17324a, #12263a);
-      color: #e8f1f8;
-      border-radius: 18px;
-      padding: clamp(1.3rem, 3.2vw, 2.4rem);
-      display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 1rem;
-      align-items: center;
-      box-shadow: 0 16px 34px rgba(18, 38, 58, 0.28);
-    }
-
-    .cta-box h2 {
-      margin: 0;
-      font-family: var(--serif);
-      font-size: clamp(1.6rem, 3.4vw, 2.5rem);
-      letter-spacing: -0.015em;
-      color: #fff;
-    }
-
-    .cta-box p {
-      margin: 0.6rem 0 0;
-      color: #c7d7e4;
-      line-height: 1.65;
-      max-width: 48ch;
-    }
-
-    .cta-actions {
-      display: flex;
-      justify-content: flex-end;
-      flex-wrap: wrap;
-      gap: 0.7rem;
-    }
-
-    .cta .btn-primary {
-      background: linear-gradient(135deg, #ee6c4d, #ff8769);
-    }
-
-    .cta .btn-ghost {
-      color: #fff;
-      border-color: rgba(255,255,255,0.35);
-      background: rgba(255,255,255,0.08);
-    }
-
-    footer {
-      padding: 1.2rem 0 2rem;
-      color: #5f6f80;
-      font-size: 0.9rem;
-    }
-
-    .foot {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      border-top: 1px solid rgba(218, 205, 189, 0.9);
-      padding-top: 1rem;
-    }
-
-    @keyframes floatIn {
-      0% {
-        opacity: 0;
-        transform: translateY(14px) rotate(-2.5deg) scale(0.98);
-      }
-      100% {
-        opacity: 1;
-        transform: translateY(0) rotate(-1.2deg) scale(1);
-      }
-    }
-
-    @keyframes grow {
-      from {
-        transform: scaleX(0.12);
-      }
-      to {
-        transform: scaleX(1);
-      }
-    }
-
-    @media (max-width: 980px) {
-      .hero-wrap,
-      .cta-box,
-      .split {
+    @media (max-width: 960px) {
+      .hero-grid,
+      .grid-3 {
         grid-template-columns: 1fr;
       }
 
-      .hero-card {
-        transform: rotate(0deg);
+      .section-head {
+        align-items: start;
+        flex-direction: column;
       }
 
-      .cta-actions {
-        justify-content: flex-start;
-      }
-
-      .logo-row {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      .features {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+      h1 {
+        max-width: none;
       }
     }
 
     @media (max-width: 640px) {
-      .logo-row,
-      .features {
-        grid-template-columns: 1fr;
-      }
-
-      .nav-links {
-        display: none;
+      .nav {
+        align-items: start;
+        flex-direction: column;
       }
 
       .hero {
-        padding-top: 2rem;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      *,
-      *::before,
-      *::after {
-        animation: none !important;
-        transition: none !important;
-        scroll-behavior: auto !important;
+        padding-top: 36px;
       }
 
-      .feature {
-        opacity: 1;
-        transform: none;
+      .workspace-card,
+      .card,
+      .code-strip {
+        padding: 16px;
+      }
+
+      .code-row,
+      .project-list li,
+      .terminal-lines li,
+      .preview-status li {
+        align-items: start;
+        flex-direction: column;
       }
     }
   </style>
 </head>
-<body class="grain">
+<body>
   <header>
-    <div class="container nav" aria-label="Main navigation">
-      <a class="brand" href="#top" aria-label="Northstar home">
-        <span class="mark" aria-hidden="true">N</span>
-        <span>Northstar</span>
+    <div class="container nav">
+      <a class="brand" href="#top">
+        <img class="brand-icon" src="../assets/pixelbox-icon.png" alt="Pixelbox icon" />
+        <span>Pixelbox</span>
       </a>
-      <nav class="nav-links">
-        <a href="#features">Features</a>
-        <a href="#results">Results</a>
-        <a href="#pricing">Pricing</a>
-        <a class="btn btn-primary" href="#demo">Book Demo</a>
+      <nav class="nav-links" aria-label="Workspace status">
+        <span>Workspace home</span>
+        <span>Local preview</span>
+        <span>Agent terminal</span>
       </nav>
     </div>
   </header>
 
   <main id="top">
     <section class="hero">
-      <div class="container hero-wrap">
+      <div class="container hero-grid">
         <div>
-          <span class="eyebrow">Now shipping in 40+ countries</span>
-          <h1>Turn strategy decks into launched products in 14 days.</h1>
-          <p>
-            Northstar gives lean teams the operating system for growth: campaign planning,
-            content workflows, approvals, and launch analytics in one focused workspace.
+          <div class="eyebrow">Home</div>
+          <h1>Open a project, run it, and keep the result in view.</h1>
+          <p class="hero-copy">
+            Pixelbox is the working surface for this repo. Use it to switch projects, keep Codex sessions attached,
+            launch local runtimes, and use this page as the workspace fallback when nothing else is live yet.
           </p>
-          <div class="cta-row">
-            <a class="btn btn-primary" href="#demo">Start Free Trial</a>
-            <a class="btn btn-ghost" href="#features">See It In Action</a>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#quick-start">Quick start</a>
+            <a class="button button-secondary" href="#projects">Recent projects</a>
           </div>
-          <div class="proof" role="list" aria-label="Key proof points">
-            <span role="listitem">4.9/5 customer satisfaction</span>
-            <span role="listitem">No credit card required</span>
-            <span role="listitem">Migration in under 48h</span>
+          <div class="hero-proof">
+            <span>Sticky terminal sessions</span>
+            <span>Embedded live preview</span>
+            <span>Project switching</span>
+            <span>HTML preview live update</span>
           </div>
         </div>
 
-        <aside class="hero-card" aria-label="Performance snapshot">
-          <div class="card-top">
-            <span>Q2 Launch Velocity</span>
-            <span>+187%</span>
+        <div class="workspace-card" aria-label="Pixelbox workspace preview">
+          <div class="window-bar">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span>pixelbox://workspace</span>
           </div>
-          <div class="bars" aria-hidden="true">
-            <div class="bar"><span style="width: 82%"></span></div>
-            <div class="bar"><span style="width: 74%; animation-delay: 90ms"></span></div>
-            <div class="bar"><span style="width: 92%; animation-delay: 180ms"></span></div>
-            <div class="bar"><span style="width: 66%; animation-delay: 260ms"></span></div>
+
+          <div class="shell">
+            <div class="shell-pane">
+              <div class="pane-head"><span>Today</span><span>Workspace state</span></div>
+              <div class="pane-body">
+                <ul class="project-list">
+                  <li>
+                    <span class="project-name">Fallback page</span>
+                    <span class="badge">generated/landing.html</span>
+                  </li>
+                  <li>
+                    <span class="project-name">Preview mode</span>
+                    <span class="badge">local HTML or localhost URL</span>
+                  </li>
+                  <li>
+                    <span class="project-name">Session model</span>
+                    <span class="badge">per-project continuity</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="shell-pane">
+              <div class="pane-head"><span>Now</span><span>Suggested flow</span></div>
+              <div class="pane-body">
+                <ul class="terminal-lines">
+                  <li><span><span class="prompt">1.</span> pick a project from the menu</span><span class="muted">scope the workspace</span></li>
+                  <li><span><span class="prompt">2.</span> resume or open the terminal</span><span class="hot">agent lane</span></li>
+                  <li><span><span class="prompt">3.</span> start a preview target</span><span class="muted">HTML or dev server</span></li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="shell-pane">
+              <div class="pane-head"><span>Preview</span><span>Fallback ready</span></div>
+              <div class="pane-body">
+                <ul class="preview-status">
+                  <li>
+                    <span>Home page source</span>
+                    <span class="preview-chip">generated/landing.html</span>
+                  </li>
+                  <li>
+                    <span>Best target when active</span>
+                    <span class="preview-chip">localhost app preview</span>
+                  </li>
+                  <li>
+                    <span>Loop</span>
+                    <span class="preview-chip">edit -> run -> verify</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
-          <div class="metric-grid">
-            <div class="metric"><strong>2.4x</strong><span>Faster campaign cycles</span></div>
-            <div class="metric"><strong>38%</strong><span>Lower acquisition cost</span></div>
-            <div class="metric"><strong>91%</strong><span>On-time launch rate</span></div>
-            <div class="metric"><strong>12h</strong><span>Average weekly time saved</span></div>
-          </div>
-        </aside>
+        </div>
       </div>
     </section>
 
-    <section class="logos container" aria-label="Trusted by teams">
-      <div class="logo-row">
-        <div class="logo">Lumen</div>
-        <div class="logo">Harbor</div>
-        <div class="logo">Fieldwork</div>
-        <div class="logo">Aster</div>
-        <div class="logo">Pioneer Co.</div>
-      </div>
-    </section>
-
-    <section id="features" class="section">
+    <section class="section" id="quick-start">
       <div class="container">
-        <h2>Built for teams that need momentum, not more meetings.</h2>
-        <p class="section-intro">
-          Swap fragmented docs and status threads for one command center built for launch weeks.
-          Northstar keeps creative, operations, and leadership aligned from first brief to post-mortem.
-        </p>
-
-        <div class="features">
-          <article class="feature">
-            <div class="icon i1" aria-hidden="true">↗</div>
-            <h3>Campaign Control Tower</h3>
-            <p>View every launch timeline, blocker, and dependency in a single rolling board.</p>
+        <div class="section-head">
+          <div>
+            <h2>Quick start</h2>
+          </div>
+          <p>
+            This page should help you start work, not sell you the app. These are the primary moves inside Pixelbox.
+          </p>
+        </div>
+        <div class="grid-3">
+          <article class="card">
+            <h3>1. Choose a project</h3>
+            <p>
+              Use the menu to switch into a project folder. Pixelbox keeps preview state and terminal context scoped to
+              that project.
+            </p>
           </article>
-          <article class="feature">
-            <div class="icon i2" aria-hidden="true">⚑</div>
-            <h3>Approval Automation</h3>
-            <p>Route copy, legal, and design approvals automatically with full revision history.</p>
+          <article class="card">
+            <h3>2. Open the terminal</h3>
+            <p>
+              Resume Codex or run commands directly. The terminal is the control surface for booting previews and doing
+              real work.
+            </p>
           </article>
-          <article class="feature">
-            <div class="icon i3" aria-hidden="true">◎</div>
-            <h3>Live Performance Layer</h3>
-            <p>Connect channels and see launch impact in real time without exporting spreadsheets.</p>
+          <article class="card">
+            <h3>3. Point the preview</h3>
+            <p>
+              Set a local URL or HTML file in Running Page so the result stays visible while you iterate.
+            </p>
           </article>
         </div>
-
-        <div class="split" id="results">
-          <article class="panel">
-            <h3>What teams get in week one</h3>
-            <ul>
-              <li><span class="tick">✓</span><span>Structured launch templates for product, paid, and lifecycle campaigns.</span></li>
-              <li><span class="tick">✓</span><span>Cross-functional dashboards tailored for executives, managers, and makers.</span></li>
-              <li><span class="tick">✓</span><span>Automated reporting that updates before your Monday standup.</span></li>
-            </ul>
-          </article>
-          <article class="panel" id="pricing">
-            <h3>Simple pricing that scales</h3>
-            <ul>
-              <li><span class="tick">✓</span><span>Starter: $49/month per team for up to 10 active campaigns.</span></li>
-              <li><span class="tick">✓</span><span>Growth: $149/month with advanced automations and integrations.</span></li>
-              <li><span class="tick">✓</span><span>Enterprise: custom security, SSO, and dedicated success architect.</span></li>
-            </ul>
-          </article>
-        </div>
-
-        <article class="testimonial" aria-label="Customer testimonial">
-          <blockquote>
-            "Northstar replaced three tools and cut our launch prep from six weeks to twelve days.
-            The team now spends time improving ideas, not chasing status updates."
-          </blockquote>
-          <div class="cite">Riley Chen, VP Growth at Harbor Labs</div>
-        </article>
       </div>
     </section>
 
-    <section class="cta" id="demo">
-      <div class="container cta-box">
-        <div>
-          <h2>Make your next launch the smooth one.</h2>
+    <section class="section" id="projects">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <h2>Workspace patterns</h2>
+          </div>
           <p>
-            Book a 20-minute walkthrough and get a tailored rollout plan for your current stack.
-            No slides, no pressure, just practical steps your team can use this week.
+            These are the app behaviors that matter most when you are using Pixelbox as a daily workspace.
           </p>
         </div>
-        <div class="cta-actions">
-          <a href="#top" class="btn btn-primary">Book My Demo</a>
-          <a href="#features" class="btn btn-ghost">Explore Features</a>
+        <div class="code-strip">
+          <div class="code-row">
+            <span><strong>Projects</strong></span>
+            <span>Switch without losing preview and terminal history</span>
+          </div>
+          <div class="code-row">
+            <span><strong>Terminal</strong></span>
+            <span>Keep agent sessions attached to the active project</span>
+          </div>
+          <div class="code-row">
+            <span><strong>Preview</strong></span>
+            <span>Bind to localhost or a local HTML file and keep it in frame</span>
+          </div>
+          <div class="code-row">
+            <span><strong>Coordination</strong></span>
+            <span>Use <code>.pixelbox/handoff.md</code> when editor and runtime work split</span>
+          </div>
+          <div class="code-row">
+            <span><strong>Fallback</strong></span>
+            <span>This page fills the viewport until a project takes over</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="runtime">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <h2>Built into this repo</h2>
+          </div>
+          <p>
+            The app home should reflect the current product surface, not future aspirations.
+          </p>
+        </div>
+        <div class="grid-3">
+          <article class="card">
+            <h3>Electron shell</h3>
+            <p>
+              Native wrapper, full-bleed viewport, and app-level controls for a coding workspace.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Real terminal</h3>
+            <p>
+              xterm-backed terminal for Codex sessions, shell work, and runtime startup commands.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Live viewport</h3>
+            <p>
+              Embedded preview for local URLs and static files with direct visual feedback.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="start">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <h2>Local commands</h2>
+          </div>
+          <p>
+            The basics for this repo stay small.
+          </p>
+        </div>
+        <div class="code-strip">
+          <div class="code-row">
+            <span><strong>Install</strong></span>
+            <span>npm install</span>
+          </div>
+          <div class="code-row">
+            <span><strong>Launch</strong></span>
+            <span>npm run dev</span>
+          </div>
+          <div class="code-row">
+            <span><strong>Fallback page</strong></span>
+            <span>generated/landing.html</span>
+          </div>
+          <div class="code-row">
+            <span><strong>Home page role</strong></span>
+            <span>in-app workspace overview, not external marketing</span>
+          </div>
         </div>
       </div>
     </section>
   </main>
 
-  <footer>
-    <div class="container foot">
-      <span>© 2026 Northstar Inc.</span>
-      <span>Built for fast-moving teams.</span>
+  <footer class="footer">
+    <div class="container">
+      Pixelbox workspace home
     </div>
   </footer>
-
-  <script>
-    (function () {
-      const items = document.querySelectorAll('.feature');
-      if (!('IntersectionObserver' in window)) {
-        items.forEach((el) => el.classList.add('reveal'));
-        return;
-      }
-
-      const observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              entry.target.classList.add('reveal');
-              observer.unobserve(entry.target);
-            }
-          });
-        },
-        { threshold: 0.25 }
-      );
-
-      items.forEach((el, idx) => {
-        el.style.transitionDelay = String(idx * 80) + 'ms';
-        observer.observe(el);
-      });
-    })();
-  </script>
 </body>
 </html>
