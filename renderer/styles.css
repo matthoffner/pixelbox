@@ -123,7 +123,6 @@ h1 {
 #new-project,
 #primary-action,
 #chat-toggle,
-#projects-toggle,
 .project-btn,
 #chat-minimize,
 #projects-minimize,
@@ -141,7 +140,6 @@ input {
 #new-project,
 #primary-action,
 #chat-toggle,
-#projects-toggle,
 .project-btn,
 #running-page-actions button {
   border: 1px solid var(--border);
@@ -408,6 +406,34 @@ input:focus-visible,
   left: 18px;
   bottom: 18px;
   z-index: 70;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.projects-fab .menu-logo {
+  width: 42px;
+  height: 42px;
+  display: block;
+  border-radius: 999px;
+  object-fit: cover;
+  box-shadow: none;
+}
+
+.projects-fab:hover,
+.projects-fab:focus-visible {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.projects-fab:hover .menu-logo,
+.projects-fab:focus-visible .menu-logo {
+  transform: translateY(-1px);
 }
 
 body:not(.projects-panel-hidden) .projects-fab {

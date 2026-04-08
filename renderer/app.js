@@ -58,7 +58,7 @@ window.__pwTerminalOutput = '';
 let reloadTimer;
 let selectedProjectPath = '.';
 let startResult;
-let projectsPanelHidden = true;
+let projectsPanelHidden = false;
 const hiddenProjects = new Set();
 const projectPreviewState = new Map();
 const projectRuntimeConfig = new Map();
@@ -82,6 +82,7 @@ const PIXELBOX_CONTEXT_START = '<!-- PIXELBOX_CONTEXT_START -->';
 const PIXELBOX_CONTEXT_END = '<!-- PIXELBOX_CONTEXT_END -->';
 const TERMINAL_MIN_WIDTH = 420;
 const LAST_SELECTED_PROJECT_KEY = 'pixelbox.lastSelectedProject';
+const PROJECTS_PANEL_HIDDEN_KEY = 'pixelbox.projectsPanelHidden';
 
 const previewFrameEl = document.createElement('webview');
 previewFrameEl.id = 'preview-frame';
@@ -120,6 +121,20 @@ function loadLastSelectedProject() {
 function persistLastSelectedProject(projectPath) {
   try {
     window.localStorage.setItem(LAST_SELECTED_PROJECT_KEY, projectPath);
+  } catch {}
+}
+
+function loadProjectsPanelHidden() {
+  try {
+    return window.localStorage.getItem(PROJECTS_PANEL_HIDDEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function persistProjectsPanelHidden() {
+  try {
+    window.localStorage.setItem(PROJECTS_PANEL_HIDDEN_KEY, projectsPanelHidden ? '1' : '0');
   } catch {}
 }
 
@@ -280,11 +295,27 @@ function currentPreviewUrl(state) {
   return state.history[state.index] || '';
 }
 
+function safeWebviewCanGoBack() {
+  try {
+    return typeof previewFrameEl.canGoBack === 'function' ? previewFrameEl.canGoBack() : false;
+  } catch {
+    return false;
+  }
+}
+
+function safeWebviewCanGoForward() {
+  try {
+    return typeof previewFrameEl.canGoForward === 'function' ? previewFrameEl.canGoForward() : false;
+  } catch {
+    return false;
+  }
+}
+
 function updateProjectNavigationControls() {
   const projectBackAvailable = projectSelectionIndex > 0;
   const projectForwardAvailable = projectSelectionIndex < projectSelectionHistory.length - 1;
-  const webBackAvailable = typeof previewFrameEl.canGoBack === 'function' ? previewFrameEl.canGoBack() : false;
-  const webForwardAvailable = typeof previewFrameEl.canGoForward === 'function' ? previewFrameEl.canGoForward() : false;
+  const webBackAvailable = safeWebviewCanGoBack();
+  const webForwardAvailable = safeWebviewCanGoForward();
   if (previewBackEl) {
     previewBackEl.disabled = !(webBackAvailable || projectBackAvailable);
   }
@@ -622,7 +653,11 @@ async function loadRuntimeConfig(projectPath) {
       ...parsed,
     };
     projectRuntimeConfig.set(projectPath, config);
-    replacePreviewHistory(projectPath, parsed.history || [], Number.isInteger(parsed.index) ? parsed.index : -1);
+    if (config.sourceType === 'none') {
+      replacePreviewHistory(projectPath, [], -1);
+    } else {
+      replacePreviewHistory(projectPath, parsed.history || [], Number.isInteger(parsed.index) ? parsed.index : -1);
+    }
     return config;
   } catch {
     const config = defaultRuntimeConfig();
@@ -670,12 +705,16 @@ async function applyRuntimeConfig(projectPath, config, options = {}) {
       sourceType: 'server',
       url: config.serverUrl,
     });
-    await window.api.syncPreviewRuntime(projectPath, {
+    const shouldAutoStart = options.forceStart ? true : config.autoStart;
+    const syncResult = await window.api.syncPreviewRuntime(projectPath, {
       sourceType: 'server',
       command: config.serverCommand,
       url: config.serverUrl,
-      autoStart: options.forceStart ? true : config.autoStart,
+      autoStart: shouldAutoStart,
     });
+    if (!syncResult?.running) {
+      replacePreviewHistory(projectPath, explicitUrls, explicitUrls.length > 0 ? 0 : -1);
+    }
     if (projectPath === selectedProjectPath) {
       await window.api.clearPreviewHtmlWatch();
     }
@@ -736,10 +775,16 @@ async function bootTerminalForPath(relPath, shouldRunStartup = false, forceStart
       cwd: relPath,
     })
     : '';
-  const result = await window.api.startTerminal(relPath, { startupCommand });
+  const result = await window.api.startOrRestartTerminal(relPath, shouldBootstrapProject, { startupCommand });
   startResult = result;
   projectSessionBootstrapped.add(relPath);
   projectSessionExited.delete(relPath);
+
+  // A project switch can happen while this async boot is in-flight.
+  // Only apply renderer terminal state if this path is still active.
+  if (selectedProjectPath !== relPath) {
+    return;
+  }
 
   window.__pwTerminalOutput = projectTerminalOutput.get(relPath) || '';
   term.reset();
@@ -858,10 +903,19 @@ window.api.onTerminalData(({ key, data }) => {
     queueTerminalWrite(data);
   }
 
+  const runtimeConfig = projectRuntimeConfig.get(key) || defaultRuntimeConfig();
+  const shouldDetectPreviewUrl =
+    runtimeConfig.sourceType === 'none' ||
+    (runtimeConfig.sourceType === 'server' && !runtimeConfig.serverUrl);
+  if (!shouldDetectPreviewUrl) {
+    return;
+  }
+
   const cleanData = stripAnsi(data);
   const matches = cleanData.match(/https?:\/\/(?:localhost|127\.0\.0\.1):\d{2,5}[^\s"'<>)\]]*/gi) || [];
-  for (const match of matches) {
-    pushPreviewUrl(key, match).catch(() => {});
+  const latest = matches[matches.length - 1];
+  if (latest) {
+    pushPreviewUrl(key, latest).catch(() => {});
   }
 });
 
@@ -960,10 +1014,12 @@ newProjectNameEl.addEventListener('keydown', (event) => {
 });
 projectsToggleEl.addEventListener('click', () => {
   projectsPanelHidden = !projectsPanelHidden;
+  persistProjectsPanelHidden();
   renderProjectsPanelVisibility();
 });
 projectsMinimizeEl.addEventListener('click', () => {
   projectsPanelHidden = true;
+  persistProjectsPanelHidden();
   renderProjectsPanelVisibility();
 });
 terminalEl.addEventListener('mousedown', focusTerminal);
@@ -1109,10 +1165,12 @@ runningPageStopEl.addEventListener('click', () => {
 });
 if (previewBackEl) {
   previewBackEl.addEventListener('click', () => {
-    if (typeof previewFrameEl.goBack === 'function' && previewFrameEl.canGoBack()) {
-      previewFrameEl.goBack();
-      return;
-    }
+    try {
+      if (typeof previewFrameEl.goBack === 'function' && safeWebviewCanGoBack()) {
+        previewFrameEl.goBack();
+        return;
+      }
+    } catch {}
     if (projectSelectionIndex <= 0) {
       return;
     }
@@ -1122,10 +1180,12 @@ if (previewBackEl) {
 }
 if (previewForwardEl) {
   previewForwardEl.addEventListener('click', () => {
-    if (typeof previewFrameEl.goForward === 'function' && previewFrameEl.canGoForward()) {
-      previewFrameEl.goForward();
-      return;
-    }
+    try {
+      if (typeof previewFrameEl.goForward === 'function' && safeWebviewCanGoForward()) {
+        previewFrameEl.goForward();
+        return;
+      }
+    } catch {}
     if (projectSelectionIndex >= projectSelectionHistory.length - 1) {
       return;
     }
@@ -1180,6 +1240,7 @@ window.addEventListener('resize', () => {
 
 (async () => {
   loadHiddenProjects();
+  projectsPanelHidden = loadProjectsPanelHidden();
   loadTerminalLayoutState();
   renderTerminalDockMode();
   await window.api.startRendererWatch();

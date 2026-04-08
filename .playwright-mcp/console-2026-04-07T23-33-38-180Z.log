@@ -4,3 +4,8 @@
 [   91642ms] TypeError: Cannot read properties of undefined (reading 'onTerminalData')
     at http://localhost:4173/renderer/app.js:855:12
 [ 6096493ms] [ERROR] Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist. @ http://localhost:4173/renderer/index.html:0
+[13489481ms] [ERROR] Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist. @ http://localhost:4173/renderer/index.html:0
+[46836586ms] [ERROR] Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist. @ http://localhost:4173/renderer/index.html:0
+[58487196ms] [ERROR] Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist. @ http://localhost:4173/renderer/index.html:0
+[65022361ms] [ERROR] Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist. @ http://localhost:4173/renderer/index.html:0
+[67774664ms] [ERROR] Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist. @ http://localhost:4173/renderer/index.html:0
