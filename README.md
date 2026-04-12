@@ -42,6 +42,25 @@ Pixelbox should feel like an AI-native operating surface for software creation:
 - Per-project terminal/session continuity behavior.
 - Local guidance injection (`AGENTS.md`) and handoff scaffolding (`.pixelbox/handoff.md`).
 
+## Landing Site
+
+Pixelbox now includes a standalone static landing site in [`landing/`](landing).
+
+- Intended deployment target: Vercel
+- Recommended Vercel root directory: `landing`
+- Local preview:
+
+```bash
+cd landing
+python3 -m http.server 4173
+```
+
+- Local URL:
+
+```text
+http://127.0.0.1:4173
+```
+
 ## How To Use
 
 ### 1. Start Pixelbox

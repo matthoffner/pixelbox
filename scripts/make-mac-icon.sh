@@ -7,7 +7,7 @@ SRC_PNG="${ROOT_DIR}/assets/pixelbox-icon.png"
 ICONSET_DIR="${ROOT_DIR}/assets/pixelbox.iconset"
 ICNS_OUT="${ROOT_DIR}/assets/pixelbox.icns"
 
-if [[ -f "${SRC_SVG}" ]]; then
+if [[ -f "${SRC_SVG}" && ! -f "${SRC_PNG}" ]]; then
   qlmanage -t -s 1024 -o "${ROOT_DIR}/assets" "${SRC_SVG}" >/dev/null
   mv "${SRC_SVG}.png" "${SRC_PNG}"
 fi

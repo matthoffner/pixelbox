@@ -5,8 +5,9 @@ const term = new Terminal({
   scrollback: 5000,
   fastScrollModifier: 'alt',
   fastScrollSensitivity: 5,
+  allowTransparency: true,
   theme: {
-    background: '#0f1e33',
+    background: 'rgba(0, 0, 0, 0)',
     foreground: '#e4eeff',
   },
 });
@@ -17,6 +18,8 @@ term.open(document.getElementById('terminal'));
 
 const panel = document.getElementById('chat-panel');
 const chatHeaderEl = document.getElementById('chat-header');
+const projectsPanelEl = document.getElementById('projects-panel');
+const projectsHeaderEl = document.querySelector('.projects-header');
 const toggle = document.getElementById('chat-toggle');
 const minimize = document.getElementById('chat-minimize');
 const chatDockFloatEl = document.getElementById('chat-dock-float');
@@ -53,6 +56,11 @@ const runningPageStopEl = document.getElementById('running-page-stop');
 const runningPageStatusEl = document.getElementById('running-page-status');
 
 const previewFieldRows = [...document.querySelectorAll('[data-source]')];
+const prefersVibrantWindow = navigator.platform.toLowerCase().includes('mac');
+
+if (prefersVibrantWindow) {
+  document.body.classList.add('vibrant-window');
+}
 
 window.__pwTerminalOutput = '';
 let reloadTimer;
@@ -73,16 +81,23 @@ let terminalFlushRaf = 0;
 let terminalResizePointer = null;
 let terminalDragPointer = null;
 let terminalMouseDrag = null;
+let projectsDragPointer = null;
+let projectsMouseDrag = null;
 const terminalLayoutState = {
   mode: 'float',
   width: 680,
   height: 520,
+};
+const projectsPanelState = {
+  left: 16,
+  top: 100,
 };
 const PIXELBOX_CONTEXT_START = '<!-- PIXELBOX_CONTEXT_START -->';
 const PIXELBOX_CONTEXT_END = '<!-- PIXELBOX_CONTEXT_END -->';
 const TERMINAL_MIN_WIDTH = 420;
 const LAST_SELECTED_PROJECT_KEY = 'pixelbox.lastSelectedProject';
 const PROJECTS_PANEL_HIDDEN_KEY = 'pixelbox.projectsPanelHidden';
+const PROJECTS_PANEL_POSITION_KEY = 'pixelbox.projectsPanelPosition';
 
 const previewFrameEl = document.createElement('webview');
 previewFrameEl.id = 'preview-frame';
@@ -136,6 +151,39 @@ function persistProjectsPanelHidden() {
   try {
     window.localStorage.setItem(PROJECTS_PANEL_HIDDEN_KEY, projectsPanelHidden ? '1' : '0');
   } catch {}
+}
+
+function loadProjectsPanelPosition() {
+  try {
+    const raw = window.localStorage.getItem(PROJECTS_PANEL_POSITION_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed && Number.isFinite(parsed.left)) {
+      projectsPanelState.left = Math.max(0, Math.floor(parsed.left));
+    }
+    if (parsed && Number.isFinite(parsed.top)) {
+      projectsPanelState.top = Math.max(0, Math.floor(parsed.top));
+    }
+  } catch {}
+}
+
+function persistProjectsPanelPosition() {
+  try {
+    window.localStorage.setItem(PROJECTS_PANEL_POSITION_KEY, JSON.stringify(projectsPanelState));
+  } catch {}
+}
+
+function renderProjectsPanelPosition() {
+  if (!projectsPanelEl) return;
+  const rect = projectsPanelEl.getBoundingClientRect();
+  const width = rect.width || projectsPanelEl.offsetWidth || 340;
+  const height = rect.height || projectsPanelEl.offsetHeight || 520;
+  const maxLeft = Math.max(0, window.innerWidth - width - 12);
+  const maxTop = Math.max(0, window.innerHeight - height - 12);
+  projectsPanelState.left = Math.min(maxLeft, Math.max(12, projectsPanelState.left));
+  projectsPanelState.top = Math.min(maxTop, Math.max(12 + 28, projectsPanelState.top));
+  projectsPanelEl.style.left = `${projectsPanelState.left}px`;
+  projectsPanelEl.style.top = `${projectsPanelState.top}px`;
 }
 
 function loadTerminalLayoutState() {
@@ -368,6 +416,11 @@ function renderProjectsPanelVisibility() {
   document.body.classList.toggle('projects-panel-hidden', projectsPanelHidden);
   if (projectsToggleEl) {
     projectsToggleEl.setAttribute('aria-pressed', String(!projectsPanelHidden));
+  }
+  if (!projectsPanelHidden) {
+    requestAnimationFrame(() => {
+      renderProjectsPanelPosition();
+    });
   }
 }
 
@@ -1147,6 +1200,79 @@ if (chatHeaderEl) {
   });
 }
 
+if (projectsHeaderEl && projectsPanelEl) {
+  const beginProjectsDrag = (clientX, clientY, pointerId = null) => {
+    const rect = projectsPanelEl.getBoundingClientRect();
+    projectsDragPointer = {
+      id: pointerId,
+      offsetX: clientX - rect.left,
+      offsetY: clientY - rect.top,
+    };
+  };
+
+  const moveProjectsDrag = (clientX, clientY) => {
+    if (!projectsDragPointer) return;
+    const maxLeft = Math.max(12, window.innerWidth - projectsPanelEl.offsetWidth - 12);
+    const maxTop = Math.max(12 + 28, window.innerHeight - projectsPanelEl.offsetHeight - 12);
+    projectsPanelState.left = Math.min(maxLeft, Math.max(12, Math.round(clientX - projectsDragPointer.offsetX)));
+    projectsPanelState.top = Math.min(maxTop, Math.max(12 + 28, Math.round(clientY - projectsDragPointer.offsetY)));
+    renderProjectsPanelPosition();
+  };
+
+  projectsHeaderEl.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    if (event.target && event.target.closest('button, input, select, textarea, a')) return;
+    event.preventDefault();
+    beginProjectsDrag(event.clientX, event.clientY, event.pointerId);
+    projectsHeaderEl.setPointerCapture(event.pointerId);
+  });
+
+  projectsHeaderEl.addEventListener('pointermove', (event) => {
+    if (!projectsDragPointer || event.pointerId !== projectsDragPointer.id) return;
+    moveProjectsDrag(event.clientX, event.clientY);
+  });
+
+  const finishProjectsDrag = (event) => {
+    if (!projectsDragPointer || event.pointerId !== projectsDragPointer.id) return;
+    try {
+      projectsHeaderEl.releasePointerCapture(event.pointerId);
+    } catch {}
+    projectsDragPointer = null;
+    persistProjectsPanelPosition();
+  };
+
+  projectsHeaderEl.addEventListener('pointerup', finishProjectsDrag);
+  projectsHeaderEl.addEventListener('pointercancel', finishProjectsDrag);
+
+  projectsHeaderEl.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) return;
+    if (event.target && event.target.closest('button, input, select, textarea, a')) return;
+    event.preventDefault();
+    beginProjectsDrag(event.clientX, event.clientY, 'mouse');
+    projectsMouseDrag = true;
+  });
+
+  window.addEventListener('mousemove', (event) => {
+    if (!projectsMouseDrag) return;
+    moveProjectsDrag(event.clientX, event.clientY);
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!projectsMouseDrag) return;
+    projectsMouseDrag = null;
+    projectsDragPointer = null;
+    persistProjectsPanelPosition();
+  });
+
+  projectsHeaderEl.addEventListener('dblclick', (event) => {
+    if (event.target && event.target.closest('button, input, select, textarea, a')) return;
+    projectsPanelState.left = 16;
+    projectsPanelState.top = 72 + 28;
+    renderProjectsPanelPosition();
+    persistProjectsPanelPosition();
+  });
+}
+
 window.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
   if (!panel.classList.contains('open')) return;
@@ -1234,6 +1360,7 @@ window.api.onAppRefreshShortcut(() => {
 });
 
 window.addEventListener('resize', () => {
+  renderProjectsPanelPosition();
   if (!panel.classList.contains('open')) return;
   syncTerminalSize();
 });
@@ -1241,6 +1368,7 @@ window.addEventListener('resize', () => {
 (async () => {
   loadHiddenProjects();
   projectsPanelHidden = loadProjectsPanelHidden();
+  loadProjectsPanelPosition();
   loadTerminalLayoutState();
   renderTerminalDockMode();
   await window.api.startRendererWatch();
@@ -1251,4 +1379,5 @@ window.addEventListener('resize', () => {
   await renderProjects();
   await selectProject(selectedProjectPath, { recordHistory: false });
   renderProjectsPanelVisibility();
+  renderProjectsPanelPosition();
 })();

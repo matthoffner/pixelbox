@@ -1,0 +1,37 @@
+{
+  "entries": [
+    {
+      "date": "2026-04-12",
+      "type": "Launch Surface",
+      "title": "Started the dedicated Pixelbox landing page",
+      "summary": "Pixelbox now has its own product-facing page instead of living only as a repo or a mention on the personal site.",
+      "points": [
+        "Positioned Pixelbox as a standalone Pixel Claw Labs product",
+        "Added a public changelog surface for ongoing release notes",
+        "Set up the site to deploy cleanly from a Vercel subdirectory"
+      ]
+    },
+    {
+      "date": "2026-04-11",
+      "type": "Desktop UX",
+      "title": "Added vibrant macOS window treatment and drag behavior",
+      "summary": "The Electron shell now leans into the native desktop feel with transparent and vibrant window styling plus cleaner drag regions.",
+      "points": [
+        "Terminal panel now uses transparent xterm layers with glass styling",
+        "Projects panel got its own stronger frosted treatment and drag behavior",
+        "Top-level app drag strip preserves the titleless look while keeping the window movable"
+      ]
+    },
+    {
+      "date": "2026-04-08",
+      "type": "Core Product",
+      "title": "Tightened the local workspace loop",
+      "summary": "Pixelbox continued shifting from a simple Electron shell into a project-aware software workspace.",
+      "points": [
+        "Project switching and runtime continuity were stabilized",
+        "Preview navigation and runtime controls became more reliable",
+        "Electron and Playwright flows expanded to cover long-session behavior"
+      ]
+    }
+  ]
+}

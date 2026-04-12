@@ -36,7 +36,6 @@
   <rect x="72" y="72" width="880" height="880" rx="224" fill="url(#bg)"/>
   <rect x="72" y="72" width="880" height="880" rx="224" fill="url(#glowA)"/>
   <rect x="72" y="72" width="880" height="880" rx="224" fill="url(#glowB)"/>
-  <rect x="72" y="72" width="880" height="880" rx="224" stroke="rgba(255,255,255,0.08)"/>
 
   <g opacity="0.22">
     <path d="M212 330H812" stroke="#8DBBFF" stroke-width="2"/>

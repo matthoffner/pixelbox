@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pixelbox</title>
+    <meta
+      name="description"
+      content="Pixelbox is a local AI workspace for running agent terminals, previewing apps in place, and shipping software with a tighter loop."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div>
+            <p class="eyebrow">Pixel Claw Labs</p>
+            <h1>Pixelbox</h1>
+          </div>
+        </div>
+        <nav class="topbar-actions">
+          <a href="#changelog">Changelog</a>
+          <a href="https://github.com/matthoffner/pixelbox" target="_blank" rel="noreferrer">GitHub</a>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="kicker">AI-native software workspace</p>
+            <h2>One surface for the terminal, the preview, and the next decision.</h2>
+            <p class="hero-text">
+              Pixelbox turns local software work into a tighter loop: switch projects,
+              keep agent sessions alive, run the app in place, and watch the system
+              behave while you change it.
+            </p>
+            <div class="hero-actions">
+              <a class="primary" href="https://github.com/matthoffner/pixelbox" target="_blank" rel="noreferrer">
+                Explore the repo
+              </a>
+              <a class="secondary" href="#changelog">Track updates</a>
+            </div>
+            <ul class="signal-list">
+              <li>Local-first Electron workspace</li>
+              <li>Project switching without losing runtime context</li>
+              <li>Built for ongoing product iteration, not one-off demos</li>
+            </ul>
+          </div>
+
+          <aside class="hero-panel">
+            <div class="panel-label">Current framing</div>
+            <div class="status-stack">
+              <article>
+                <h3>What it is</h3>
+                <p>Pixelbox is the native shell for coding with agents, terminals, and live previews.</p>
+              </article>
+              <article>
+                <h3>Where it came from</h3>
+                <p>It started inside the Pixel Claw idea space and is now becoming its own product line.</p>
+              </article>
+              <article>
+                <h3>What happens next</h3>
+                <p>This landing page becomes the public heartbeat: changelog updates, milestones, screenshots, and product notes.</p>
+              </article>
+            </div>
+          </aside>
+        </section>
+
+        <section class="feature-grid" aria-label="Product framing">
+          <article class="feature-card feature-card-wide">
+            <p class="card-label">Why it exists</p>
+            <h3>The gap between “write code” and “see behavior” is still too wide.</h3>
+            <p>
+              Most local workflows spread context across a terminal, a browser, a chat
+              pane, and whatever tab still has the last useful error. Pixelbox collapses
+              that into one place and treats agent work like a first-class local runtime.
+            </p>
+          </article>
+          <article class="feature-card">
+            <p class="card-label">Core loop</p>
+            <h3>Switch. Run. Observe. Edit.</h3>
+            <p>Project-aware sessions, embedded preview, and terminal continuity make the loop harder to drop.</p>
+          </article>
+          <article class="feature-card">
+            <p class="card-label">Positioning</p>
+            <h3>Not just a launcher</h3>
+            <p>Pixelbox is the workspace layer around AI software creation, not another terminal skin or static app shell.</p>
+          </article>
+        </section>
+
+        <section class="roadmap-band">
+          <div>
+            <p class="card-label">Near-term direction</p>
+            <h3>What this page should grow into</h3>
+          </div>
+          <ol>
+            <li>Public changelog with screenshots and short release notes</li>
+            <li>Dedicated launch story for Pixelbox as a standalone labs product</li>
+            <li>Versioned milestones for terminal UX, runtime orchestration, and multi-agent coordination</li>
+          </ol>
+        </section>
+
+        <section id="changelog" class="changelog-section">
+          <div class="section-heading">
+            <div>
+              <p class="card-label">Changelog</p>
+              <h3>Product motion, visible over time</h3>
+            </div>
+            <p class="section-note">
+              Keep this tight. Ship the entry, attach the date, move on.
+            </p>
+          </div>
+          <div id="changelog-list" class="changelog-list" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="changelog-item-template">
+      <article class="changelog-item">
+        <div class="changelog-meta">
+          <span class="changelog-date"></span>
+          <span class="changelog-tag"></span>
+        </div>
+        <h4 class="changelog-title"></h4>
+        <p class="changelog-summary"></p>
+        <ul class="changelog-points"></ul>
+      </article>
+    </template>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

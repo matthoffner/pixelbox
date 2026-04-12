@@ -51,12 +51,18 @@ function getStartupTerminalCommand(options = {}) {
 }
 
 function createWindow() {
+  const isMac = process.platform === 'darwin';
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     title: 'Pixelbox',
     icon: appIconPath,
     titleBarStyle: 'hiddenInset',
+    transparent: isMac,
+    vibrancy: isMac ? 'under-window' : undefined,
+    visualEffectState: isMac ? 'active' : undefined,
+    backgroundMaterial: isMac ? 'under-window' : 'none',
+    backgroundColor: isMac ? '#00000000' : '#071425',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -66,6 +72,10 @@ function createWindow() {
       webviewTag: true,
     },
   });
+
+  if (isMac && typeof mainWindow.setVibrancy === 'function') {
+    mainWindow.setVibrancy('under-window');
+  }
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.setMenuBarVisibility(false);
