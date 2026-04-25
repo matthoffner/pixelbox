@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Matthoffner | Things I Keep Thinking About</title>
+    <meta
+      name="description"
+      content="A personal homepage for sharing projects and ideas Matthoffner is interested in building."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/script.js" defer></script>
+  </head>
+  <body>
+    <div class="site-shell">
+      <div class="aurora aurora-left"></div>
+      <div class="aurora aurora-right"></div>
+      <div class="grain"></div>
+
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark"></span>
+          <div>
+            <p class="eyebrow">Matthoffner</p>
+            <p class="brand-subtitle">stuff I'm building</p>
+          </div>
+        </div>
+        <nav class="topnav">
+          <a href="#projects">Projects</a>
+          <a href="https://github.com/matthoffner">GitHub</a>
+        </nav>
+      </header>
+
+      <main>
+        <section class="intro section reveal">
+          <p class="kicker">Playgrounds, not pitch decks.</p>
+          <h1 id="random-tagline">Things I keep thinking about building.</h1>
+          <p class="lede">
+            This is mostly a place to keep track of the kinds of software I find
+            interesting: tools for building, tools for operations, and runtime
+            ideas that make the work feel clearer and less annoying.
+          </p>
+          <p class="intro-note">
+            Nothing here is a company bio. It is closer to a personal index of
+            projects I keep returning to.
+          </p>
+          <p class="intro-link-row">
+            <a class="subtle-link" href="https://github.com/matthoffner">github.com/matthoffner</a>
+          </p>
+        </section>
+
+        <section id="projects" class="section reveal">
+          <div class="section-heading">
+            <p class="eyebrow">Current work</p>
+            <h2>Three things I keep coming back to.</h2>
+          </div>
+
+          <div class="project-list">
+            <article class="project-card project-pixelbox">
+              <div class="project-head project-head-stack">
+                <span class="card-index">01</span>
+                <div>
+                  <h3>Pixelbox</h3>
+                  <p class="project-tag">
+                    What if making software felt more like staying in one thought?
+                  </p>
+                </div>
+              </div>
+              <div class="project-body">
+                <p>
+                  Pixelbox is the environment idea: ask, edit, run, preview,
+                  debug, and iterate in one loop instead of scattering attention
+                  across a pile of tools and windows.
+                </p>
+                <div class="project-meta">
+                  <span>Local-first development</span>
+                  <span>Integrated preview loop</span>
+                  <span>Execution-backed progress</span>
+                </div>
+                <a class="project-link" href="https://github.com/matthoffner/pixelbox">View Pixelbox on GitHub</a>
+              </div>
+            </article>
+
+            <article class="project-card project-automoat">
+              <div class="project-head project-head-stack">
+                <span class="card-index">02</span>
+                <div>
+                  <h3>Automoat</h3>
+                  <p class="project-tag">
+                    Turn messy business data into a defensible AI moat.
+                  </p>
+                </div>
+              </div>
+              <div class="project-body">
+                <p>
+                  Automoat helps discover what is actually proprietary in a
+                  business, turn that data into something testable, and prove
+                  whether it creates an advantage through research, benchmarks,
+                  retrieval, adaptation, and local-first workflows.
+                </p>
+                <div class="project-meta">
+                  <span>Moat discovery</span>
+                  <span>Evaluation and benchmarks</span>
+                  <span>Local-first workflows</span>
+                </div>
+                <a class="project-link" href="/automoat.html">Read more about Automoat</a>
+              </div>
+            </article>
+
+            <article class="project-card project-forge">
+              <div class="project-head project-head-stack">
+                <span class="card-index">03</span>
+                <div>
+                  <h3>Forge</h3>
+                  <p class="project-tag">
+                    A runtime idea for when agent workflows get messy.
+                  </p>
+                </div>
+              </div>
+              <div class="project-body">
+                <p>
+                  Forge is me poking at the question of what sits underneath
+                  multi-agent work once the pile of CLIs, auth setup, logs, and
+                  runtime behavior starts getting out of hand.
+                </p>
+                <div class="project-meta">
+                  <span>Unified runtime</span>
+                  <span>Agent orchestration</span>
+                  <span>Operator traceability</span>
+                </div>
+                <span class="project-link pending-link">More soon</span>
+              </div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
