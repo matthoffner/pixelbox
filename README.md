@@ -39,6 +39,10 @@ Pixelbox should feel like an AI-native operating surface for software creation:
 - Floating terminal panel with xterm.
 - Project switcher and per-project runtime config.
 - Embedded live app view for local URLs/files.
+- Native app runtime support with capture-image previews.
+- AI Launch presets for Codex, Claude, Gemini, Hermes, OpenClaw TUI, or a plain terminal.
+- Keyboard project switching with `Cmd/Ctrl+Shift+ArrowLeft` and `Cmd/Ctrl+Shift+ArrowRight`.
+- File-path drag and drop into the terminal.
 - Per-project terminal/session continuity behavior.
 - Local guidance injection (`AGENTS.md`) and handoff scaffolding (`.pixelbox/handoff.md`).
 
@@ -88,9 +92,16 @@ Or:
 
 - `Source: HTML file` and point to a static file.
 
+Or:
+
+- `Source: Native app command` for desktop/native flows.
+- Set `Run command`, optional `Capture command`, and `Image file`.
+- Click `Save`, then `Start`.
+
 ### 4. Work with agents in terminal
 
 - Open the terminal panel.
+- In **AI Launch**, choose which agent CLI should auto-start for the selected project, or choose `Plain terminal` to open the shell without launching one.
 - Use project-scoped prompts.
 - Keep runtime and editor tasks coordinated via `.pixelbox/handoff.md`.
 

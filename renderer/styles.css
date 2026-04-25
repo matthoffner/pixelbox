@@ -259,18 +259,21 @@ input {
 }
 
 .project-action {
-  border: 1px solid var(--border);
-  background: transparent;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   color: var(--muted);
   border-radius: 10px;
-  padding: 6px 8px;
-  font-size: 11px;
-  cursor: pointer;
+  flex: 0 0 auto;
 }
 
 .project-action:hover {
   color: var(--text);
   border-color: color-mix(in srgb, var(--cta), white 20%);
+}
+
+.project-action.danger {
+  color: color-mix(in srgb, var(--danger), white 18%);
 }
 
 .project-action.danger:hover {
@@ -302,7 +305,8 @@ input {
   background: color-mix(in srgb, var(--cta), transparent 60%);
 }
 
-#running-page-panel {
+#running-page-panel,
+#codex-launch-panel {
   border-top: 1px solid color-mix(in srgb, var(--border), transparent 25%);
   padding-top: 14px;
   display: grid;
@@ -310,10 +314,18 @@ input {
 }
 
 #running-page-status,
+#codex-launch-status,
 #preview-subtitle,
 #preview-url {
   color: var(--muted);
   font-size: 12px;
+}
+
+#codex-launch-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .running-field,
@@ -579,7 +591,7 @@ body:not(.projects-panel-hidden) .projects-fab {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  z-index: 40;
+  z-index: 50;
   width: clamp(420px, 46vw, 680px);
   max-width: calc(100vw - 32px);
   height: min(56vh, 520px);

@@ -46,6 +46,7 @@
               <option value="none">None</option>
               <option value="html">HTML file</option>
               <option value="server">Node/server command</option>
+              <option value="native">Native app command</option>
             </select>
           </label>
           <label class="running-field" data-source="html">
@@ -60,8 +61,24 @@
             <span>Server URL</span>
             <input id="running-page-url-input" type="text" placeholder="localhost target" />
           </label>
+          <label class="running-field" data-source="native">
+            <span>Run command</span>
+            <input id="running-page-native-command" type="text" placeholder="npm run dev" />
+          </label>
+          <label class="running-field" data-source="native">
+            <span>Capture command</span>
+            <input id="running-page-native-capture" type="text" placeholder="npm run dev:mac:inspect" />
+          </label>
+          <label class="running-field" data-source="native">
+            <span>Image file</span>
+            <input id="running-page-native-image" type="text" placeholder=".pixelbox/mac-screen.png" />
+          </label>
           <label id="running-page-autostart-field" class="running-checkbox" data-source="server">
             <input id="running-page-autostart" type="checkbox" checked />
+            <span>Auto-start when this project opens</span>
+          </label>
+          <label class="running-checkbox" data-source="native">
+            <input id="running-page-native-autostart" type="checkbox" checked />
             <span>Auto-start when this project opens</span>
           </label>
           <div id="running-page-actions">
@@ -69,6 +86,29 @@
             <button id="running-page-start" type="button">Start</button>
             <button id="running-page-stop" type="button">Stop</button>
           </div>
+        </section>
+
+        <section id="codex-launch-panel" aria-label="AI Launch">
+          <div class="running-page-header">
+            <strong>AI Launch</strong>
+            <div id="codex-launch-status">Codex · default permissions</div>
+          </div>
+          <label class="running-field">
+            <span>CLI</span>
+            <select id="ai-cli-select">
+              <option value="codex">Codex</option>
+              <option value="claude">Claude</option>
+              <option value="gemini">Gemini</option>
+              <option value="hermes">Hermes</option>
+              <option value="openclaw">OpenClaw TUI</option>
+              <option value="custom">Plain terminal</option>
+            </select>
+          </label>
+          <label class="running-checkbox">
+            <input id="codex-dangerous-toggle" type="checkbox" />
+            <span>Dangerously bypass approvals + sandbox</span>
+          </label>
+          <p id="codex-launch-note">Applies the next time Pixelbox auto-starts the selected CLI. Dangerous bypass is used for Codex and Claude only. Plain terminal opens the shell without auto-launching an agent CLI.</p>
         </section>
       </section>
 
@@ -85,6 +125,9 @@
             <p>Run your app in the terminal below. It will load here when ready.</p>
           </div>
           <div id="preview-frame-host" aria-live="polite"></div>
+          <div id="preview-native-host" hidden>
+            <img id="preview-native-image" alt="Native app preview" />
+          </div>
         </div>
       </section>
 
@@ -151,7 +194,14 @@
         </div>
       </header>
       <div id="terminal" aria-label="Terminal output" tabindex="0"></div>
-      <div id="chat-resize-handle" aria-hidden="true"></div>
+      <div class="chat-resize-handle" data-resize="n" aria-hidden="true"></div>
+      <div class="chat-resize-handle" data-resize="e" aria-hidden="true"></div>
+      <div class="chat-resize-handle" data-resize="s" aria-hidden="true"></div>
+      <div class="chat-resize-handle" data-resize="w" aria-hidden="true"></div>
+      <div class="chat-resize-handle" data-resize="ne" aria-hidden="true"></div>
+      <div class="chat-resize-handle" data-resize="nw" aria-hidden="true"></div>
+      <div class="chat-resize-handle" data-resize="se" aria-hidden="true"></div>
+      <div class="chat-resize-handle" data-resize="sw" aria-hidden="true"></div>
     </section>
 
     <script src="../node_modules/xterm/lib/xterm.js"></script>

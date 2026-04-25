@@ -1,7 +1,14 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   getWorkspaceRoot: () => ipcRenderer.invoke('workspace:getRoot'),
+  getPathForDroppedFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || '';
+    } catch {
+      return '';
+    }
+  },
   resolveWorkspacePath: (path) => ipcRenderer.invoke('workspace:resolvePath', path),
   listDir: (path) => ipcRenderer.invoke('fs:listDir', path),
   readFile: (path) => ipcRenderer.invoke('fs:readFile', path),
@@ -9,6 +16,8 @@ contextBridge.exposeInMainWorld('api', {
   mkdir: (path) => ipcRenderer.invoke('fs:mkdir', path),
   removeDir: (path) => ipcRenderer.invoke('fs:removeDir', path),
   resolvePreviewHtmlFile: (path) => ipcRenderer.invoke('preview:resolveHtmlFile', path),
+  resolvePreviewFile: (path) => ipcRenderer.invoke('preview:resolveFile', path),
+  execPreviewCommand: (projectPath, command) => ipcRenderer.invoke('preview:execCommand', projectPath, command),
   syncPreviewRuntime: (projectPath, options = {}) => ipcRenderer.invoke('preview:syncRuntime', projectPath, options),
   startPreviewRuntime: (projectPath, options = {}) => ipcRenderer.invoke('preview:startRuntime', projectPath, options),
   stopPreviewRuntime: (projectPath) => ipcRenderer.invoke('preview:stopRuntime', projectPath),
@@ -42,5 +51,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   onAppRefreshShortcut: (callback) => {
     ipcRenderer.on('app:refreshShortcut', () => callback());
+  },
+  onProjectSwitchShortcut: (callback) => {
+    ipcRenderer.on('app:projectSwitchShortcut', (_event, payload) => callback(payload));
   },
 });

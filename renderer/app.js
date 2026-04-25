@@ -25,7 +25,7 @@ const minimize = document.getElementById('chat-minimize');
 const chatDockFloatEl = document.getElementById('chat-dock-float');
 const chatDockRightEl = document.getElementById('chat-dock-right');
 const chatDockBottomEl = document.getElementById('chat-dock-bottom');
-const chatResizeHandleEl = document.getElementById('chat-resize-handle');
+const chatResizeHandleEls = [...document.querySelectorAll('.chat-resize-handle')];
 const primaryAction = document.getElementById('primary-action');
 const terminalEl = document.getElementById('terminal');
 const projectsListEl = document.getElementById('projects-list');
@@ -54,6 +54,10 @@ const runningPageSaveEl = document.getElementById('running-page-save');
 const runningPageStartEl = document.getElementById('running-page-start');
 const runningPageStopEl = document.getElementById('running-page-stop');
 const runningPageStatusEl = document.getElementById('running-page-status');
+const aiCliSelectEl = document.getElementById('ai-cli-select');
+const codexDangerousToggleEl = document.getElementById('codex-dangerous-toggle');
+const codexLaunchStatusEl = document.getElementById('codex-launch-status');
+const codexLaunchNoteEl = document.getElementById('codex-launch-note');
 
 const previewFieldRows = [...document.querySelectorAll('[data-source]')];
 const prefersVibrantWindow = navigator.platform.toLowerCase().includes('mac');
@@ -78,11 +82,15 @@ const projectSelectionHistory = ['.'];
 let projectSelectionIndex = 0;
 let terminalRenderBuffer = '';
 let terminalFlushRaf = 0;
+let terminalPendingScrollToBottom = false;
 let terminalResizePointer = null;
 let terminalDragPointer = null;
 let terminalMouseDrag = null;
 let projectsDragPointer = null;
 let projectsMouseDrag = null;
+let selectedAiCli = 'codex';
+let codexDangerouslyBypassPermissions = false;
+let lastProjectSwitchShortcut = { direction: 0, at: 0 };
 const terminalLayoutState = {
   mode: 'float',
   width: 680,
@@ -98,6 +106,9 @@ const TERMINAL_MIN_WIDTH = 420;
 const LAST_SELECTED_PROJECT_KEY = 'pixelbox.lastSelectedProject';
 const PROJECTS_PANEL_HIDDEN_KEY = 'pixelbox.projectsPanelHidden';
 const PROJECTS_PANEL_POSITION_KEY = 'pixelbox.projectsPanelPosition';
+const AI_CLI_KEY = 'pixelbox.aiCli';
+const CODEX_DANGEROUS_BYPASS_KEY = 'pixelbox.codexDangerouslyBypassPermissions';
+const SUPPORTED_AI_CLIS = ['codex', 'claude', 'gemini', 'hermes', 'openclaw', 'custom'];
 
 const previewFrameEl = document.createElement('webview');
 previewFrameEl.id = 'preview-frame';
@@ -171,6 +182,80 @@ function persistProjectsPanelPosition() {
   try {
     window.localStorage.setItem(PROJECTS_PANEL_POSITION_KEY, JSON.stringify(projectsPanelState));
   } catch {}
+}
+
+function loadSelectedAiCli() {
+  try {
+    const value = window.localStorage.getItem(AI_CLI_KEY);
+    if (value && SUPPORTED_AI_CLIS.includes(value)) {
+      return value;
+    }
+  } catch {}
+  return 'codex';
+}
+
+function persistSelectedAiCli() {
+  try {
+    window.localStorage.setItem(AI_CLI_KEY, selectedAiCli);
+  } catch {}
+}
+
+function loadCodexDangerouslyBypassPermissions() {
+  try {
+    return window.localStorage.getItem(CODEX_DANGEROUS_BYPASS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function persistCodexDangerouslyBypassPermissions() {
+  try {
+    window.localStorage.setItem(
+      CODEX_DANGEROUS_BYPASS_KEY,
+      codexDangerouslyBypassPermissions ? '1' : '0'
+    );
+  } catch {}
+}
+
+function aiCliLabel(value) {
+  switch (value) {
+    case 'claude':
+      return 'Claude';
+    case 'gemini':
+      return 'Gemini';
+    case 'hermes':
+      return 'Hermes';
+    case 'openclaw':
+      return 'OpenClaw TUI';
+    case 'custom':
+      return 'Plain terminal';
+    case 'codex':
+    default:
+      return 'Codex';
+  }
+}
+
+function aiCliSupportsDangerousBypass(value) {
+  return value === 'codex' || value === 'claude';
+}
+
+function renderCodexLaunchConfig() {
+  if (aiCliSelectEl) {
+    aiCliSelectEl.value = selectedAiCli;
+  }
+  if (codexDangerousToggleEl) {
+    codexDangerousToggleEl.checked = codexDangerouslyBypassPermissions;
+    codexDangerousToggleEl.disabled = !aiCliSupportsDangerousBypass(selectedAiCli);
+  }
+  if (codexLaunchStatusEl) {
+    const mode = aiCliSupportsDangerousBypass(selectedAiCli)
+      ? (codexDangerouslyBypassPermissions ? 'danger mode' : 'default permissions')
+      : 'standard launch';
+    codexLaunchStatusEl.textContent = `${aiCliLabel(selectedAiCli)} · ${mode}`;
+  }
+  if (codexLaunchNoteEl) {
+    codexLaunchNoteEl.textContent = 'Applies the next time Pixelbox auto-starts the selected CLI. Dangerous bypass is used for Codex and Claude only. Plain terminal opens the shell without auto-launching an agent CLI.';
+  }
 }
 
 function renderProjectsPanelPosition() {
@@ -254,6 +339,106 @@ function sanitizeProjectName(input) {
     .replace(/[^a-z0-9-_]/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
+}
+
+function shellEscapePath(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function parseDroppedUriList(rawValue) {
+  if (!rawValue) return [];
+  return rawValue
+    .split(/\r?\n|\0/g)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry && !entry.startsWith('#'))
+    .map((entry) => {
+      if (!entry.startsWith('file://')) return '';
+      try {
+        return decodeURIComponent(new URL(entry).pathname);
+      } catch {
+        return '';
+      }
+    })
+    .filter(Boolean);
+}
+
+function parseDroppedPlainTextPaths(rawValue) {
+  if (!rawValue) return [];
+  return rawValue
+    .split(/\r?\n|\0/g)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      if (entry.startsWith('file://')) {
+        try {
+          return decodeURIComponent(new URL(entry).pathname);
+        } catch {
+          return '';
+        }
+      }
+      if (entry.startsWith('~/')) {
+        return entry;
+      }
+      return entry.startsWith('/') ? entry : '';
+    })
+    .filter(Boolean);
+}
+
+function droppedPathsFromTransfer(dataTransfer) {
+  if (!dataTransfer) return [];
+  const paths = [];
+  const seen = new Set();
+  const pushPath = (value) => {
+    if (typeof value !== 'string') return;
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    paths.push(trimmed);
+  };
+
+  for (const path of parseDroppedUriList(dataTransfer.getData('text/uri-list'))) {
+    pushPath(path);
+  }
+
+  for (const path of parseDroppedUriList(dataTransfer.getData('public.file-url'))) {
+    pushPath(path);
+  }
+
+  for (const file of Array.from(dataTransfer.files || [])) {
+    const directPath = typeof file.path === 'string' ? file.path : '';
+    if (directPath) {
+      pushPath(directPath);
+      continue;
+    }
+    if (window.api?.getPathForDroppedFile) {
+      pushPath(window.api.getPathForDroppedFile(file));
+    }
+  }
+
+  const plainText = dataTransfer.getData('text/plain') || '';
+  if (paths.length === 0) {
+    for (const path of parseDroppedUriList(plainText)) {
+      pushPath(path);
+    }
+    for (const path of parseDroppedPlainTextPaths(plainText)) {
+      pushPath(path);
+    }
+  }
+
+  return paths;
+}
+
+function dragContainsFiles(dataTransfer) {
+  if (!dataTransfer) return false;
+  if ((dataTransfer.files?.length || 0) > 0) return true;
+  if (Array.from(dataTransfer.items || []).some((item) => item?.kind === 'file')) return true;
+  const types = Array.from(dataTransfer.types || []);
+  return (
+    types.includes('Files')
+    || types.includes('text/uri-list')
+    || types.includes('public.file-url')
+    || types.includes('public.url')
+  );
 }
 
 function pixelboxContextBlock() {
@@ -518,17 +703,32 @@ function appendTerminalOutput(projectPath, data) {
 
 function queueTerminalWrite(data) {
   if (!data) return;
+  const activeBuffer = term.buffer?.active;
+  const shouldScrollToBottom =
+    terminalPendingScrollToBottom ||
+    !activeBuffer ||
+    (activeBuffer.baseY - activeBuffer.viewportY) <= 1;
   terminalRenderBuffer += data;
+  terminalPendingScrollToBottom = shouldScrollToBottom;
   if (terminalFlushRaf) return;
   terminalFlushRaf = requestAnimationFrame(() => {
     terminalFlushRaf = 0;
     if (!terminalRenderBuffer) return;
-    term.write(terminalRenderBuffer);
+    const pending = terminalRenderBuffer;
+    const scrollToBottom = terminalPendingScrollToBottom;
     terminalRenderBuffer = '';
+    terminalPendingScrollToBottom = false;
+    term.write(pending, () => {
+      if (scrollToBottom) {
+        term.scrollToBottom();
+      }
+    });
   });
 }
 
 function syncTerminalSize() {
+  const activeBuffer = term.buffer?.active;
+  const shouldScrollToBottom = !activeBuffer || (activeBuffer.baseY - activeBuffer.viewportY) <= 1;
   fitAddon.fit();
 
   if (term.cols < 20 || term.rows < 5) {
@@ -537,6 +737,10 @@ function syncTerminalSize() {
     const fallbackCols = Math.max(80, Math.floor(width / 8));
     const fallbackRows = Math.max(24, Math.floor(height / 18));
     term.resize(fallbackCols, fallbackRows);
+  }
+
+  if (shouldScrollToBottom) {
+    requestAnimationFrame(() => term.scrollToBottom());
   }
 
   window.api.resizeTerminal(term.cols, term.rows, selectedProjectPath);
@@ -577,6 +781,33 @@ function focusTerminal() {
   term.focus();
 }
 
+function writeToActiveTerminal(data) {
+  if (projectSessionExited.has(selectedProjectPath)) {
+    bootTerminalForPath(selectedProjectPath, true, true)
+      .then(() => {
+        window.api.writeTerminal(data, selectedProjectPath);
+      })
+      .catch(() => {});
+    return;
+  }
+  window.api.writeTerminal(data, selectedProjectPath);
+}
+
+function renderTerminalDropActive(active) {
+  panel.classList.toggle('terminal-drop-active', Boolean(active));
+}
+
+async function handleTerminalFileDrop(event) {
+  const paths = droppedPathsFromTransfer(event.dataTransfer);
+  renderTerminalDropActive(false);
+  if (paths.length === 0) return;
+  const escaped = `${paths.map(shellEscapePath).join(' ')} `;
+  window.__pwLastTerminalDrop = escaped;
+  openPanel();
+  focusTerminal();
+  writeToActiveTerminal(escaped);
+}
+
 function openPanel() {
   panel.classList.add('open');
   document.body.classList.add('terminal-active');
@@ -611,9 +842,16 @@ function projectButton(label, relPath, active, clickHandler) {
   if (relPath !== '.') {
     const hideBtn = document.createElement('button');
     hideBtn.type = 'button';
-    hideBtn.className = 'project-action';
-    hideBtn.textContent = 'Hide';
+    hideBtn.className = 'icon-button project-action';
+    hideBtn.setAttribute('aria-label', 'Hide project from list');
     hideBtn.title = 'Hide project from list';
+    hideBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" />
+        <circle cx="12" cy="12" r="3" />
+        <path d="M4 4l16 16" />
+      </svg>
+    `;
     hideBtn.addEventListener('click', (event) => {
       event.stopPropagation();
       hiddenProjects.add(relPath);
@@ -628,9 +866,18 @@ function projectButton(label, relPath, active, clickHandler) {
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
-    removeBtn.className = 'project-action danger';
-    removeBtn.textContent = 'Remove';
+    removeBtn.className = 'icon-button project-action danger';
+    removeBtn.setAttribute('aria-label', 'Delete project folder');
     removeBtn.title = 'Delete project folder';
+    removeBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 6h18" />
+        <path d="M8 6V4h8v2" />
+        <path d="M6 6l1 14h10l1-14" />
+        <path d="M10 11v6" />
+        <path d="M14 11v6" />
+      </svg>
+    `;
     removeBtn.addEventListener('click', async (event) => {
       event.stopPropagation();
       const ok = window.confirm(`Remove project "${label}" and delete its files?`);
@@ -826,6 +1073,8 @@ async function bootTerminalForPath(relPath, shouldRunStartup = false, forceStart
     ? await window.api.getStartupTerminalCommand({
       hasPseudoTTY: Boolean(startResult && startResult.hasPseudoTTY),
       cwd: relPath,
+      aiCli: selectedAiCli,
+      codexDangerouslyBypassPermissions,
     })
     : '';
   const result = await window.api.startOrRestartTerminal(relPath, shouldBootstrapProject, { startupCommand });
@@ -848,6 +1097,7 @@ async function bootTerminalForPath(relPath, shouldRunStartup = false, forceStart
   }
   if (window.__pwTerminalOutput) {
     queueTerminalWrite(window.__pwTerminalOutput);
+    terminalPendingScrollToBottom = true;
   }
 
   requestAnimationFrame(() => {
@@ -865,6 +1115,69 @@ function recordProjectSelection(relPath) {
   projectSelectionHistory.push(relPath);
   projectSelectionIndex = projectSelectionHistory.length - 1;
   updateProjectNavigationControls();
+}
+
+function isEditableShortcutTarget(target = document.activeElement) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.closest('#terminal')) {
+    return false;
+  }
+
+  return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+}
+
+async function listSelectableProjectPaths() {
+  await window.api.mkdir('projects');
+  const entries = await window.api.listDir('projects');
+  const projects = entries
+    .filter((entry) => entry.type === 'directory')
+    .filter((entry) => !hiddenProjects.has(entry.path))
+    .map((entry) => entry.path);
+  return ['.', ...projects];
+}
+
+function shouldIgnoreProjectSwitchShortcut(direction) {
+  const now = Date.now();
+  const isDuplicate =
+    lastProjectSwitchShortcut.direction === direction &&
+    now - lastProjectSwitchShortcut.at < 150;
+  lastProjectSwitchShortcut = { direction, at: now };
+  return isDuplicate;
+}
+
+async function cycleProjectSelection(direction) {
+  const projectPaths = await listSelectableProjectPaths();
+  if (projectPaths.length <= 1) {
+    return;
+  }
+
+  const currentIndex = projectPaths.indexOf(selectedProjectPath);
+  const startIndex = currentIndex === -1 ? 0 : currentIndex;
+  const nextIndex = (startIndex + direction + projectPaths.length) % projectPaths.length;
+  const nextProjectPath = projectPaths[nextIndex];
+  if (!nextProjectPath || nextProjectPath === selectedProjectPath) {
+    return;
+  }
+
+  await selectProject(nextProjectPath, { recordHistory: true });
+}
+
+function handleProjectSwitchShortcut(direction, options = {}) {
+  const { checkEditableTarget = false } = options;
+  if (!Number.isInteger(direction) || Math.abs(direction) !== 1) {
+    return false;
+  }
+  if (checkEditableTarget && isEditableShortcutTarget()) {
+    return false;
+  }
+  if (shouldIgnoreProjectSwitchShortcut(direction)) {
+    return true;
+  }
+  cycleProjectSelection(direction).catch(() => {});
+  return true;
 }
 
 async function renderProjects() {
@@ -998,15 +1311,7 @@ window.api.onPreviewHtmlChanged(({ key }) => {
 });
 
 term.onData((data) => {
-  if (projectSessionExited.has(selectedProjectPath)) {
-    bootTerminalForPath(selectedProjectPath, true, true)
-      .then(() => {
-        window.api.writeTerminal(data, selectedProjectPath);
-      })
-      .catch(() => {});
-    return;
-  }
-  window.api.writeTerminal(data, selectedProjectPath);
+  writeToActiveTerminal(data);
 });
 
 window.api.onTerminalExit(({ key }) => {
@@ -1077,50 +1382,147 @@ projectsMinimizeEl.addEventListener('click', () => {
 });
 terminalEl.addEventListener('mousedown', focusTerminal);
 panel.addEventListener('mousedown', focusTerminal);
-if (chatResizeHandleEl) {
-  chatResizeHandleEl.addEventListener('pointerdown', (event) => {
+for (const dropTarget of [terminalEl, panel]) {
+  dropTarget.addEventListener('dragenter', (event) => {
+    if (!dragContainsFiles(event.dataTransfer)) return;
     event.preventDefault();
-    const rect = panel.getBoundingClientRect();
-    terminalResizePointer = {
-      id: event.pointerId,
-      mode: terminalLayoutState.mode,
-      startX: event.clientX,
-      startY: event.clientY,
-      startWidth: rect.width,
-      startHeight: rect.height,
-    };
-    chatResizeHandleEl.setPointerCapture(event.pointerId);
+    renderTerminalDropActive(true);
   });
 
-  chatResizeHandleEl.addEventListener('pointermove', (event) => {
-    if (!terminalResizePointer || event.pointerId !== terminalResizePointer.id) return;
-    if (terminalResizePointer.mode === 'right') {
-      const delta = terminalResizePointer.startX - event.clientX;
-      terminalLayoutState.width = Math.min(1200, Math.max(TERMINAL_MIN_WIDTH, Math.floor(terminalResizePointer.startWidth + delta)));
-    } else if (terminalResizePointer.mode === 'bottom') {
-      const delta = terminalResizePointer.startY - event.clientY;
-      terminalLayoutState.height = Math.min(920, Math.max(240, Math.floor(terminalResizePointer.startHeight + delta)));
-    } else {
-      const deltaX = terminalResizePointer.startX - event.clientX;
-      const deltaY = terminalResizePointer.startY - event.clientY;
-      terminalLayoutState.width = Math.min(window.innerWidth - 24, Math.max(TERMINAL_MIN_WIDTH, Math.floor(terminalResizePointer.startWidth + deltaX)));
-      terminalLayoutState.height = Math.min(window.innerHeight - 24, Math.max(240, Math.floor(terminalResizePointer.startHeight + deltaY)));
+  dropTarget.addEventListener('dragover', (event) => {
+    if (!dragContainsFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
     }
-    renderTerminalDockMode();
-    syncTerminalSize();
+    renderTerminalDropActive(true);
   });
 
-  const finishResize = (event) => {
-    if (!terminalResizePointer || event.pointerId !== terminalResizePointer.id) return;
-    try {
-      chatResizeHandleEl.releasePointerCapture(event.pointerId);
-    } catch {}
-    terminalResizePointer = null;
-    persistTerminalLayoutState();
+  dropTarget.addEventListener('dragleave', (event) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget && panel.contains(nextTarget)) return;
+    renderTerminalDropActive(false);
+  });
+
+  dropTarget.addEventListener('drop', (event) => {
+    if (!dragContainsFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    handleTerminalFileDrop(event).catch(() => {
+      renderTerminalDropActive(false);
+    });
+  });
+}
+
+window.addEventListener('dragend', () => {
+  renderTerminalDropActive(false);
+});
+if (chatResizeHandleEls.length) {
+  const clampTerminalWidth = (value) => Math.min(Math.max(TERMINAL_MIN_WIDTH, Math.floor(value)), Math.max(TERMINAL_MIN_WIDTH, window.innerWidth - 24));
+  const clampTerminalHeight = (value) => Math.min(Math.max(240, Math.floor(value)), Math.max(240, window.innerHeight - 24));
+
+  const updateFloatingPanelBounds = (nextLeft, nextTop, nextWidth, nextHeight) => {
+    const boundedWidth = clampTerminalWidth(nextWidth);
+    const boundedHeight = clampTerminalHeight(nextHeight);
+    const maxLeft = Math.max(0, window.innerWidth - boundedWidth);
+    const maxTop = Math.max(0, window.innerHeight - boundedHeight);
+    const boundedLeft = Math.min(maxLeft, Math.max(0, nextLeft));
+    const boundedTop = Math.min(maxTop, Math.max(0, nextTop));
+
+    terminalLayoutState.width = boundedWidth;
+    terminalLayoutState.height = boundedHeight;
+    panel.style.left = `${Math.round(boundedLeft)}px`;
+    panel.style.top = `${Math.round(boundedTop)}px`;
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
   };
 
-  chatResizeHandleEl.addEventListener('pointerup', finishResize);
-  chatResizeHandleEl.addEventListener('pointercancel', finishResize);
+  for (const handleEl of chatResizeHandleEls) {
+    handleEl.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = panel.getBoundingClientRect();
+      const direction = handleEl.dataset.resize || '';
+      if (!direction) return;
+      if (terminalLayoutState.mode === 'float') {
+        panel.style.left = `${Math.round(rect.left)}px`;
+        panel.style.top = `${Math.round(rect.top)}px`;
+        panel.style.right = 'auto';
+        panel.style.bottom = 'auto';
+      }
+      terminalResizePointer = {
+        id: event.pointerId,
+        mode: terminalLayoutState.mode,
+        direction,
+        element: handleEl,
+        startX: event.clientX,
+        startY: event.clientY,
+        startLeft: rect.left,
+        startTop: rect.top,
+        startWidth: rect.width,
+        startHeight: rect.height,
+      };
+      handleEl.setPointerCapture(event.pointerId);
+    });
+
+    handleEl.addEventListener('pointermove', (event) => {
+      if (!terminalResizePointer || event.pointerId !== terminalResizePointer.id) return;
+      const { mode, direction, startX, startY, startWidth, startHeight, startLeft, startTop } = terminalResizePointer;
+      const deltaX = event.clientX - startX;
+      const deltaY = event.clientY - startY;
+
+      if (mode === 'right') {
+        terminalLayoutState.width = clampTerminalWidth(startWidth - deltaX);
+      } else if (mode === 'bottom') {
+        terminalLayoutState.height = clampTerminalHeight(startHeight - deltaY);
+      } else {
+        let nextLeft = startLeft;
+        let nextTop = startTop;
+        let nextWidth = startWidth;
+        let nextHeight = startHeight;
+
+        if (direction.includes('e')) {
+          nextWidth = startWidth + deltaX;
+        }
+        if (direction.includes('w')) {
+          nextWidth = startWidth - deltaX;
+          nextLeft = startLeft + deltaX;
+        }
+        if (direction.includes('s')) {
+          nextHeight = startHeight + deltaY;
+        }
+        if (direction.includes('n')) {
+          nextHeight = startHeight - deltaY;
+          nextTop = startTop + deltaY;
+        }
+
+        if (nextWidth < TERMINAL_MIN_WIDTH) {
+          nextLeft -= TERMINAL_MIN_WIDTH - nextWidth;
+          nextWidth = TERMINAL_MIN_WIDTH;
+        }
+        if (nextHeight < 240) {
+          nextTop -= 240 - nextHeight;
+          nextHeight = 240;
+        }
+
+        updateFloatingPanelBounds(nextLeft, nextTop, nextWidth, nextHeight);
+      }
+
+      renderTerminalDockMode();
+      syncTerminalSize();
+    });
+
+    const finishResize = (event) => {
+      if (!terminalResizePointer || event.pointerId !== terminalResizePointer.id) return;
+      try {
+        handleEl.releasePointerCapture(event.pointerId);
+      } catch {}
+      terminalResizePointer = null;
+      persistTerminalLayoutState();
+    };
+
+    handleEl.addEventListener('pointerup', finishResize);
+    handleEl.addEventListener('pointercancel', finishResize);
+  }
 }
 
 if (chatHeaderEl) {
@@ -1274,6 +1676,21 @@ if (projectsHeaderEl && projectsPanelEl) {
 }
 
 window.addEventListener('keydown', (event) => {
+  const isProjectSwitchShortcut =
+    !event.repeat &&
+    event.shiftKey &&
+    (event.metaKey || event.ctrlKey) &&
+    (event.key === 'ArrowLeft' || event.key === 'ArrowRight');
+  if (isProjectSwitchShortcut) {
+    const handled = handleProjectSwitchShortcut(event.key === 'ArrowLeft' ? -1 : 1, {
+      checkEditableTarget: true,
+    });
+    if (handled) {
+      event.preventDefault();
+    }
+    return;
+  }
+
   if (event.key !== 'Escape') return;
   if (!panel.classList.contains('open')) return;
   if (terminalLayoutState.mode === 'float') return;
@@ -1289,6 +1706,21 @@ runningPageStartEl.addEventListener('click', () => {
 runningPageStopEl.addEventListener('click', () => {
   stopConfiguredRuntime().catch(() => {});
 });
+if (aiCliSelectEl) {
+  aiCliSelectEl.addEventListener('change', () => {
+    if (!SUPPORTED_AI_CLIS.includes(aiCliSelectEl.value)) return;
+    selectedAiCli = aiCliSelectEl.value;
+    persistSelectedAiCli();
+    renderCodexLaunchConfig();
+  });
+}
+if (codexDangerousToggleEl) {
+  codexDangerousToggleEl.addEventListener('change', () => {
+    codexDangerouslyBypassPermissions = codexDangerousToggleEl.checked;
+    persistCodexDangerouslyBypassPermissions();
+    renderCodexLaunchConfig();
+  });
+}
 if (previewBackEl) {
   previewBackEl.addEventListener('click', () => {
     try {
@@ -1358,6 +1790,9 @@ if (previewReloadEl) {
 window.api.onAppRefreshShortcut(() => {
   reloadActivePreview();
 });
+window.api.onProjectSwitchShortcut(({ direction } = {}) => {
+  handleProjectSwitchShortcut(direction);
+});
 
 window.addEventListener('resize', () => {
   renderProjectsPanelPosition();
@@ -1370,7 +1805,10 @@ window.addEventListener('resize', () => {
   projectsPanelHidden = loadProjectsPanelHidden();
   loadProjectsPanelPosition();
   loadTerminalLayoutState();
+  selectedAiCli = loadSelectedAiCli();
+  codexDangerouslyBypassPermissions = loadCodexDangerouslyBypassPermissions();
   renderTerminalDockMode();
+  renderCodexLaunchConfig();
   await window.api.startRendererWatch();
   openPanel();
   selectedProjectPath = loadLastSelectedProject();

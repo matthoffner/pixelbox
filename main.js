@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { execFile } = require('node:child_process');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const os = require('node:os');
@@ -47,7 +48,48 @@ function getStartupTerminalCommand(options = {}) {
     return preferred.trim();
   }
 
-  return 'clear; if command -v codex >/dev/null 2>&1; then env TERM=xterm-256color codex resume --last || env TERM=xterm-256color codex; else echo "codex CLI not found in PATH."; fi';
+  const launcher = ['codex', 'claude', 'gemini', 'hermes', 'openclaw', 'custom'].includes(options.aiCli)
+    ? options.aiCli
+    : 'codex';
+
+  const definitions = {
+    codex: {
+      binary: 'codex',
+      missing: 'Codex CLI not found in PATH.',
+      command: options.codexDangerouslyBypassPermissions
+        ? 'env TERM=xterm-256color codex --dangerously-bypass-approvals-and-sandbox'
+        : 'env TERM=xterm-256color codex resume --last || env TERM=xterm-256color codex',
+    },
+    claude: {
+      binary: 'claude',
+      missing: 'Claude CLI not found in PATH.',
+      command: options.codexDangerouslyBypassPermissions
+        ? 'env TERM=xterm-256color claude --dangerously-skip-permissions'
+        : 'env TERM=xterm-256color claude --continue || env TERM=xterm-256color claude',
+    },
+    gemini: {
+      binary: 'gemini',
+      missing: 'Gemini CLI not found in PATH.',
+      command: 'env TERM=xterm-256color gemini',
+    },
+    hermes: {
+      binary: 'hermes',
+      missing: 'Hermes CLI not found in PATH.',
+      command: 'env TERM=xterm-256color hermes',
+    },
+    openclaw: {
+      binary: 'openclaw',
+      missing: 'OpenClaw CLI not found in PATH.',
+      command: 'env TERM=xterm-256color openclaw tui',
+    },
+  };
+
+  if (launcher === 'custom') {
+    return '';
+  }
+
+  const active = definitions[launcher];
+  return `clear; if command -v ${active.binary} >/dev/null 2>&1; then ${active.command}; else echo "${active.missing}"; fi`;
 }
 
 function createWindow() {
@@ -81,16 +123,29 @@ function createWindow() {
   mainWindow.setMenuBarVisibility(false);
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
-    const isRefreshShortcut =
-      input.type === 'keyDown' &&
-      input.key &&
-      input.key.toLowerCase() === 'r' &&
-      (input.meta || input.control);
+    const key = input.key ? input.key.toLowerCase() : '';
+    const isKeyDown = input.type === 'keyDown';
+    const isRefreshShortcut = isKeyDown && key === 'r' && (input.meta || input.control);
     if (!isRefreshShortcut) return;
     event.preventDefault();
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('app:refreshShortcut');
     }
+  });
+
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    const key = input.key ? input.key.toLowerCase() : '';
+    const isDirectionalShortcut =
+      input.type === 'keyDown' &&
+      !input.isAutoRepeat &&
+      input.shift &&
+      (input.meta || input.control) &&
+      (key === 'arrowleft' || key === 'left' || key === 'arrowright' || key === 'right');
+    if (!isDirectionalShortcut) return;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send('app:projectSwitchShortcut', {
+      direction: key.includes('left') ? -1 : 1,
+    });
   });
 
   if (process.env.PXCODE_CAPTURE_ON_LOAD === '1') {
@@ -241,6 +296,35 @@ function attachIpcHandlers() {
       path: absolutePath,
       url: pathToFileURL(absolutePath).href,
     };
+  });
+
+  ipcMain.handle('preview:resolveFile', async (_event, relPath) => {
+    const absolutePath = workspaceFs.resolveWorkspacePath(relPath);
+    await fsp.access(absolutePath, fs.constants.R_OK);
+    return {
+      path: absolutePath,
+      url: pathToFileURL(absolutePath).href,
+    };
+  });
+
+  ipcMain.handle('preview:execCommand', async (_event, projectPath = '.', command = '') => {
+    const cwd = workspaceFs.resolveWorkspacePath(projectPath);
+    const shell = defaultShell();
+
+    if (!command || !command.trim()) {
+      return { ok: true, stdout: '', stderr: '', code: 0 };
+    }
+
+    return new Promise((resolve) => {
+      execFile(shell, ['-lc', command], { cwd, env: { ...process.env } }, (error, stdout = '', stderr = '') => {
+        resolve({
+          ok: !error,
+          stdout,
+          stderr,
+          code: typeof error?.code === 'number' ? error.code : 0,
+        });
+      });
+    });
   });
 
   ipcMain.handle('preview:syncRuntime', (_event, projectPath = '.', options = {}) => {
