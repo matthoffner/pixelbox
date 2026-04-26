@@ -9,6 +9,7 @@ const { createWorkspaceFs } = require('./lib/workspaceFs');
 const { PreviewRuntimeManager } = require('./lib/previewRuntimeManager');
 const { TerminalManager } = require('./lib/terminalManager');
 const { TerminalSession, defaultShell } = require('./lib/terminalSession');
+const codexMonitor = require('./lib/codexMonitor');
 
 function resolveWorkspaceRoot() {
   const fromEnv = process.env.PIXELBOX_WORKSPACE_ROOT || process.env.PXCODE_WORKSPACE_ROOT;
@@ -193,6 +194,7 @@ function clearPreviewHtmlWatcher() {
 
 function watchPreviewHtmlFile(key, absolutePath) {
   const nextPath = path.resolve(absolutePath);
+  const watchRoot = path.dirname(nextPath);
   if (previewHtmlWatcher && previewHtmlWatcherKey === key && previewHtmlWatcherPath === nextPath) {
     return { ok: true, watching: true };
   }
@@ -201,7 +203,7 @@ function watchPreviewHtmlFile(key, absolutePath) {
 
   previewHtmlWatcherKey = key;
   previewHtmlWatcherPath = nextPath;
-  previewHtmlWatcher = fs.watch(nextPath, () => {
+  previewHtmlWatcher = fs.watch(watchRoot, { recursive: true }, () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     clearTimeout(previewHtmlChangeDebounce);
     previewHtmlChangeDebounce = setTimeout(() => {
@@ -330,24 +332,24 @@ function attachIpcHandlers() {
   ipcMain.handle('preview:syncRuntime', (_event, projectPath = '.', options = {}) => {
     const manager = ensurePreviewRuntimeManager();
     const cwd = workspaceFs.resolveWorkspacePath(projectPath);
-    return manager.syncProject(projectPath, {
+    return manager.resolveLaunchOptions(projectPath, {
       cwd,
       sourceType: options.sourceType,
       command: options.command,
       url: options.url,
       autoStart: options.autoStart,
-    });
+    }).then((resolvedOptions) => manager.syncProject(projectPath, resolvedOptions));
   });
 
   ipcMain.handle('preview:startRuntime', (_event, projectPath = '.', options = {}) => {
     const manager = ensurePreviewRuntimeManager();
     const cwd = workspaceFs.resolveWorkspacePath(projectPath);
-    return manager.start(projectPath, {
+    return manager.resolveLaunchOptions(projectPath, {
       cwd,
       sourceType: options.sourceType || 'server',
       command: options.command,
       url: options.url,
-    });
+    }).then((resolvedOptions) => manager.start(projectPath, resolvedOptions));
   });
 
   ipcMain.handle('preview:stopRuntime', (_event, projectPath = '.') => {
@@ -382,6 +384,43 @@ function attachIpcHandlers() {
   ipcMain.handle('renderer:watchStart', () => {
     watchRendererFiles();
     return { ok: true };
+  });
+
+  ipcMain.handle('codexMonitor:list', () => {
+    return codexMonitor.getProcesses();
+  });
+
+  ipcMain.handle('codexMonitor:details', (_event, pid) => {
+    const numericPid = Number(pid);
+    if (!Number.isFinite(numericPid)) {
+      throw new Error('A numeric pid is required.');
+    }
+    const processInfo = codexMonitor.getProcesses().find((item) => item.pid === numericPid);
+    if (!processInfo) {
+      throw new Error(`PID ${numericPid} was not found.`);
+    }
+    return codexMonitor.getProcessDetails(processInfo);
+  });
+
+  ipcMain.handle('codexMonitor:summarize', async (_event, pid, instruction = '') => {
+    const numericPid = Number(pid);
+    if (!Number.isFinite(numericPid)) {
+      throw new Error('A numeric pid is required.');
+    }
+    const processInfo = codexMonitor.getProcesses().find((item) => item.pid === numericPid);
+    if (!processInfo) {
+      throw new Error(`PID ${numericPid} was not found.`);
+    }
+    const details = codexMonitor.getProcessDetails(processInfo);
+    return {
+      summary: await codexMonitor.runSummary(
+        processInfo,
+        details,
+        instruction && instruction.trim()
+          ? instruction.trim()
+          : 'Summarize the current conversation and code work for a human who is about to take over.'
+      ),
+    };
   });
 
   ipcMain.on('terminal:write', (_event, data, key) => {

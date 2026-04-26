@@ -41,8 +41,11 @@ Pixelbox should feel like an AI-native operating surface for software creation:
 - Embedded live app view for local URLs/files.
 - Native app runtime support with capture-image previews.
 - AI Launch presets for Codex, Claude, Gemini, Hermes, OpenClaw TUI, or a plain terminal.
+- In-app agent monitor for active Codex processes.
+- Hidden-project restore list and cleaner project action menus.
 - Keyboard project switching with `Cmd/Ctrl+Shift+ArrowLeft` and `Cmd/Ctrl+Shift+ArrowRight`.
 - File-path drag and drop into the terminal.
+- Automatic local port reassignment for colliding localhost dev servers.
 - Per-project terminal/session continuity behavior.
 - Local guidance injection (`AGENTS.md`) and handoff scaffolding (`.pixelbox/handoff.md`).
 
@@ -102,6 +105,7 @@ Or:
 
 - Open the terminal panel.
 - In **AI Launch**, choose which agent CLI should auto-start for the selected project, or choose `Plain terminal` to open the shell without launching one.
+- Use **Agent Monitor** to inspect active Codex processes running on the machine.
 - Use project-scoped prompts.
 - Keep runtime and editor tasks coordinated via `.pixelbox/handoff.md`.
 
@@ -140,6 +144,7 @@ npm run test:pw:next
 - `main.js`: Electron main process, IPC, terminal/runtime managers.
 - `preload.js`: renderer-safe API bridge.
 - `renderer/`: UI shell, terminal wiring, runtime controls.
+- `lib/codexMonitor.js`: active Codex process discovery + transcript summarization helpers.
 - `lib/terminalSession.js`: PTY/stdin shell session wrapper.
 - `lib/terminalManager.js`: multi-session terminal lifecycle by project.
 - `lib/previewRuntimeManager.js`: project runtime process supervision + URL detection.

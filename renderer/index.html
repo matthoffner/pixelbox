@@ -19,6 +19,7 @@
           <strong>Projects</strong>
           <div class="projects-actions">
             <button id="new-project" type="button">New Project</button>
+            <button id="hidden-projects-toggle" type="button" hidden>Hidden</button>
             <button id="projects-minimize" class="icon-button panel-icon-button" type="button" aria-label="Hide menu">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 12h12" />
@@ -35,6 +36,7 @@
         </div>
         <div id="active-project">Active: workspace root</div>
         <div id="projects-list"></div>
+        <div id="hidden-projects-list" hidden></div>
         <section id="running-page-panel" aria-label="Running Page">
           <div class="running-page-header">
             <strong>Running Page</strong>
@@ -109,6 +111,15 @@
             <span>Dangerously bypass approvals + sandbox</span>
           </label>
           <p id="codex-launch-note">Applies the next time Pixelbox auto-starts the selected CLI. Dangerous bypass is used for Codex and Claude only. Plain terminal opens the shell without auto-launching an agent CLI.</p>
+        </section>
+
+        <section id="agent-monitor-panel" aria-label="Agent Monitor">
+          <div class="running-page-header">
+            <strong>Agent Monitor</strong>
+            <button id="agent-monitor-refresh" type="button">Refresh</button>
+          </div>
+          <div id="agent-monitor-status">Loading…</div>
+          <div id="agent-monitor-list"></div>
         </section>
       </section>
 

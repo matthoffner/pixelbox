@@ -37,6 +37,8 @@ const newProjectCreateEl = document.getElementById('new-project-create');
 const newProjectCancelEl = document.getElementById('new-project-cancel');
 const projectsToggleEl = document.getElementById('projects-toggle');
 const projectsMinimizeEl = document.getElementById('projects-minimize');
+const hiddenProjectsToggleEl = document.getElementById('hidden-projects-toggle');
+const hiddenProjectsListEl = document.getElementById('hidden-projects-list');
 const headlineEl = document.getElementById('headline');
 const previewFrameHostEl = document.getElementById('preview-frame-host');
 const previewBackEl = document.getElementById('preview-back');
@@ -54,6 +56,9 @@ const runningPageSaveEl = document.getElementById('running-page-save');
 const runningPageStartEl = document.getElementById('running-page-start');
 const runningPageStopEl = document.getElementById('running-page-stop');
 const runningPageStatusEl = document.getElementById('running-page-status');
+const agentMonitorRefreshEl = document.getElementById('agent-monitor-refresh');
+const agentMonitorStatusEl = document.getElementById('agent-monitor-status');
+const agentMonitorListEl = document.getElementById('agent-monitor-list');
 const aiCliSelectEl = document.getElementById('ai-cli-select');
 const codexDangerousToggleEl = document.getElementById('codex-dangerous-toggle');
 const codexLaunchStatusEl = document.getElementById('codex-launch-status');
@@ -71,6 +76,8 @@ let reloadTimer;
 let selectedProjectPath = '.';
 let startResult;
 let projectsPanelHidden = false;
+let hiddenProjectsExpanded = false;
+let openProjectActionsPath = null;
 const hiddenProjects = new Set();
 const projectPreviewState = new Map();
 const projectRuntimeConfig = new Map();
@@ -88,6 +95,7 @@ let terminalDragPointer = null;
 let terminalMouseDrag = null;
 let projectsDragPointer = null;
 let projectsMouseDrag = null;
+let agentMonitorPollTimer = null;
 let selectedAiCli = 'codex';
 let codexDangerouslyBypassPermissions = false;
 let lastProjectSwitchShortcut = { direction: 0, at: 0 };
@@ -103,9 +111,11 @@ const projectsPanelState = {
 const PIXELBOX_CONTEXT_START = '<!-- PIXELBOX_CONTEXT_START -->';
 const PIXELBOX_CONTEXT_END = '<!-- PIXELBOX_CONTEXT_END -->';
 const TERMINAL_MIN_WIDTH = 420;
+const MAX_PROJECT_TERMINAL_OUTPUT = 200000;
 const LAST_SELECTED_PROJECT_KEY = 'pixelbox.lastSelectedProject';
 const PROJECTS_PANEL_HIDDEN_KEY = 'pixelbox.projectsPanelHidden';
 const PROJECTS_PANEL_POSITION_KEY = 'pixelbox.projectsPanelPosition';
+const HIDDEN_PROJECTS_EXPANDED_KEY = 'pixelbox.hiddenProjectsExpanded';
 const AI_CLI_KEY = 'pixelbox.aiCli';
 const CODEX_DANGEROUS_BYPASS_KEY = 'pixelbox.codexDangerouslyBypassPermissions';
 const SUPPORTED_AI_CLIS = ['codex', 'claude', 'gemini', 'hermes', 'openclaw', 'custom'];
@@ -132,6 +142,20 @@ function loadHiddenProjects() {
 function persistHiddenProjects() {
   try {
     window.localStorage.setItem('pixelbox.hiddenProjects', JSON.stringify([...hiddenProjects]));
+  } catch {}
+}
+
+function loadHiddenProjectsExpanded() {
+  try {
+    return window.localStorage.getItem(HIDDEN_PROJECTS_EXPANDED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function persistHiddenProjectsExpanded() {
+  try {
+    window.localStorage.setItem(HIDDEN_PROJECTS_EXPANDED_KEY, hiddenProjectsExpanded ? '1' : '0');
   } catch {}
 }
 
@@ -694,10 +718,90 @@ async function pushPreviewUrl(projectPath, rawUrl, options = {}) {
 }
 
 function appendTerminalOutput(projectPath, data) {
-  const next = `${projectTerminalOutput.get(projectPath) || ''}${data}`;
+  const next = `${projectTerminalOutput.get(projectPath) || ''}${data}`.slice(-MAX_PROJECT_TERMINAL_OUTPUT);
   projectTerminalOutput.set(projectPath, next);
   if (projectPath === selectedProjectPath) {
     window.__pwTerminalOutput = next;
+  }
+}
+
+function singleLine(value, maxLength = 120) {
+  const compact = String(value || '').replace(/\s+/g, ' ').trim();
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function renderAgentMonitor(processes, detailsByPid = new Map()) {
+  if (!agentMonitorListEl || !agentMonitorStatusEl) return;
+  agentMonitorListEl.innerHTML = '';
+  if (!Array.isArray(processes) || processes.length === 0) {
+    agentMonitorStatusEl.textContent = 'No Codex processes detected.';
+    return;
+  }
+
+  const totalCpu = processes.reduce((sum, item) => sum + (Number(item.cpu) || 0), 0);
+  const totalMem = processes.reduce((sum, item) => sum + (Number(item.mem) || 0), 0);
+  agentMonitorStatusEl.textContent = `${processes.length} process${processes.length === 1 ? '' : 'es'} · ${totalCpu.toFixed(1)}% CPU · ${totalMem.toFixed(1)}% MEM`;
+
+  for (const processInfo of processes) {
+    const details = detailsByPid.get(processInfo.pid) || {};
+    const card = document.createElement('div');
+    card.className = 'agent-monitor-item';
+
+    const top = document.createElement('div');
+    top.className = 'agent-monitor-top';
+    top.innerHTML = `
+      <strong>${processInfo.kind || 'unknown'} · PID ${processInfo.pid}</strong>
+      <span>${Number(processInfo.cpu || 0).toFixed(1)}% CPU · ${Number(processInfo.mem || 0).toFixed(1)}% MEM</span>
+    `;
+    card.appendChild(top);
+
+    const command = document.createElement('div');
+    command.className = 'agent-monitor-line';
+    command.textContent = singleLine(processInfo.command, 160);
+    card.appendChild(command);
+
+    if (details.cwd) {
+      const cwd = document.createElement('div');
+      cwd.className = 'agent-monitor-line muted';
+      cwd.textContent = `cwd: ${details.cwd}`;
+      card.appendChild(cwd);
+    }
+
+    if (details.transcriptSummary) {
+      const summary = document.createElement('div');
+      summary.className = 'agent-monitor-line muted';
+      summary.textContent = singleLine(details.transcriptSummary, 180);
+      card.appendChild(summary);
+    }
+
+    agentMonitorListEl.appendChild(card);
+  }
+}
+
+async function refreshAgentMonitor() {
+  if (!agentMonitorStatusEl || !agentMonitorListEl) return;
+  agentMonitorStatusEl.textContent = 'Scanning…';
+  try {
+    const processes = await window.api.codexMonitorList();
+    const detailsEntries = await Promise.all(
+      processes.map(async (processInfo) => {
+        try {
+          return [processInfo.pid, await window.api.codexMonitorDetails(processInfo.pid)];
+        } catch {
+          return [processInfo.pid, {}];
+        }
+      })
+    );
+    renderAgentMonitor(processes, new Map(detailsEntries));
+  } catch (error) {
+    agentMonitorListEl.innerHTML = '';
+    const message = error && error.message ? error.message : 'unknown error';
+    if (message.includes('No handler registered for')) {
+      agentMonitorStatusEl.textContent = 'Monitor requires a full Pixelbox restart to enable new main-process hooks.';
+      return;
+    }
+    agentMonitorStatusEl.textContent = `Monitor error: ${message}`;
   }
 }
 
@@ -828,6 +932,35 @@ function closePanel() {
   }
 }
 
+async function removeProject(relPath, label) {
+  const ok = window.confirm(`Delete project "${label}" and remove its files?`);
+  if (!ok) return;
+  const confirmation = window.prompt(`Type the project name to confirm delete:\n${label}`, '');
+  if (confirmation !== label) {
+    window.alert('Project name did not match. Delete cancelled.');
+    return;
+  }
+  try {
+    await window.api.removeDir(relPath);
+    hiddenProjects.delete(relPath);
+    persistHiddenProjects();
+    projectPreviewState.delete(relPath);
+    projectRuntimeConfig.delete(relPath);
+    projectRuntimeStatus.delete(relPath);
+    projectTerminalOutput.delete(relPath);
+    projectSessionBootstrapped.delete(relPath);
+    projectSessionExited.delete(relPath);
+    openProjectActionsPath = null;
+    if (selectedProjectPath === relPath) {
+      await selectProject('.', { recordHistory: true });
+    } else {
+      await renderProjects();
+    }
+  } catch (error) {
+    window.alert(`Failed to remove project: ${error && error.message ? error.message : 'unknown error'}`);
+  }
+}
+
 function projectButton(label, relPath, active, clickHandler) {
   const row = document.createElement('div');
   row.className = 'project-item';
@@ -840,71 +973,107 @@ function projectButton(label, relPath, active, clickHandler) {
   row.appendChild(btn);
 
   if (relPath !== '.') {
-    const hideBtn = document.createElement('button');
-    hideBtn.type = 'button';
-    hideBtn.className = 'icon-button project-action';
-    hideBtn.setAttribute('aria-label', 'Hide project from list');
-    hideBtn.title = 'Hide project from list';
-    hideBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" />
-        <circle cx="12" cy="12" r="3" />
-        <path d="M4 4l16 16" />
-      </svg>
-    `;
-    hideBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      hiddenProjects.add(relPath);
-      persistHiddenProjects();
-      if (selectedProjectPath === relPath) {
-        selectProject('.', { recordHistory: true }).catch(() => {});
-      } else {
-        renderProjects().catch(() => {});
-      }
-    });
-    row.appendChild(hideBtn);
+    if (openProjectActionsPath === relPath) {
+      row.classList.add('project-item-actions-open');
+    }
 
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'icon-button project-action danger';
-    removeBtn.setAttribute('aria-label', 'Delete project folder');
-    removeBtn.title = 'Delete project folder';
-    removeBtn.innerHTML = `
+    const actionsBtn = document.createElement('button');
+    actionsBtn.type = 'button';
+    actionsBtn.className = 'icon-button project-actions-toggle';
+    actionsBtn.setAttribute('aria-label', `Project actions for ${label}`);
+    actionsBtn.setAttribute('aria-expanded', String(openProjectActionsPath === relPath));
+    actionsBtn.title = 'Project actions';
+    actionsBtn.innerHTML = `
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M3 6h18" />
-        <path d="M8 6V4h8v2" />
-        <path d="M6 6l1 14h10l1-14" />
-        <path d="M10 11v6" />
-        <path d="M14 11v6" />
+        <circle cx="12" cy="5" r="1.75" />
+        <circle cx="12" cy="12" r="1.75" />
+        <circle cx="12" cy="19" r="1.75" />
       </svg>
     `;
-    removeBtn.addEventListener('click', async (event) => {
+    actionsBtn.addEventListener('click', (event) => {
       event.stopPropagation();
-      const ok = window.confirm(`Remove project "${label}" and delete its files?`);
-      if (!ok) return;
-      try {
-        await window.api.removeDir(relPath);
-        hiddenProjects.delete(relPath);
-        persistHiddenProjects();
-        projectPreviewState.delete(relPath);
-        projectRuntimeConfig.delete(relPath);
-        projectRuntimeStatus.delete(relPath);
-        projectTerminalOutput.delete(relPath);
-        projectSessionBootstrapped.delete(relPath);
-        projectSessionExited.delete(relPath);
-        if (selectedProjectPath === relPath) {
-          await selectProject('.', { recordHistory: true });
-        } else {
-          await renderProjects();
-        }
-      } catch (error) {
-        window.alert(`Failed to remove project: ${error && error.message ? error.message : 'unknown error'}`);
-      }
+      openProjectActionsPath = openProjectActionsPath === relPath ? null : relPath;
+      renderProjects().catch(() => {});
     });
-    row.appendChild(removeBtn);
+    row.appendChild(actionsBtn);
+
+    if (openProjectActionsPath === relPath) {
+      const menu = document.createElement('div');
+      menu.className = 'project-actions-menu';
+      menu.addEventListener('click', (event) => event.stopPropagation());
+
+      const hideBtn = document.createElement('button');
+      hideBtn.type = 'button';
+      hideBtn.className = 'project-menu-item';
+      hideBtn.textContent = 'Hide from list';
+      hideBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openProjectActionsPath = null;
+        hiddenProjects.add(relPath);
+        persistHiddenProjects();
+        if (selectedProjectPath === relPath) {
+          selectProject('.', { recordHistory: true }).catch(() => {});
+        } else {
+          renderProjects().catch(() => {});
+        }
+      });
+      menu.appendChild(hideBtn);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'project-menu-item danger';
+      removeBtn.textContent = 'Delete project…';
+      removeBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        removeProject(relPath, label).catch(() => {});
+      });
+      menu.appendChild(removeBtn);
+      row.appendChild(menu);
+    }
   }
 
   return row;
+}
+
+function renderHiddenProjects(projects) {
+  if (!hiddenProjectsToggleEl || !hiddenProjectsListEl) return;
+  const hidden = projects.filter((project) => hiddenProjects.has(project.path));
+  hiddenProjectsToggleEl.hidden = hidden.length === 0;
+  hiddenProjectsToggleEl.textContent = `Hidden (${hidden.length})`;
+  hiddenProjectsToggleEl.setAttribute('aria-expanded', String(hiddenProjectsExpanded));
+  hiddenProjectsListEl.hidden = !hiddenProjectsExpanded || hidden.length === 0;
+  hiddenProjectsListEl.innerHTML = '';
+  if (!hiddenProjectsExpanded || hidden.length === 0) {
+    return;
+  }
+
+  const header = document.createElement('div');
+  header.className = 'hidden-projects-header';
+  header.textContent = 'Hidden projects';
+  hiddenProjectsListEl.appendChild(header);
+
+  for (const project of hidden) {
+    const row = document.createElement('div');
+    row.className = 'hidden-project-item';
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'hidden-project-label';
+    labelEl.textContent = project.name;
+    row.appendChild(labelEl);
+
+    const restoreBtn = document.createElement('button');
+    restoreBtn.type = 'button';
+    restoreBtn.className = 'hidden-project-restore';
+    restoreBtn.textContent = 'Restore';
+    restoreBtn.addEventListener('click', () => {
+      hiddenProjects.delete(project.path);
+      persistHiddenProjects();
+      renderProjects().catch(() => {});
+    });
+    row.appendChild(restoreBtn);
+
+    hiddenProjectsListEl.appendChild(row);
+  }
 }
 
 function renderRunningPageFields(sourceType) {
@@ -1194,6 +1363,7 @@ async function renderProjects() {
       projectButton(project.name, project.path, selectedProjectPath === project.path, selectProject)
     );
   }
+  renderHiddenProjects(projects);
 
   const activeLabel = selectedProjectPath === '.' ? 'workspace root' : selectedProjectPath;
   activeProjectEl.textContent = `Active: ${activeLabel}`;
@@ -1293,9 +1463,21 @@ window.api.onPreviewStatus(({ key, running, url, configuredUrl, sourceType }) =>
   });
 
   if (url) {
-    pushPreviewUrl(key, url).catch(() => {});
+    pushPreviewUrl(key, url)
+      .then(() => {
+        if (key === selectedProjectPath) {
+          renderRuntimeConfig(key);
+        }
+      })
+      .catch(() => {});
   } else if (configuredUrl && sourceType === 'server') {
-    pushPreviewUrl(key, configuredUrl).catch(() => {});
+    pushPreviewUrl(key, configuredUrl)
+      .then(() => {
+        if (key === selectedProjectPath) {
+          renderRuntimeConfig(key);
+        }
+      })
+      .catch(() => {});
   }
 
   if (key === selectedProjectPath) {
@@ -1380,6 +1562,18 @@ projectsMinimizeEl.addEventListener('click', () => {
   persistProjectsPanelHidden();
   renderProjectsPanelVisibility();
 });
+if (hiddenProjectsToggleEl) {
+  hiddenProjectsToggleEl.addEventListener('click', () => {
+    hiddenProjectsExpanded = !hiddenProjectsExpanded;
+    persistHiddenProjectsExpanded();
+    renderProjects().catch(() => {});
+  });
+}
+if (agentMonitorRefreshEl) {
+  agentMonitorRefreshEl.addEventListener('click', () => {
+    refreshAgentMonitor().catch(() => {});
+  });
+}
 terminalEl.addEventListener('mousedown', focusTerminal);
 panel.addEventListener('mousedown', focusTerminal);
 for (const dropTarget of [terminalEl, panel]) {
@@ -1800,8 +1994,18 @@ window.addEventListener('resize', () => {
   syncTerminalSize();
 });
 
+window.addEventListener('pointerdown', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (!openProjectActionsPath) return;
+  if (target.closest('.project-item-actions-open')) return;
+  openProjectActionsPath = null;
+  renderProjects().catch(() => {});
+});
+
 (async () => {
   loadHiddenProjects();
+  hiddenProjectsExpanded = loadHiddenProjectsExpanded();
   projectsPanelHidden = loadProjectsPanelHidden();
   loadProjectsPanelPosition();
   loadTerminalLayoutState();
@@ -1809,6 +2013,13 @@ window.addEventListener('resize', () => {
   codexDangerouslyBypassPermissions = loadCodexDangerouslyBypassPermissions();
   renderTerminalDockMode();
   renderCodexLaunchConfig();
+  refreshAgentMonitor().catch(() => {});
+  if (agentMonitorPollTimer) {
+    clearInterval(agentMonitorPollTimer);
+  }
+  agentMonitorPollTimer = setInterval(() => {
+    refreshAgentMonitor().catch(() => {});
+  }, 10000);
   await window.api.startRendererWatch();
   openPanel();
   selectedProjectPath = loadLastSelectedProject();

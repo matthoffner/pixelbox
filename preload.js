@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld('api', {
   resizeTerminal: (cols, rows, key) => ipcRenderer.send('terminal:resize', cols, rows, key),
   killTerminal: () => ipcRenderer.send('terminal:kill'),
   startRendererWatch: () => ipcRenderer.invoke('renderer:watchStart'),
+  codexMonitorList: () => ipcRenderer.invoke('codexMonitor:list'),
+  codexMonitorDetails: (pid) => ipcRenderer.invoke('codexMonitor:details', pid),
   onTerminalData: (callback) => {
     ipcRenderer.on('terminal:data', (_event, payload) => callback(payload));
   },

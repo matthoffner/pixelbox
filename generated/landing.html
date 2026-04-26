@@ -3,29 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pixelbox | Local AI Software Workspace</title>
+  <title>Pixelbox | Ambient Dashboard</title>
   <meta
     name="description"
-    content="Pixelbox is a local AI software workspace for switching projects, running agent terminals, and viewing the app live in one place."
+    content="An ambient Pixelbox landing page with a canvas sky that shifts with the time of day and optional local weather."
   />
   <style>
     :root {
-      --bg: #08111f;
-      --bg-2: #0d1a2e;
-      --panel: rgba(10, 18, 33, 0.76);
-      --panel-strong: rgba(14, 24, 43, 0.92);
-      --line: rgba(147, 179, 255, 0.16);
-      --text: #edf3ff;
-      --muted: #99abc7;
-      --blue: #67b7ff;
-      --cyan: #63f4d3;
-      --amber: #ffbc6a;
-      --rose: #ff7f96;
-      --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
-      --radius: 24px;
-      --max: 1180px;
-      --mono: "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
-      --sans: "Avenir Next", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+      color-scheme: dark;
+      --bg-1: #071018;
+      --bg-2: #0b1826;
+      --bg-3: #102236;
+      --panel: rgba(8, 14, 24, 0.56);
+      --panel-strong: rgba(10, 17, 28, 0.82);
+      --line: rgba(185, 214, 255, 0.12);
+      --line-strong: rgba(185, 214, 255, 0.24);
+      --text: #eef4ff;
+      --muted: #a2b6d1;
+      --soft: #6e829c;
+      --accent: #8ad7ff;
+      --accent-2: #98ffd9;
+      --warm: #ffc27a;
+      --rose: #ff9ab0;
+      --shadow: 0 30px 90px rgba(0, 0, 0, 0.3);
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 18px;
+      --max-width: 1320px;
+      --glow: rgba(138, 215, 255, 0.26);
+      --sky-top: #09111d;
+      --sky-bottom: #0d2032;
     }
 
     * {
@@ -35,712 +42,1348 @@
     html,
     body {
       margin: 0;
-      padding: 0;
       min-height: 100%;
     }
 
     body {
-      font-family: var(--sans);
+      overflow: hidden;
+      font-family: "Inter", "Avenir Next", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
       color: var(--text);
-      background:
-        radial-gradient(circle at top left, rgba(103, 183, 255, 0.22), transparent 34%),
-        radial-gradient(circle at 85% 12%, rgba(99, 244, 211, 0.14), transparent 28%),
-        radial-gradient(circle at 20% 85%, rgba(255, 127, 150, 0.12), transparent 24%),
-        linear-gradient(180deg, var(--bg) 0%, #091221 40%, var(--bg-2) 100%);
-      overflow-x: hidden;
+      background: linear-gradient(180deg, var(--bg-1), var(--bg-2) 45%, var(--bg-3));
     }
 
-    body::before {
+    body::before,
+    body::after {
       content: "";
       position: fixed;
       inset: 0;
       pointer-events: none;
+    }
+
+    body::before {
+      background:
+        radial-gradient(circle at 15% 15%, rgba(146, 214, 255, 0.14), transparent 26%),
+        radial-gradient(circle at 80% 18%, rgba(152, 255, 217, 0.08), transparent 22%),
+        radial-gradient(circle at 50% 110%, rgba(255, 194, 122, 0.12), transparent 38%);
+      opacity: 0.9;
+    }
+
+    body::after {
       background-image:
-        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-      background-size: 42px 42px;
-      mask-image: radial-gradient(circle at center, black 46%, transparent 88%);
-      opacity: 0.35;
+        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: radial-gradient(circle at center, black 42%, transparent 92%);
+      opacity: 0.24;
     }
 
-    a {
-      color: inherit;
+    #ambient-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
     }
 
-    .container {
-      width: min(calc(100% - 32px), var(--max));
+    .app {
+      position: relative;
+      min-height: 100vh;
+      padding: 22px;
+      display: grid;
+      place-items: stretch;
+    }
+
+    .dashboard {
+      width: min(100%, var(--max-width));
       margin: 0 auto;
+      min-height: calc(100vh - 44px);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 16px;
     }
 
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 30;
-      backdrop-filter: blur(18px);
-      background: rgba(8, 17, 31, 0.72);
-      border-bottom: 1px solid rgba(147, 179, 255, 0.12);
+    .panel {
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.025));
+      backdrop-filter: blur(24px) saturate(140%);
+      box-shadow: var(--shadow);
     }
 
-    .nav {
+    .panel::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .topbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      padding: 16px 0;
+      padding: 14px 18px;
+      border-radius: 22px;
+      background: rgba(8, 13, 23, 0.46);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(18px);
     }
 
     .brand {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      text-decoration: none;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-    }
-
-    .brand-icon {
-      width: 38px;
-      height: 38px;
-      display: block;
-      border-radius: 12px;
-      box-shadow: 0 10px 28px rgba(103, 183, 255, 0.2);
-    }
-
-    .nav-links {
       display: flex;
       align-items: center;
-      gap: 18px;
-      flex-wrap: wrap;
-      color: var(--muted);
-      font-size: 0.95rem;
+      gap: 12px;
+      min-width: 0;
     }
 
-    .nav-links a {
-      text-decoration: none;
-    }
-
-    .nav-links a:hover {
-      color: var(--text);
-    }
-
-    .button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      min-height: 46px;
-      padding: 0 18px;
-      border-radius: 999px;
-      text-decoration: none;
-      font-weight: 800;
-      letter-spacing: 0.01em;
-      transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
-    }
-
-    .button:hover {
-      transform: translateY(-1px);
-    }
-
-    .button-primary {
-      color: #07111d;
-      background: linear-gradient(135deg, var(--cyan), #8bc9ff);
-      box-shadow: 0 14px 34px rgba(99, 244, 211, 0.2);
-    }
-
-    .button-secondary {
-      border: 1px solid rgba(147, 179, 255, 0.22);
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text);
-    }
-
-    .hero {
-      padding: 56px 0 40px;
-    }
-
-    .hero-grid {
+    .brand-mark {
+      width: 40px;
+      height: 40px;
+      border-radius: 14px;
       display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 28px;
-      align-items: center;
+      place-items: center;
+      font-size: 0.92rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: white;
+      background: linear-gradient(135deg, rgba(138, 215, 255, 0.34), rgba(255, 194, 122, 0.22));
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
     }
 
-    .eyebrow {
+    .brand-copy {
+      min-width: 0;
+    }
+
+    .brand-copy strong,
+    .brand-copy span {
+      display: block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .brand-copy span,
+    .meta-line,
+    .microcopy,
+    .hint,
+    .mini-value span,
+    .pill,
+    .footer-note {
+      color: var(--muted);
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .pill {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
       border-radius: 999px;
-      border: 1px solid rgba(147, 179, 255, 0.16);
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--muted);
-      font-size: 0.82rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      font-weight: 800;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.035);
+      font-size: 0.84rem;
     }
 
-    h1 {
-      margin: 18px 0 16px;
-      font-size: clamp(2.8rem, 7vw, 5.9rem);
-      line-height: 0.95;
-      letter-spacing: -0.05em;
-      max-width: 10ch;
-    }
-
-    .hero-copy {
-      margin: 0;
-      max-width: 58ch;
-      color: var(--muted);
-      font-size: clamp(1.04rem, 1.6vw, 1.18rem);
-      line-height: 1.7;
-    }
-
-    .hero-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 22px;
-    }
-
-    .hero-proof {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 14px;
-      margin-top: 20px;
-      color: var(--muted);
-      font-size: 0.95rem;
-    }
-
-    .hero-proof span {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .hero-proof span::before {
-      content: "";
-      width: 7px;
-      height: 7px;
+    .pill-dot {
+      width: 8px;
+      height: 8px;
       border-radius: 999px;
-      background: var(--cyan);
-      box-shadow: 0 0 16px rgba(99, 244, 211, 0.5);
+      background: var(--accent-2);
+      box-shadow: 0 0 18px var(--accent-2);
     }
 
-    .workspace-card {
-      position: relative;
-      padding: 20px;
-      border-radius: var(--radius);
-      background: linear-gradient(180deg, rgba(16, 28, 51, 0.94), rgba(10, 18, 33, 0.92));
-      border: 1px solid rgba(147, 179, 255, 0.14);
-      box-shadow: var(--shadow);
-      overflow: hidden;
+    .main-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.9fr);
+      gap: 16px;
+      min-height: 0;
     }
 
-    .workspace-card::after {
+    .hero {
+      padding: clamp(24px, 4vw, 38px);
+      display: grid;
+      align-content: space-between;
+      min-height: 0;
+      isolation: isolate;
+    }
+
+    .hero::before {
       content: "";
       position: absolute;
-      inset: auto -10% -36% auto;
-      width: 220px;
-      height: 220px;
-      background: radial-gradient(circle, rgba(103, 183, 255, 0.28), transparent 62%);
+      inset: auto 8% -22% auto;
+      width: 280px;
+      height: 280px;
+      border-radius: 999px;
+      background: radial-gradient(circle, var(--glow), transparent 68%);
+      filter: blur(14px);
+      opacity: 0.8;
+      z-index: -1;
     }
 
-    .window-bar {
-      display: flex;
+    .eyebrow {
+      display: inline-flex;
       align-items: center;
-      gap: 8px;
-      color: var(--muted);
-      font-size: 0.84rem;
-      margin-bottom: 16px;
+      gap: 10px;
+      width: fit-content;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.05);
     }
 
-    .dot {
+    .orb {
       width: 10px;
       height: 10px;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.2);
+      background: var(--warm);
+      box-shadow: 0 0 24px var(--warm);
     }
 
-    .dot:nth-child(1) {
-      background: #ff7e79;
+    .hero-copy {
+      margin-top: 18px;
+      max-width: 760px;
     }
 
-    .dot:nth-child(2) {
-      background: #ffbd4a;
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(3.5rem, 10vw, 8rem);
+      line-height: 0.92;
+      letter-spacing: -0.07em;
+      text-wrap: balance;
     }
 
-    .dot:nth-child(3) {
-      background: #29c76f;
+    .hero p {
+      margin: 18px 0 0;
+      max-width: 56ch;
+      font-size: clamp(1rem, 1.3vw, 1.12rem);
+      color: var(--muted);
     }
 
-    .shell {
+    .hero-footer {
+      margin-top: 28px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .clock-block {
+      display: grid;
+      gap: 6px;
+    }
+
+    .clock {
+      font-size: clamp(3rem, 8vw, 6rem);
+      line-height: 0.92;
+      letter-spacing: -0.06em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .date-line {
+      font-size: 1rem;
+      color: var(--muted);
+    }
+
+    .micro-grid {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .mini-value {
+      min-width: 124px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .mini-value strong,
+    .status-value {
+      display: block;
+      margin-top: 4px;
+      font-size: 1.08rem;
+      color: var(--text);
+    }
+
+    .side {
+      display: grid;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    .stack-card {
+      padding: 20px;
       display: grid;
       gap: 14px;
     }
 
-    .shell-pane {
-      border-radius: 18px;
-      border: 1px solid rgba(147, 179, 255, 0.12);
-      background: rgba(255, 255, 255, 0.03);
-      overflow: hidden;
-    }
-
-    .pane-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 14px;
-      color: var(--muted);
-      font-size: 0.8rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      border-bottom: 1px solid rgba(147, 179, 255, 0.1);
-    }
-
-    .pane-body {
-      padding: 14px;
-    }
-
-    .project-list,
-    .terminal-lines,
-    .preview-status {
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    .project-list li,
-    .terminal-lines li,
-    .preview-status li {
+    .card-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(147, 179, 255, 0.08);
     }
 
-    .project-list li:last-child,
-    .terminal-lines li:last-child,
-    .preview-status li:last-child {
-      border-bottom: 0;
+    .card-header h2,
+    .footer h3 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: -0.03em;
     }
 
-    .project-name {
-      font-weight: 700;
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
     }
 
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: rgba(103, 183, 255, 0.12);
-      color: #cde5ff;
-      font-size: 0.78rem;
-      white-space: nowrap;
+    .status-item {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
-    .terminal-lines {
-      font-family: var(--mono);
-      font-size: 0.9rem;
-      color: #d7e5ff;
-    }
-
-    .terminal-lines .prompt {
-      color: var(--cyan);
-    }
-
-    .terminal-lines .muted {
-      color: #7f96bb;
-    }
-
-    .terminal-lines .hot {
-      color: var(--amber);
-    }
-
-    .preview-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 7px 10px;
-      border-radius: 999px;
-      background: rgba(99, 244, 211, 0.1);
-      color: #c6fff3;
-      font-size: 0.78rem;
-      white-space: nowrap;
-    }
-
-    .section {
-      padding: 34px 0;
-    }
-
-    .section-head {
+    .weather-main {
       display: flex;
+      align-items: flex-end;
       justify-content: space-between;
-      align-items: end;
-      gap: 18px;
-      margin-bottom: 18px;
-    }
-
-    .section-head h2 {
-      margin: 0;
-      font-size: clamp(1.8rem, 3vw, 2.8rem);
-      line-height: 1;
-      letter-spacing: -0.04em;
-    }
-
-    .section-head p {
-      margin: 0;
-      color: var(--muted);
-      max-width: 56ch;
-      line-height: 1.65;
-    }
-
-    .grid-3 {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 16px;
-    }
-
-    .card {
-      border-radius: 20px;
-      padding: 22px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      box-shadow: var(--shadow);
-    }
-
-    .card h3 {
-      margin: 0 0 12px;
-      font-size: 1.2rem;
-    }
-
-    .card p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.68;
-    }
-
-    .code-strip {
-      display: grid;
       gap: 14px;
-      padding: 20px;
-      border-radius: 22px;
-      background: var(--panel-strong);
-      border: 1px solid var(--line);
-      box-shadow: var(--shadow);
-      font-family: var(--mono);
+      flex-wrap: wrap;
     }
 
-    .code-row {
+    .weather-temp {
+      font-size: 2.5rem;
+      line-height: 0.9;
+      letter-spacing: -0.05em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button,
+    .ghost-link {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font: inherit;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+    }
+
+    button:hover,
+    .ghost-link:hover {
+      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    button:active,
+    .ghost-link:active {
+      transform: translateY(0);
+    }
+
+    .timeline {
+      display: grid;
+      gap: 10px;
+    }
+
+    .track {
+      position: relative;
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: linear-gradient(90deg, #0f1830 0%, #644651 18%, #d5a15d 32%, #8fd7ff 52%, #8bdcc9 66%, #e59a66 82%, #11172a 100%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .track::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent);
+    }
+
+    .track-marker {
+      position: absolute;
+      top: 50%;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: white;
+      border: 3px solid rgba(5, 10, 16, 0.55);
+      box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.08), 0 0 24px rgba(255, 255, 255, 0.26);
+      transform: translate(-50%, -50%);
+    }
+
+    .track-labels {
       display: flex;
       justify-content: space-between;
-      gap: 16px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid rgba(147, 179, 255, 0.1);
-      color: #d6e5ff;
-    }
-
-    .code-row:last-child {
-      padding-bottom: 0;
-      border-bottom: 0;
-    }
-
-    .code-row strong {
-      color: var(--cyan);
-      font-weight: 700;
+      gap: 10px;
+      font-size: 0.84rem;
+      color: var(--soft);
     }
 
     .footer {
-      padding: 24px 0 48px;
-      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 4px 0;
+      flex-wrap: wrap;
+    }
+
+    .footer-note {
       font-size: 0.92rem;
     }
 
-    @media (max-width: 960px) {
-      .hero-grid,
-      .grid-3 {
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 980px) {
+      body {
+        overflow: auto;
+      }
+
+      .app {
+        min-height: 100vh;
+      }
+
+      .dashboard {
+        min-height: auto;
+      }
+
+      .main-grid {
         grid-template-columns: 1fr;
       }
 
-      .section-head {
-        align-items: start;
-        flex-direction: column;
-      }
-
-      h1 {
-        max-width: none;
+      .hero {
+        min-height: 58vh;
       }
     }
 
-    @media (max-width: 640px) {
-      .nav {
-        align-items: start;
+    @media (max-width: 720px) {
+      .app {
+        padding: 14px;
+      }
+
+      .topbar,
+      .hero,
+      .stack-card {
+        border-radius: 20px;
+      }
+
+      .topbar {
+        align-items: flex-start;
         flex-direction: column;
       }
 
-      .hero {
-        padding-top: 36px;
+      .topbar-right,
+      .hero-footer,
+      .weather-main,
+      .footer {
+        justify-content: flex-start;
       }
 
-      .workspace-card,
-      .card,
-      .code-strip {
-        padding: 16px;
+      .status-grid {
+        grid-template-columns: 1fr;
       }
 
-      .code-row,
-      .project-list li,
-      .terminal-lines li,
-      .preview-status li {
-        align-items: start;
-        flex-direction: column;
+      .clock {
+        font-size: clamp(2.6rem, 16vw, 4.4rem);
+      }
+
+      .hero h1 {
+        font-size: clamp(2.8rem, 16vw, 5rem);
       }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div class="container nav">
-      <a class="brand" href="#top">
-        <img class="brand-icon" src="../assets/pixelbox-icon.svg" alt="Pixelbox icon" />
-        <span>Pixelbox</span>
-      </a>
-      <nav class="nav-links" aria-label="Workspace status">
-        <span>Workspace home</span>
-        <span>Local preview</span>
-        <span>Agent terminal</span>
-      </nav>
-    </div>
-  </header>
+  <canvas id="ambient-canvas" aria-hidden="true"></canvas>
 
-  <main id="top">
-    <section class="hero">
-      <div class="container hero-grid">
+  <div class="app">
+    <main class="dashboard" aria-label="Ambient dashboard">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">PX</div>
+          <div class="brand-copy">
+            <strong>Pixelbox Ambient</strong>
+            <span id="topbar-summary">Syncing to your local rhythm.</span>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div class="pill"><span class="pill-dot"></span><span id="phase-pill">Circadian · Day</span></div>
+          <div class="pill" id="weather-pill">Weather · Ambient fallback</div>
+        </div>
+      </header>
+
+      <section class="main-grid">
+        <section class="panel hero">
+          <div>
+            <div class="eyebrow"><span class="orb"></span><span id="eyebrow-text">Local sky</span></div>
+            <div class="hero-copy">
+              <h1 id="headline">Slow dashboard for fast minds.</h1>
+              <p id="hero-text">The backdrop shifts with your time of day, softens with the weather, and stays quiet enough to live behind real work.</p>
+            </div>
+          </div>
+
+          <div class="hero-footer">
+            <div class="clock-block">
+              <div class="clock" id="clock">12:00</div>
+              <div class="date-line" id="date-line">Saturday, April 19</div>
+            </div>
+
+            <div class="micro-grid">
+              <div class="mini-value">
+                <span>Phase</span>
+                <strong id="phase-name">Morning</strong>
+              </div>
+              <div class="mini-value">
+                <span>Atmosphere</span>
+                <strong id="atmosphere-copy">Clear and open</strong>
+              </div>
+              <div class="mini-value">
+                <span>Light</span>
+                <strong id="light-copy">Cool horizon glow</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="side">
+          <section class="panel stack-card">
+            <div class="card-header">
+              <h2>Now</h2>
+              <span class="meta-line" id="status-stamp">Live local scene</span>
+            </div>
+
+            <div class="status-grid">
+              <div class="status-item">
+                <span class="microcopy">Circadian state</span>
+                <strong class="status-value" id="circadian-copy">Afternoon focus</strong>
+              </div>
+              <div class="status-item">
+                <span class="microcopy">Canvas motion</span>
+                <strong class="status-value" id="motion-copy">Drifting slowly</strong>
+              </div>
+              <div class="status-item">
+                <span class="microcopy">Weather source</span>
+                <strong class="status-value" id="weather-source">Time-based fallback</strong>
+              </div>
+              <div class="status-item">
+                <span class="microcopy">Location</span>
+                <strong class="status-value" id="weather-location">Here, more or less</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel stack-card">
+            <div class="card-header">
+              <h2>Weather</h2>
+              <span class="meta-line" id="weather-updated">No live fetch yet</span>
+            </div>
+
+            <div class="weather-main">
+              <div>
+                <div class="weather-temp" id="weather-temp">--°</div>
+                <div class="hint" id="weather-copy">Ambient mode is using your local time. Add weather when you want the scene to match outside.</div>
+              </div>
+
+              <div class="actions">
+                <button id="use-weather" type="button">Use my local weather</button>
+                <button id="clear-weather" type="button">Clear</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel stack-card timeline">
+            <div class="card-header">
+              <h2>Daily arc</h2>
+              <span class="meta-line" id="day-progress">0% through day</span>
+            </div>
+
+            <div class="track">
+              <div class="track-marker" id="track-marker"></div>
+            </div>
+            <div class="track-labels">
+              <span>Night</span>
+              <span>Dawn</span>
+              <span>Day</span>
+              <span>Dusk</span>
+              <span>Night</span>
+            </div>
+          </section>
+        </aside>
+      </section>
+
+      <footer class="footer">
         <div>
-          <div class="eyebrow">Home</div>
-          <h1>Open a project, run it, and keep the result in view.</h1>
-          <p class="hero-copy">
-            Pixelbox is the working surface for this repo. Use it to switch projects, keep Codex sessions attached,
-            launch local runtimes, and use this page as the workspace fallback when nothing else is live yet.
-          </p>
-          <div class="hero-actions">
-            <a class="button button-primary" href="#quick-start">Quick start</a>
-            <a class="button button-secondary" href="#projects">Recent projects</a>
-          </div>
-          <div class="hero-proof">
-            <span>Sticky terminal sessions</span>
-            <span>Embedded live preview</span>
-            <span>Project switching</span>
-            <span>HTML preview live update</span>
-          </div>
+          <h3>Ambient by default</h3>
+          <div class="footer-note">Time always drives the scene. Weather only joins after a direct click.</div>
         </div>
+        <div class="footer-note" id="footer-tips">Tip: append <code>?weather=rain&amp;temp=58&amp;place=Seattle</code> to preview moods.</div>
+      </footer>
+    </main>
+  </div>
 
-        <div class="workspace-card" aria-label="Pixelbox workspace preview">
-          <div class="window-bar">
-            <span class="dot"></span>
-            <span class="dot"></span>
-            <span class="dot"></span>
-            <span>pixelbox://workspace</span>
-          </div>
+  <script>
+    const $ = (selector) => document.querySelector(selector);
 
-          <div class="shell">
-            <div class="shell-pane">
-              <div class="pane-head"><span>Today</span><span>Workspace state</span></div>
-              <div class="pane-body">
-                <ul class="project-list">
-                  <li>
-                    <span class="project-name">Fallback page</span>
-                    <span class="badge">generated/landing.html</span>
-                  </li>
-                  <li>
-                    <span class="project-name">Preview mode</span>
-                    <span class="badge">local HTML or localhost URL</span>
-                  </li>
-                  <li>
-                    <span class="project-name">Session model</span>
-                    <span class="badge">per-project continuity</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
+    const elements = {
+      topbarSummary: $("#topbar-summary"),
+      phasePill: $("#phase-pill"),
+      weatherPill: $("#weather-pill"),
+      eyebrowText: $("#eyebrow-text"),
+      headline: $("#headline"),
+      heroText: $("#hero-text"),
+      clock: $("#clock"),
+      dateLine: $("#date-line"),
+      phaseName: $("#phase-name"),
+      atmosphereCopy: $("#atmosphere-copy"),
+      lightCopy: $("#light-copy"),
+      statusStamp: $("#status-stamp"),
+      circadianCopy: $("#circadian-copy"),
+      motionCopy: $("#motion-copy"),
+      weatherSource: $("#weather-source"),
+      weatherLocation: $("#weather-location"),
+      weatherUpdated: $("#weather-updated"),
+      weatherTemp: $("#weather-temp"),
+      weatherCopy: $("#weather-copy"),
+      dayProgress: $("#day-progress"),
+      trackMarker: $("#track-marker")
+    };
 
-            <div class="shell-pane">
-              <div class="pane-head"><span>Now</span><span>Suggested flow</span></div>
-              <div class="pane-body">
-                <ul class="terminal-lines">
-                  <li><span><span class="prompt">1.</span> pick a project from the menu</span><span class="muted">scope the workspace</span></li>
-                  <li><span><span class="prompt">2.</span> resume or open the terminal</span><span class="hot">agent lane</span></li>
-                  <li><span><span class="prompt">3.</span> start a preview target</span><span class="muted">HTML or dev server</span></li>
-                </ul>
-              </div>
-            </div>
+    const canvas = $("#ambient-canvas");
+    const context = canvas.getContext("2d");
 
-            <div class="shell-pane">
-              <div class="pane-head"><span>Preview</span><span>Fallback ready</span></div>
-              <div class="pane-body">
-                <ul class="preview-status">
-                  <li>
-                    <span>Home page source</span>
-                    <span class="preview-chip">generated/landing.html</span>
-                  </li>
-                  <li>
-                    <span>Best target when active</span>
-                    <span class="preview-chip">localhost app preview</span>
-                  </li>
-                  <li>
-                    <span>Loop</span>
-                    <span class="preview-chip">edit -> run -> verify</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+    const phaseConfig = {
+      lateNight: {
+        label: "Late night",
+        pill: "Circadian · Night",
+        mood: "Quiet recovery",
+        atmosphere: "Still air and dark glass",
+        light: "Moonlit gradients",
+        motion: "Slow star drift",
+        eyebrow: "Night field",
+        headline: "Night keeps the edges soft.",
+        text: "Low light, spare motion, and a calmer canvas so the interface feels more like a room than a screen.",
+        colors: {
+          bg1: "#04070f",
+          bg2: "#0a1320",
+          bg3: "#132239",
+          glow: "rgba(125, 184, 255, 0.24)",
+          accent: "#88b8ff",
+          accent2: "#a4fff1",
+          warm: "#c8d4ff",
+          rose: "#ff9db7"
+        }
+      },
+      dawn: {
+        label: "Dawn",
+        pill: "Circadian · Dawn",
+        mood: "Gentle ramp-up",
+        atmosphere: "Mist lifting off the horizon",
+        light: "Peach and blue crossover",
+        motion: "Soft haze drift",
+        eyebrow: "First light",
+        headline: "The dashboard wakes up with you.",
+        text: "Dawn adds warmth at the horizon, keeps the contrast low, and lets the day arrive instead of snapping on.",
+        colors: {
+          bg1: "#1a1d32",
+          bg2: "#4a3851",
+          bg3: "#d89060",
+          glow: "rgba(255, 187, 133, 0.34)",
+          accent: "#ffbf89",
+          accent2: "#a7f2ff",
+          warm: "#ffd49b",
+          rose: "#ff9eb5"
+        }
+      },
+      day: {
+        label: "Day",
+        pill: "Circadian · Day",
+        mood: "Open focus",
+        atmosphere: "Clear and breathable",
+        light: "Bright upper sky",
+        motion: "Air currents and haze",
+        eyebrow: "Open sky",
+        headline: "Slow dashboard for fast minds.",
+        text: "Day mode keeps the glass panels crisp, the palette cooler, and the animation subtle enough to fade behind work.",
+        colors: {
+          bg1: "#5c93c3",
+          bg2: "#8ec4eb",
+          bg3: "#d5edf7",
+          glow: "rgba(255, 246, 202, 0.34)",
+          accent: "#8ad7ff",
+          accent2: "#98ffd9",
+          warm: "#ffd07f",
+          rose: "#ffc2cf"
+        }
+      },
+      golden: {
+        label: "Golden hour",
+        pill: "Circadian · Golden",
+        mood: "Warm momentum",
+        atmosphere: "Long light and saturated edges",
+        light: "Amber spill across glass",
+        motion: "Heat shimmer drift",
+        eyebrow: "Golden sky",
+        headline: "The room turns cinematic.",
+        text: "Late daylight leans warmer, deeper, and a little more dramatic without becoming noisy.",
+        colors: {
+          bg1: "#503042",
+          bg2: "#c27159",
+          bg3: "#f0b972",
+          glow: "rgba(255, 188, 102, 0.38)",
+          accent: "#ffcf8a",
+          accent2: "#fff0b0",
+          warm: "#ffb965",
+          rose: "#ff9f86"
+        }
+      },
+      dusk: {
+        label: "Dusk",
+        pill: "Circadian · Dusk",
+        mood: "Evening downshift",
+        atmosphere: "Color fading into depth",
+        light: "Rose horizon glow",
+        motion: "Cloud ribbons",
+        eyebrow: "Blue hour",
+        headline: "Evening settles into the glass.",
+        text: "Dusk lowers the ceiling, deepens the gradients, and brings back a bit of sparkle as the ambient field cools.",
+        colors: {
+          bg1: "#181a35",
+          bg2: "#3d3f73",
+          bg3: "#d07a72",
+          glow: "rgba(255, 152, 171, 0.28)",
+          accent: "#b4c4ff",
+          accent2: "#ffb1c2",
+          warm: "#ffb16c",
+          rose: "#ff97aa"
+        }
+      }
+    };
 
-    <section class="section" id="quick-start">
-      <div class="container">
-        <div class="section-head">
-          <div>
-            <h2>Quick start</h2>
-          </div>
-          <p>
-            This page should help you start work, not sell you the app. These are the primary moves inside Pixelbox.
-          </p>
-        </div>
-        <div class="grid-3">
-          <article class="card">
-            <h3>1. Choose a project</h3>
-            <p>
-              Use the menu to switch into a project folder. Pixelbox keeps preview state and terminal context scoped to
-              that project.
-            </p>
-          </article>
-          <article class="card">
-            <h3>2. Open the terminal</h3>
-            <p>
-              Resume Codex or run commands directly. The terminal is the control surface for booting previews and doing
-              real work.
-            </p>
-          </article>
-          <article class="card">
-            <h3>3. Point the preview</h3>
-            <p>
-              Set a local URL or HTML file in Running Page so the result stays visible while you iterate.
-            </p>
-          </article>
-        </div>
-      </div>
-    </section>
+    const weatherPresets = {
+      clear: { label: "Clear", intensity: 0.08, overlay: "clear", motion: 1 },
+      cloudy: { label: "Cloudy", intensity: 0.34, overlay: "clouds", motion: 1.15 },
+      fog: { label: "Fog", intensity: 0.48, overlay: "fog", motion: 0.75 },
+      rain: { label: "Rain", intensity: 0.78, overlay: "rain", motion: 1.5 },
+      storm: { label: "Storm", intensity: 0.92, overlay: "storm", motion: 1.8 },
+      snow: { label: "Snow", intensity: 0.72, overlay: "snow", motion: 0.55 }
+    };
 
-    <section class="section" id="projects">
-      <div class="container">
-        <div class="section-head">
-          <div>
-            <h2>Workspace patterns</h2>
-          </div>
-          <p>
-            These are the app behaviors that matter most when you are using Pixelbox as a daily workspace.
-          </p>
-        </div>
-        <div class="code-strip">
-          <div class="code-row">
-            <span><strong>Projects</strong></span>
-            <span>Switch without losing preview and terminal history</span>
-          </div>
-          <div class="code-row">
-            <span><strong>Terminal</strong></span>
-            <span>Keep agent sessions attached to the active project</span>
-          </div>
-          <div class="code-row">
-            <span><strong>Preview</strong></span>
-            <span>Bind to localhost or a local HTML file and keep it in frame</span>
-          </div>
-          <div class="code-row">
-            <span><strong>Coordination</strong></span>
-            <span>Use <code>.pixelbox/handoff.md</code> when editor and runtime work split</span>
-          </div>
-          <div class="code-row">
-            <span><strong>Fallback</strong></span>
-            <span>This page fills the viewport until a project takes over</span>
-          </div>
-        </div>
-      </div>
-    </section>
+    const scene = {
+      width: 0,
+      height: 0,
+      dpr: Math.min(window.devicePixelRatio || 1, 2),
+      particles: [],
+      stars: [],
+      clouds: [],
+      drops: [],
+      flakes: [],
+      weather: null,
+      weatherSource: "fallback",
+      phase: phaseConfig.day,
+      phaseKey: "day",
+      now: new Date()
+    };
 
-    <section class="section" id="runtime">
-      <div class="container">
-        <div class="section-head">
-          <div>
-            <h2>Built into this repo</h2>
-          </div>
-          <p>
-            The app home should reflect the current product surface, not future aspirations.
-          </p>
-        </div>
-        <div class="grid-3">
-          <article class="card">
-            <h3>Electron shell</h3>
-            <p>
-              Native wrapper, full-bleed viewport, and app-level controls for a coding workspace.
-            </p>
-          </article>
-          <article class="card">
-            <h3>Real terminal</h3>
-            <p>
-              xterm-backed terminal for Codex sessions, shell work, and runtime startup commands.
-            </p>
-          </article>
-          <article class="card">
-            <h3>Live viewport</h3>
-            <p>
-              Embedded preview for local URLs and static files with direct visual feedback.
-            </p>
-          </article>
-        </div>
-      </div>
-    </section>
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
 
-    <section class="section" id="start">
-      <div class="container">
-        <div class="section-head">
-          <div>
-            <h2>Local commands</h2>
-          </div>
-          <p>
-            The basics for this repo stay small.
-          </p>
-        </div>
-        <div class="code-strip">
-          <div class="code-row">
-            <span><strong>Install</strong></span>
-            <span>npm install</span>
-          </div>
-          <div class="code-row">
-            <span><strong>Launch</strong></span>
-            <span>npm run dev</span>
-          </div>
-          <div class="code-row">
-            <span><strong>Fallback page</strong></span>
-            <span>generated/landing.html</span>
-          </div>
-          <div class="code-row">
-            <span><strong>Home page role</strong></span>
-            <span>in-app workspace overview, not external marketing</span>
-          </div>
-        </div>
-      </div>
-    </section>
-  </main>
+    function lerp(start, end, amount) {
+      return start + (end - start) * amount;
+    }
 
-  <footer class="footer">
-    <div class="container">
-      Pixelbox workspace home
-    </div>
-  </footer>
+    function parseQueryWeather() {
+      const params = new URLSearchParams(window.location.search);
+      const type = (params.get("weather") || params.get("wx") || "").toLowerCase();
+      if (!type || !weatherPresets[type]) {
+        return null;
+      }
+
+      const temp = Number(params.get("temp"));
+      return {
+        type,
+        label: weatherPresets[type].label,
+        temperature: Number.isFinite(temp) ? temp : null,
+        place: params.get("place") || params.get("location") || "Preview mode",
+        updatedAt: new Date(),
+        source: "query"
+      };
+    }
+
+    function readStoredWeather() {
+      try {
+        const raw = localStorage.getItem("px-ambient-weather");
+        if (!raw) {
+          return null;
+        }
+
+        const parsed = JSON.parse(raw);
+        if (!parsed || !parsed.type || !weatherPresets[parsed.type]) {
+          return null;
+        }
+
+        return parsed;
+      } catch {
+        return null;
+      }
+    }
+
+    function storeWeather(weather) {
+      try {
+        if (!weather) {
+          localStorage.removeItem("px-ambient-weather");
+          return;
+        }
+
+        localStorage.setItem("px-ambient-weather", JSON.stringify(weather));
+      } catch {
+      }
+    }
+
+    function getPhaseDetails(date) {
+      const minutes = date.getHours() * 60 + date.getMinutes();
+      const normalized = minutes / 1440;
+
+      if (minutes < 300) {
+        return { key: "lateNight", progress: normalized };
+      }
+      if (minutes < 480) {
+        return { key: "dawn", progress: normalized };
+      }
+      if (minutes < 1020) {
+        return { key: "day", progress: normalized };
+      }
+      if (minutes < 1140) {
+        return { key: "golden", progress: normalized };
+      }
+      if (minutes < 1260) {
+        return { key: "dusk", progress: normalized };
+      }
+      return { key: "lateNight", progress: normalized };
+    }
+
+    function mixHex(colorA, colorB, amount) {
+      const a = colorA.replace("#", "");
+      const b = colorB.replace("#", "");
+      const ar = parseInt(a.slice(0, 2), 16);
+      const ag = parseInt(a.slice(2, 4), 16);
+      const ab = parseInt(a.slice(4, 6), 16);
+      const br = parseInt(b.slice(0, 2), 16);
+      const bg = parseInt(b.slice(2, 4), 16);
+      const bb = parseInt(b.slice(4, 6), 16);
+      const rr = Math.round(lerp(ar, br, amount));
+      const rg = Math.round(lerp(ag, bg, amount));
+      const rb = Math.round(lerp(ab, bb, amount));
+      return `rgb(${rr}, ${rg}, ${rb})`;
+    }
+
+    function hexToRgba(hex, alpha) {
+      const value = hex.replace("#", "");
+      const red = parseInt(value.slice(0, 2), 16);
+      const green = parseInt(value.slice(2, 4), 16);
+      const blue = parseInt(value.slice(4, 6), 16);
+      return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+    }
+
+    function applyPhaseToDom(phaseKey, weather) {
+      const phase = phaseConfig[phaseKey];
+      scene.phase = phase;
+      scene.phaseKey = phaseKey;
+
+      document.documentElement.style.setProperty("--bg-1", phase.colors.bg1);
+      document.documentElement.style.setProperty("--bg-2", phase.colors.bg2);
+      document.documentElement.style.setProperty("--bg-3", phase.colors.bg3);
+      document.documentElement.style.setProperty("--glow", phase.colors.glow);
+      document.documentElement.style.setProperty("--accent", phase.colors.accent);
+      document.documentElement.style.setProperty("--accent-2", phase.colors.accent2);
+      document.documentElement.style.setProperty("--warm", phase.colors.warm);
+      document.documentElement.style.setProperty("--rose", phase.colors.rose);
+      document.documentElement.style.setProperty("--sky-top", phase.colors.bg1);
+      document.documentElement.style.setProperty("--sky-bottom", phase.colors.bg3);
+
+      elements.phasePill.textContent = phase.pill;
+      elements.eyebrowText.textContent = phase.eyebrow;
+      elements.headline.textContent = phase.headline;
+      elements.heroText.textContent = phase.text;
+      elements.phaseName.textContent = phase.label;
+      elements.atmosphereCopy.textContent = weather ? `${phase.atmosphere} · ${weather.label.toLowerCase()}` : phase.atmosphere;
+      elements.lightCopy.textContent = phase.light;
+      elements.circadianCopy.textContent = phase.mood;
+      elements.motionCopy.textContent = weather ? describeMotion(weather.type, phase) : phase.motion;
+      elements.topbarSummary.textContent = weather ? `${phase.label} tones, tuned by ${weather.label.toLowerCase()} weather.` : `${phase.label} tones, synced to local time.`;
+      elements.statusStamp.textContent = weather ? `Live scene · ${weather.label}` : "Live local scene";
+    }
+
+    function describeMotion(weatherType, phase) {
+      if (!weatherType) {
+        return phase.motion;
+      }
+
+      if (weatherType === "rain") {
+        return "Rain streaks through the field";
+      }
+      if (weatherType === "storm") {
+        return "Charged cloud movement";
+      }
+      if (weatherType === "snow") {
+        return "Snowfall in slow layers";
+      }
+      if (weatherType === "fog") {
+        return "Fog banks sliding by";
+      }
+      if (weatherType === "cloudy") {
+        return "Cloud bands crossing softly";
+      }
+      return phase.motion;
+    }
+
+    function formatTemperature(value) {
+      if (!Number.isFinite(value)) {
+        return "--°";
+      }
+      return `${Math.round(value)}°`;
+    }
+
+    function setWeather(weather) {
+      scene.weather = weather;
+
+      if (!weather) {
+        scene.weatherSource = "fallback";
+        elements.weatherPill.textContent = "Weather · Ambient fallback";
+        elements.weatherSource.textContent = "Time-based fallback";
+        elements.weatherLocation.textContent = "Here, more or less";
+        elements.weatherUpdated.textContent = "No live fetch yet";
+        elements.weatherTemp.textContent = "--°";
+        elements.weatherCopy.textContent = "Ambient mode is using your local time. Add weather when you want the scene to match outside.";
+        storeWeather(null);
+        return;
+      }
+
+      scene.weatherSource = weather.source || "stored";
+      elements.weatherPill.textContent = `Weather · ${weather.label}`;
+      elements.weatherSource.textContent = weather.source === "live" ? "Live weather" : weather.source === "query" ? "Query preview" : "Saved weather";
+      elements.weatherLocation.textContent = weather.place || "Nearby";
+      elements.weatherUpdated.textContent = weather.updatedAt ? `Updated ${new Date(weather.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Stored weather";
+      elements.weatherTemp.textContent = formatTemperature(weather.temperature);
+      elements.weatherCopy.textContent = weather.description || `${weather.label} conditions are tinting the canvas and motion.`;
+      storeWeather(weather);
+    }
+
+    function updateClock() {
+      const now = new Date();
+      scene.now = now;
+      const phaseDetails = getPhaseDetails(now);
+      const weather = scene.weather;
+
+      elements.clock.textContent = now.toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit"
+      });
+      elements.dateLine.textContent = now.toLocaleDateString([], {
+        weekday: "long",
+        month: "long",
+        day: "numeric"
+      });
+
+      const progressPercent = Math.round(phaseDetails.progress * 100);
+      elements.dayProgress.textContent = `${progressPercent}% through day`;
+      elements.trackMarker.style.left = `${phaseDetails.progress * 100}%`;
+
+      applyPhaseToDom(phaseDetails.key, weather);
+    }
+
+    function rebuildField() {
+      const area = scene.width * scene.height;
+      const particleCount = clamp(Math.round(area / 18000), 28, 90);
+      const starCount = clamp(Math.round(area / 22000), 24, 80);
+      const cloudCount = clamp(Math.round(area / 190000), 3, 8);
+      const rainCount = clamp(Math.round(area / 16000), 40, 150);
+      const snowCount = clamp(Math.round(area / 20000), 24, 90);
+
+      scene.particles = Array.from({ length: particleCount }, () => ({
+        x: Math.random() * scene.width,
+        y: Math.random() * scene.height,
+        size: Math.random() * 2.4 + 0.4,
+        speed: Math.random() * 0.25 + 0.08,
+        alpha: Math.random() * 0.36 + 0.06,
+        drift: Math.random() * 0.8 + 0.2
+      }));
+
+      scene.stars = Array.from({ length: starCount }, () => ({
+        x: Math.random() * scene.width,
+        y: Math.random() * (scene.height * 0.68),
+        size: Math.random() * 1.7 + 0.4,
+        alpha: Math.random() * 0.6 + 0.08,
+        twinkle: Math.random() * Math.PI * 2
+      }));
+
+      scene.clouds = Array.from({ length: cloudCount }, (_, index) => ({
+        x: (index / cloudCount) * scene.width,
+        y: scene.height * (0.16 + Math.random() * 0.28),
+        width: 160 + Math.random() * 220,
+        height: 42 + Math.random() * 48,
+        speed: Math.random() * 0.18 + 0.05,
+        alpha: Math.random() * 0.14 + 0.06
+      }));
+
+      scene.drops = Array.from({ length: rainCount }, () => ({
+        x: Math.random() * scene.width,
+        y: Math.random() * scene.height,
+        length: Math.random() * 18 + 10,
+        speed: Math.random() * 8 + 10,
+        alpha: Math.random() * 0.3 + 0.08
+      }));
+
+      scene.flakes = Array.from({ length: snowCount }, () => ({
+        x: Math.random() * scene.width,
+        y: Math.random() * scene.height,
+        size: Math.random() * 3.2 + 1,
+        speed: Math.random() * 1.4 + 0.5,
+        sway: Math.random() * 1.5 + 0.5,
+        alpha: Math.random() * 0.5 + 0.16
+      }));
+    }
+
+    function resizeCanvas() {
+      scene.dpr = Math.min(window.devicePixelRatio || 1, 2);
+      scene.width = window.innerWidth;
+      scene.height = window.innerHeight;
+      canvas.width = Math.round(scene.width * scene.dpr);
+      canvas.height = Math.round(scene.height * scene.dpr);
+      canvas.style.width = `${scene.width}px`;
+      canvas.style.height = `${scene.height}px`;
+      context.setTransform(scene.dpr, 0, 0, scene.dpr, 0, 0);
+      rebuildField();
+    }
+
+    function drawGradient() {
+      const weather = scene.weather;
+      const preset = weather ? weatherPresets[weather.type] : null;
+      const haze = preset ? preset.intensity : 0;
+      const gradient = context.createLinearGradient(0, 0, 0, scene.height);
+      gradient.addColorStop(0, mixHex(scene.phase.colors.bg1, "#d8dde6", haze * 0.08));
+      gradient.addColorStop(0.55, mixHex(scene.phase.colors.bg2, "#9aa6b5", haze * 0.12));
+      gradient.addColorStop(1, mixHex(scene.phase.colors.bg3, "#5f6770", haze * 0.18));
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, scene.width, scene.height);
+    }
+
+    function drawGlow(timeSeconds) {
+      const minutes = scene.now.getHours() * 60 + scene.now.getMinutes();
+      const travel = minutes / 1440;
+      const x = scene.width * (0.08 + travel * 0.84);
+      const yBase = scene.height * (0.74 - Math.sin(travel * Math.PI) * 0.48);
+      const y = clamp(yBase, scene.height * 0.14, scene.height * 0.88);
+      const radius = scene.phaseKey === "lateNight" ? 56 : scene.phaseKey === "day" ? 88 : 72;
+      const weather = scene.weather;
+      const clouded = weather && ["cloudy", "rain", "storm", "fog", "snow"].includes(weather.type);
+      const alpha = clouded ? 0.5 : 0.95;
+      const glow = context.createRadialGradient(x, y, 0, x, y, radius * 2.7);
+      glow.addColorStop(0, hexToRgba(scene.phase.colors.warm, alpha));
+      glow.addColorStop(0.26, hexToRgba(scene.phase.colors.warm, alpha * 0.34));
+      glow.addColorStop(1, "rgba(255,255,255,0)");
+      context.fillStyle = glow;
+      context.beginPath();
+      context.arc(x, y, radius * 2.7, 0, Math.PI * 2);
+      context.fill();
+
+      if (scene.phaseKey !== "lateNight") {
+        context.fillStyle = clouded ? "rgba(255, 238, 217, 0.55)" : "rgba(255, 240, 213, 0.95)";
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
+      } else {
+        context.fillStyle = "rgba(220, 232, 255, 0.95)";
+        context.beginPath();
+        context.arc(x, y, radius * 0.74, 0, Math.PI * 2);
+        context.fill();
+        context.globalCompositeOperation = "destination-out";
+        context.beginPath();
+        context.arc(x + radius * 0.28, y - radius * 0.12, radius * 0.68, 0, Math.PI * 2);
+        context.fill();
+        context.globalCompositeOperation = "source-over";
+      }
+
+      if (scene.phaseKey === "lateNight" || scene.phaseKey === "dusk") {
+        drawStars(timeSeconds);
+      }
+    }
+
+    function drawStars(timeSeconds) {
+      for (const star of scene.stars) {
+        const twinkle = 0.45 + Math.sin(timeSeconds * 0.8 + star.twinkle) * 0.32;
+        context.fillStyle = `rgba(255,255,255,${star.alpha * twinkle})`;
+        context.beginPath();
+        context.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        context.fill();
+      }
+    }
+
+    function drawParticles(timeSeconds) {
+      const weather = scene.weather;
+      const multiplier = weather ? weatherPresets[weather.type].motion : 1;
+      for (const particle of scene.particles) {
+        particle.x += particle.speed * particle.drift * multiplier;
+        particle.y -= particle.speed * 0.2 * multiplier;
+
+        if (particle.x > scene.width + 12) {
+          particle.x = -12;
+        }
+        if (particle.y < -12) {
+          particle.y = scene.height + 12;
+        }
+
+        const pulse = 0.5 + Math.sin(timeSeconds * particle.speed + particle.drift) * 0.24;
+        context.fillStyle = `rgba(255,255,255,${particle.alpha * pulse})`;
+        context.beginPath();
+        context.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        context.fill();
+      }
+    }
+
+    function drawClouds(timeSeconds) {
+      const weather = scene.weather;
+      const preset = weather ? weatherPresets[weather.type] : null;
+      const intensity = preset ? preset.intensity : 0.12;
+      const extra = preset && ["clouds", "fog", "rain", "storm", "snow"].includes(preset.overlay);
+
+      for (const cloud of scene.clouds) {
+        cloud.x += cloud.speed * (extra ? 1.2 : 0.55);
+        if (cloud.x - cloud.width > scene.width + 80) {
+          cloud.x = -cloud.width - 80;
+        }
+
+        const gradient = context.createLinearGradient(cloud.x, cloud.y, cloud.x, cloud.y + cloud.height);
+        gradient.addColorStop(0, `rgba(255,255,255,${cloud.alpha + intensity * 0.16})`);
+        gradient.addColorStop(1, `rgba(196,214,236,${cloud.alpha * 0.25})`);
+        context.fillStyle = gradient;
+
+        context.beginPath();
+        context.ellipse(cloud.x, cloud.y, cloud.width * 0.42, cloud.height * 0.9, 0, 0, Math.PI * 2);
+        context.ellipse(cloud.x + cloud.width * 0.18, cloud.y - 12, cloud.width * 0.28, cloud.height * 0.8, 0, 0, Math.PI * 2);
+        context.ellipse(cloud.x - cloud.width * 0.2, cloud.y + 4, cloud.width * 0.25, cloud.height * 0.7, 0, 0, Math.PI * 2);
+        context.fill();
+      }
+
+      if (preset && preset.overlay === "fog") {
+        for (let index = 0; index < 4; index += 1) {
+          const y = scene.height * (0.55 + index * 0.09) + Math.sin(timeSeconds * 0.2 + index) * 8;
+          const fog = context.createLinearGradient(0, y - 28, 0, y + 28);
+          fog.addColorStop(0, "rgba(232, 240, 255, 0)");
+          fog.addColorStop(0.5, "rgba(232, 240, 255, 0.12)");
+          fog.addColorStop(1, "rgba(232, 240, 255, 0)");
+          context.fillStyle = fog;
+          context.fillRect(0, y - 28, scene.width, 56);
+        }
+      }
+    }
+
+    function drawRain() {
+      const weather = scene.weather;
+      if (!weather || !["rain", "storm"].includes(weather.type)) {
+        return;
+      }
+
+      for (const drop of scene.drops) {
+        drop.x += weather.type === "storm" ? 2.8 : 1.2;
+        drop.y += drop.speed;
+        if (drop.y > scene.height + 20 || drop.x > scene.width + 20) {
+          drop.x = Math.random() * scene.width - 20;
+          drop.y = -20;
+        }
+
+        context.strokeStyle = weather.type === "storm"
+          ? `rgba(210, 230, 255, ${drop.alpha + 0.12})`
+          : `rgba(185, 220, 255, ${drop.alpha})`;
+        context.lineWidth = weather.type === "storm" ? 1.4 : 1;
+        context.beginPath();
+        context.moveTo(drop.x, drop.y);
+        context.lineTo(drop.x - 4, drop.y + drop.length);
+        context.stroke();
+      }
+
+      if (weather.type === "storm" && Math.random() < 0.009) {
+        context.fillStyle = "rgba(255,255,255,0.08)";
+        context.fillRect(0, 0, scene.width, scene.height);
+      }
+    }
+
+    function drawSnow(timeSeconds) {
+      const weather = scene.weather;
+      if (!weather || weather.type !== "snow") {
+        return;
+      }
+
+      for (const flake of scene.flakes) {
+        flake.y += flake.speed;
+        flake.x += Math.sin(timeSeconds * 0.7 + flake.sway + flake.y * 0.01) * 0.7;
+        if (flake.y > scene.height + 10) {
+          flake.y = -10;
+          flake.x = Math.random() * scene.width;
+        }
+
+        context.fillStyle = `rgba(255,255,255,${flake.alpha})`;
+        context.beginPath();
+        context.arc(flake.x, flake.y, flake.size, 0, Math.PI * 2);
+        context.fill();
+      }
+    }
+
+    function drawVignette() {
+      const vignette = context.createRadialGradient(
+        scene.width * 0.5,
+        scene.height * 0.48,
+        scene.width * 0.12,
+        scene.width * 0.5,
+        scene.height * 0.52,
+        scene.width * 0.7
+      );
+      vignette.addColorStop(0, "rgba(0,0,0,0)");
+      vignette.addColorStop(1, "rgba(2,6,12,0.34)");
+      context.fillStyle = vignette;
+      context.fillRect(0, 0, scene.width, scene.height);
+    }
+
+    function frame(now) {
+      const timeSeconds = now * 0.001;
+      context.clearRect(0, 0, scene.width, scene.height);
+      drawGradient();
+      drawGlow(timeSeconds);
+      drawClouds(timeSeconds);
+      drawParticles(timeSeconds);
+      drawRain();
+      drawSnow(timeSeconds);
+      drawVignette();
+      requestAnimationFrame(frame);
+    }
+
+    function weatherTypeFromCode(code) {
+      if ([0, 1].includes(code)) {
+        return "clear";
+      }
+      if ([2, 3].includes(code)) {
+        return "cloudy";
+      }
+      if ([45, 48].includes(code)) {
+        return "fog";
+      }
+      if ([71, 73, 75, 77, 85, 86].includes(code)) {
+        return "snow";
+      }
+      if ([95, 96, 99].includes(code)) {
+        return "storm";
+      }
+      if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) {
+        return "rain";
+      }
+      return "cloudy";
+    }
+
+    async function fetchLocalWeather() {
+      if (!navigator.geolocation) {
+        elements.weatherCopy.textContent = "Geolocation is not available in this browser.";
+        return;
+      }
+
+      elements.weatherUpdated.textContent = "Finding your weather…";
+
+      navigator.geolocation.getCurrentPosition(
+        async ({ coords }) => {
+          try {
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=temperature_2m,weather_code&temperature_unit=fahrenheit&timezone=auto`;
+            const response = await fetch(url);
+            if (!response.ok) {
+              throw new Error(`Weather request failed with ${response.status}`);
+            }
+
+            const data = await response.json();
+            const current = data.current || {};
+            const type = weatherTypeFromCode(current.weather_code);
+            const weather = {
+              type,
+              label: weatherPresets[type].label,
+              temperature: Number.isFinite(current.temperature_2m) ? current.temperature_2m : null,
+              description: `${weatherPresets[type].label} conditions are now shaping the ambient scene.`,
+              place: "Local weather",
+              updatedAt: new Date().toISOString(),
+              source: "live"
+            };
+            setWeather(weather);
+            updateClock();
+          } catch (error) {
+            elements.weatherUpdated.textContent = "Could not fetch weather";
+            elements.weatherCopy.textContent = error instanceof Error ? error.message : "Weather lookup failed.";
+          }
+        },
+        (error) => {
+          elements.weatherUpdated.textContent = "Weather lookup skipped";
+          elements.weatherCopy.textContent = error.message || "Location access was denied.";
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 10000,
+          maximumAge: 30 * 60 * 1000
+        }
+      );
+    }
+
+    function init() {
+      resizeCanvas();
+
+      const queryWeather = parseQueryWeather();
+      const storedWeather = readStoredWeather();
+      setWeather(queryWeather || storedWeather || null);
+      updateClock();
+      requestAnimationFrame(frame);
+
+      window.addEventListener("resize", resizeCanvas);
+      window.addEventListener("visibilitychange", updateClock);
+      setInterval(updateClock, 30 * 1000);
+
+      $("#use-weather").addEventListener("click", fetchLocalWeather);
+      $("#clear-weather").addEventListener("click", () => {
+        setWeather(null);
+        updateClock();
+      });
+    }
+
+    init();
+  </script>
 </body>
 </html>
