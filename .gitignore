@@ -11,6 +11,8 @@ projects/
 .pixelbox/
 .pxcode/
 memory/
+.tmp/
+.tmp-*/
 
 # Local agent context files
 AGENTS.md

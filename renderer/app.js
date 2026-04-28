@@ -96,6 +96,7 @@ let terminalMouseDrag = null;
 let projectsDragPointer = null;
 let projectsMouseDrag = null;
 let agentMonitorPollTimer = null;
+const agentMonitorStoppingPids = new Set();
 let selectedAiCli = 'codex';
 let codexDangerouslyBypassPermissions = false;
 let lastProjectSwitchShortcut = { direction: 0, at: 0 };
@@ -731,17 +732,39 @@ function singleLine(value, maxLength = 120) {
   return `${compact.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
+function selectedAiCliLabelForMonitor() {
+  switch (selectedAiCli) {
+    case 'claude':
+      return 'Claude';
+    case 'gemini':
+      return 'Gemini';
+    case 'hermes':
+      return 'Hermes';
+    case 'openclaw':
+      return 'OpenClaw';
+    case 'custom':
+      return 'Plain terminal';
+    case 'codex':
+    default:
+      return 'Codex';
+  }
+}
+
+function agentMonitorScopeLabel() {
+  return selectedProjectPath === '.' ? 'workspace root' : selectedProjectPath;
+}
+
 function renderAgentMonitor(processes, detailsByPid = new Map()) {
   if (!agentMonitorListEl || !agentMonitorStatusEl) return;
   agentMonitorListEl.innerHTML = '';
   if (!Array.isArray(processes) || processes.length === 0) {
-    agentMonitorStatusEl.textContent = 'No Codex processes detected.';
+    agentMonitorStatusEl.textContent = `No ${selectedAiCliLabelForMonitor()} processes in ${agentMonitorScopeLabel()}.`;
     return;
   }
 
   const totalCpu = processes.reduce((sum, item) => sum + (Number(item.cpu) || 0), 0);
   const totalMem = processes.reduce((sum, item) => sum + (Number(item.mem) || 0), 0);
-  agentMonitorStatusEl.textContent = `${processes.length} process${processes.length === 1 ? '' : 'es'} · ${totalCpu.toFixed(1)}% CPU · ${totalMem.toFixed(1)}% MEM`;
+  agentMonitorStatusEl.textContent = `${selectedAiCliLabelForMonitor()} · ${agentMonitorScopeLabel()} · ${processes.length} process${processes.length === 1 ? '' : 'es'} · ${totalCpu.toFixed(1)}% CPU · ${totalMem.toFixed(1)}% MEM`;
 
   for (const processInfo of processes) {
     const details = detailsByPid.get(processInfo.pid) || {};
@@ -755,6 +778,31 @@ function renderAgentMonitor(processes, detailsByPid = new Map()) {
       <span>${Number(processInfo.cpu || 0).toFixed(1)}% CPU · ${Number(processInfo.mem || 0).toFixed(1)}% MEM</span>
     `;
     card.appendChild(top);
+
+    const actions = document.createElement('div');
+    actions.className = 'agent-monitor-actions';
+
+    const stopButton = document.createElement('button');
+    stopButton.type = 'button';
+    stopButton.className = 'agent-monitor-stop';
+    stopButton.textContent = agentMonitorStoppingPids.has(processInfo.pid) ? 'Stopping…' : 'Stop';
+    stopButton.disabled = agentMonitorStoppingPids.has(processInfo.pid);
+    stopButton.addEventListener('click', async () => {
+      const confirmed = window.confirm(`Stop ${processInfo.cli || processInfo.engine || 'agent'} process ${processInfo.pid}?`);
+      if (!confirmed) return;
+      agentMonitorStoppingPids.add(processInfo.pid);
+      renderAgentMonitor(processes, detailsByPid);
+      try {
+        await window.api.codexMonitorStop(processInfo.pid, 'SIGTERM');
+      } catch (error) {
+        window.alert(`Failed to stop PID ${processInfo.pid}: ${error && error.message ? error.message : 'unknown error'}`);
+      } finally {
+        agentMonitorStoppingPids.delete(processInfo.pid);
+        refreshAgentMonitor().catch(() => {});
+      }
+    });
+    actions.appendChild(stopButton);
+    card.appendChild(actions);
 
     const command = document.createElement('div');
     command.className = 'agent-monitor-line';
@@ -783,7 +831,11 @@ async function refreshAgentMonitor() {
   if (!agentMonitorStatusEl || !agentMonitorListEl) return;
   agentMonitorStatusEl.textContent = 'Scanning…';
   try {
-    const processes = await window.api.codexMonitorList();
+    const cwdPrefix = await window.api.resolveWorkspacePath(selectedProjectPath);
+    const processes = await window.api.codexMonitorList({
+      cli: selectedAiCli,
+      cwdPrefix,
+    });
     const detailsEntries = await Promise.all(
       processes.map(async (processInfo) => {
         try {
@@ -1382,6 +1434,7 @@ async function selectProject(relPath, options = {}) {
   } else {
     updateProjectNavigationControls();
   }
+  refreshAgentMonitor().catch(() => {});
 
   await renderProjects();
   const bootPromise = bootTerminalForPath(projectPath, true, projectSessionExited.has(projectPath));
@@ -1906,6 +1959,7 @@ if (aiCliSelectEl) {
     selectedAiCli = aiCliSelectEl.value;
     persistSelectedAiCli();
     renderCodexLaunchConfig();
+    refreshAgentMonitor().catch(() => {});
   });
 }
 if (codexDangerousToggleEl) {
@@ -2018,8 +2072,9 @@ window.addEventListener('pointerdown', (event) => {
     clearInterval(agentMonitorPollTimer);
   }
   agentMonitorPollTimer = setInterval(() => {
+    if (document.hidden) return;
     refreshAgentMonitor().catch(() => {});
-  }, 10000);
+  }, 30000);
   await window.api.startRendererWatch();
   openPanel();
   selectedProjectPath = loadLastSelectedProject();

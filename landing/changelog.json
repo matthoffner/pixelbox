@@ -1,6 +1,28 @@
 {
   "entries": [
     {
+      "date": "2026-04-26",
+      "type": "Release 0.3.0",
+      "title": "Added agent monitoring, project recovery, and smarter local preview orchestration",
+      "summary": "Pixelbox moved further from a polished shell into a more durable local software workspace with better visibility into active agents and fewer broken localhost loops.",
+      "points": [
+        "Added an in-app agent monitor for active Codex sessions with backend inspection hooks",
+        "Introduced hidden-project restore controls and cleaner project action menus",
+        "Improved runtime startup by automatically reassigning colliding localhost ports and injecting the matching PORT environment variable"
+      ]
+    },
+    {
+      "date": "2026-04-25",
+      "type": "Release 0.2.0",
+      "title": "Expanded AI launch flows and native runtime support",
+      "summary": "Pixelbox gained wider CLI startup coverage plus the ability to manage non-web preview workflows without forcing everything through a browser tab.",
+      "points": [
+        "Added AI Launch presets for Codex, Claude, Gemini, Hermes, OpenClaw TUI, and plain terminal mode",
+        "Added native app runtime support with run, capture, and image configuration fields",
+        "Added project switching shortcuts and terminal drag-and-drop for faster local workflow control"
+      ]
+    },
+    {
       "date": "2026-04-12",
       "type": "Launch Surface",
       "title": "Started the dedicated Pixelbox landing page",
@@ -9,17 +31,6 @@
         "Positioned Pixelbox as a standalone Pixel Claw Labs product",
         "Added a public changelog surface for ongoing release notes",
         "Set up the site to deploy cleanly from a Vercel subdirectory"
-      ]
-    },
-    {
-      "date": "2026-04-11",
-      "type": "Desktop UX",
-      "title": "Added vibrant macOS window treatment and drag behavior",
-      "summary": "The Electron shell now leans into the native desktop feel with transparent and vibrant window styling plus cleaner drag regions.",
-      "points": [
-        "Terminal panel now uses transparent xterm layers with glass styling",
-        "Projects panel got its own stronger frosted treatment and drag behavior",
-        "Top-level app drag strip preserves the titleless look while keeping the window movable"
       ]
     },
     {

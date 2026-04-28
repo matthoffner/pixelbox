@@ -401,6 +401,7 @@ input {
 
 #running-page-status,
 #codex-launch-status,
+#agent-monitor-note,
 #agent-monitor-status,
 #preview-subtitle,
 #preview-url {
@@ -429,6 +430,26 @@ input {
   border-radius: 12px;
   background: color-mix(in srgb, var(--surface), black 8%);
   border: 1px solid color-mix(in srgb, var(--border), transparent 35%);
+}
+
+.agent-monitor-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.agent-monitor-stop {
+  border: 1px solid color-mix(in srgb, #ff7868, var(--border) 55%);
+  background: color-mix(in srgb, #ff7868 12%, var(--surface));
+  color: #ffd8d2;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.agent-monitor-stop:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 .agent-monitor-top {

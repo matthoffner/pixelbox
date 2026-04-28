@@ -386,8 +386,8 @@ function attachIpcHandlers() {
     return { ok: true };
   });
 
-  ipcMain.handle('codexMonitor:list', () => {
-    return codexMonitor.getProcesses();
+  ipcMain.handle('codexMonitor:list', (_event, filters = {}) => {
+    return codexMonitor.getProcesses(filters);
   });
 
   ipcMain.handle('codexMonitor:details', (_event, pid) => {
@@ -421,6 +421,10 @@ function attachIpcHandlers() {
           : 'Summarize the current conversation and code work for a human who is about to take over.'
       ),
     };
+  });
+
+  ipcMain.handle('codexMonitor:stop', (_event, pid, signal = 'SIGTERM') => {
+    return codexMonitor.stopProcess(pid, signal);
   });
 
   ipcMain.on('terminal:write', (_event, data, key) => {

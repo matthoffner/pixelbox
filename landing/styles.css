@@ -273,6 +273,18 @@ body::before {
   padding: 22px;
 }
 
+.feature-card:nth-child(4) {
+  background:
+    radial-gradient(circle at bottom left, rgba(154, 240, 207, 0.12), transparent 34%),
+    var(--panel);
+}
+
+.feature-card:nth-child(5) {
+  background:
+    radial-gradient(circle at top left, rgba(136, 215, 255, 0.1), transparent 30%),
+    var(--panel);
+}
+
 .feature-card-wide {
   grid-column: span 2;
   background:
