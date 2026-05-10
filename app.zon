@@ -1,0 +1,24 @@
+.{
+    .id = "com.pixelbox.app",
+    .name = "pixelbox",
+    .display_name = "Pixelbox",
+    .version = "0.3.0",
+    .icons = .{ "assets/pixelbox.icns" },
+    .platforms = .{ "macos", "linux" },
+    .permissions = .{},
+    .capabilities = .{ "webview" },
+    .security = .{
+        .navigation = .{
+            .allowed_origins = .{
+                "http://127.0.0.1:3210",
+                "http://127.0.0.1:3210/",
+            },
+            .external_links = .{ .action = "deny" },
+        },
+    },
+    .web_engine = "system",
+    .cef = .{ .dir = "third_party/cef/macos", .auto_install = false },
+    .windows = .{
+        .{ .label = "main", .title = "Pixelbox", .width = 1400, .height = 900, .restore_state = true },
+    },
+}

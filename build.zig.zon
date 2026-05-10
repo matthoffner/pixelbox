@@ -1,0 +1,8 @@
+.{
+    .name = .pixelbox,
+    .fingerprint = 0xe7e7e9cd517f41d6,
+    .version = "0.3.0",
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{ "app.zon", "assets", "bridge", "build.zig", "build.zig.zon", "lib", "package.json", "renderer", "src" },
+}

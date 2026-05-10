@@ -2,14 +2,20 @@
   "name": "self-hosted-electron-editor",
   "productName": "Pixelbox",
   "version": "0.3.0",
-  "description": "Electron app with built-in code editor and terminal",
-  "main": "main.js",
+  "description": "Pixelbox native shell with built-in code editor and terminal",
+  "main": "bridge/server.js",
   "scripts": {
-    "dev": "electron .",
+    "dev": "zig build run",
+    "dev:backend": "node bridge/server.js",
+    "dev:hot": "zig build dev",
     "dev:capture": "PXCODE_CAPTURE_ON_LOAD=1 electron .",
+    "dev:electron": "electron .",
     "icon:mac": "bash scripts/make-mac-icon.sh",
-    "build:mac": "electron-builder --mac dir",
-    "start": "electron .",
+    "build": "zig build",
+    "build:mac": "zig build package -Dpackage-target=macos",
+    "build:electron:mac": "electron-builder --mac dir",
+    "start": "zig build run",
+    "start:electron": "electron .",
     "test": "node --test",
     "test:codex": "RUN_CODEX_E2E=1 node --test test/terminal.codex.e2e.test.js",
     "test:pw": "node --test test/electron.playwright.test.js",
@@ -22,8 +28,7 @@
     "test:pw:live-cycle": "node test/pw_electron_live_cycle.js",
     "test:pw:codex-next-long": "node test/pw_codex_long_session_next.js",
     "test:pw:openclaw": "RUN_PLAYWRIGHT_E2E=1 RUN_OPENCLAW_E2E=1 node --test test/electron.playwright.test.js",
-    "test:pw:next": "RUN_PLAYWRIGHT_E2E=1 RUN_NEXT_SMOKE=1 node --test test/electron.playwright.test.js"
-    ,
+    "test:pw:next": "RUN_PLAYWRIGHT_E2E=1 RUN_NEXT_SMOKE=1 node --test test/electron.playwright.test.js",
     "test:pw:prod": "RUN_PLAYWRIGHT_PACKAGED=1 node --test test/electron.packaged.playwright.test.js"
   },
   "dependencies": {
@@ -35,7 +40,8 @@
   "devDependencies": {
     "electron": "^30.0.0",
     "electron-builder": "^24.13.3",
-    "playwright": "^1.59.1"
+    "playwright": "^1.59.1",
+    "zero-native": "^0.1.9"
   },
   "build": {
     "appId": "com.pixelbox.app",

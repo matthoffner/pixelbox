@@ -13,6 +13,8 @@ projects/
 memory/
 .tmp/
 .tmp-*/
+.zig-cache/
+zig-out/
 
 # Local agent context files
 AGENTS.md

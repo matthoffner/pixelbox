@@ -739,8 +739,8 @@ body:not(.projects-panel-hidden) .projects-fab {
   max-width: calc(100vw - 32px);
   height: min(56vh, 520px);
   max-height: calc(100vh - 32px - var(--titlebar-safe-top));
-  border-radius: 16px;
-  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  backdrop-filter: blur(14px);
   display: none;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 48px 1fr;
@@ -749,13 +749,14 @@ body:not(.projects-panel-hidden) .projects-fab {
 
 body.vibrant-window #chat-panel {
   background:
-    linear-gradient(180deg, var(--terminal-glass), var(--terminal-glass-strong)),
-    rgba(8, 14, 24, 0.18);
+    linear-gradient(180deg, rgba(48, 108, 164, 0.72), rgba(30, 72, 116, 0.62) 96px, rgba(18, 31, 48, 0.46) 96px, rgba(18, 31, 48, 0.46)),
+    rgba(11, 18, 28, 0.24);
   box-shadow:
-    0 26px 52px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
+    0 30px 60px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(175, 215, 248, 0.22);
+  backdrop-filter: blur(28px) saturate(148%);
+  -webkit-backdrop-filter: blur(28px) saturate(148%);
 }
 
 #chat-panel.open {
@@ -807,12 +808,23 @@ body.vibrant-window #chat-panel {
   padding: 10px;
 }
 
+body.native-terminal-active #terminal .xterm,
+body.native-terminal-active #terminal .xterm-viewport,
+body.native-terminal-active #terminal .xterm-screen,
+body.native-terminal-active #terminal .xterm-scroll-area,
+body.native-terminal-active #terminal .xterm-cursor-layer,
+body.native-terminal-active #terminal .xterm-text-layer,
+body.native-terminal-active #terminal .xterm-selection-layer {
+  opacity: 0;
+  pointer-events: none;
+}
+
 body.vibrant-window #terminal {
   background: transparent;
 }
 
 body.vibrant-window #chat-header {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
   border-bottom-color: color-mix(in srgb, var(--border), white 18%);
 }
 
@@ -840,8 +852,7 @@ body.vibrant-window #terminal .xterm-selection-layer {
 }
 
 .chat-resize-handle::before {
-  content: '';
-  position: absolute;
+  content: none;
 }
 
 .chat-resize-handle[data-resize='n'] {

@@ -90,6 +90,7 @@ let projectSelectionIndex = 0;
 let terminalRenderBuffer = '';
 let terminalFlushRaf = 0;
 let terminalPendingScrollToBottom = false;
+let nativeTerminalPanelSyncRaf = 0;
 let terminalResizePointer = null;
 let terminalDragPointer = null;
 let terminalMouseDrag = null;
@@ -121,9 +122,10 @@ const AI_CLI_KEY = 'pixelbox.aiCli';
 const CODEX_DANGEROUS_BYPASS_KEY = 'pixelbox.codexDangerouslyBypassPermissions';
 const SUPPORTED_AI_CLIS = ['codex', 'claude', 'gemini', 'hermes', 'openclaw', 'custom'];
 
-const previewFrameEl = document.createElement('webview');
+const previewFrameEl = document.createElement('iframe');
 previewFrameEl.id = 'preview-frame';
-previewFrameEl.setAttribute('allowpopups', 'true');
+previewFrameEl.setAttribute('title', 'Preview');
+previewFrameEl.setAttribute('referrerpolicy', 'no-referrer');
 previewFrameHostEl.appendChild(previewFrameEl);
 
 function loadHiddenProjects() {
@@ -320,6 +322,7 @@ function persistTerminalLayoutState() {
 }
 
 function renderTerminalDockMode() {
+  syncTerminalPresentationMode();
   document.body.classList.remove('terminal-dock-float', 'terminal-dock-right', 'terminal-dock-bottom');
   document.body.classList.add(`terminal-dock-${terminalLayoutState.mode}`);
   document.documentElement.style.setProperty('--terminal-width', `${terminalLayoutState.width}px`);
@@ -327,6 +330,55 @@ function renderTerminalDockMode() {
   if (chatDockFloatEl) chatDockFloatEl.setAttribute('aria-pressed', String(terminalLayoutState.mode === 'float'));
   if (chatDockRightEl) chatDockRightEl.setAttribute('aria-pressed', String(terminalLayoutState.mode === 'right'));
   if (chatDockBottomEl) chatDockBottomEl.setAttribute('aria-pressed', String(terminalLayoutState.mode === 'bottom'));
+  queueNativeTerminalPanelSync();
+}
+
+function nativeTerminalBridgeAvailable() {
+  return Boolean(window.zero && typeof window.zero.invoke === 'function');
+}
+
+function nativeTerminalExclusive() {
+  return nativeTerminalBridgeAvailable();
+}
+
+function syncTerminalPresentationMode() {
+  document.body.classList.toggle('native-terminal-active', nativeTerminalExclusive());
+}
+
+function nativeTerminalPanelPayload() {
+  const rect = terminalEl.getBoundingClientRect();
+  return {
+    visible: panel.classList.contains('open'),
+    mode: terminalLayoutState.mode,
+    projectPath: selectedProjectPath,
+    frame: {
+      x: Math.round(rect.left),
+      y: Math.round(rect.top),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    },
+    terminal: {
+      cols: term.cols,
+      rows: term.rows,
+    },
+    devicePixelRatio: window.devicePixelRatio || 1,
+  };
+}
+
+async function syncNativeTerminalPanel() {
+  if (!nativeTerminalBridgeAvailable()) return;
+  try {
+    await window.zero.invoke('pixelbox.terminal.setPanelState', nativeTerminalPanelPayload());
+  } catch {}
+}
+
+function queueNativeTerminalPanelSync() {
+  if (!nativeTerminalBridgeAvailable()) return;
+  if (nativeTerminalPanelSyncRaf) return;
+  nativeTerminalPanelSyncRaf = requestAnimationFrame(() => {
+    nativeTerminalPanelSyncRaf = 0;
+    syncNativeTerminalPanel().catch(() => {});
+  });
 }
 
 function defaultRuntimeConfig() {
@@ -900,6 +952,7 @@ function syncTerminalSize() {
   }
 
   window.api.resizeTerminal(term.cols, term.rows, selectedProjectPath);
+  queueNativeTerminalPanelSync();
 }
 
 function setTerminalDockMode(mode) {
@@ -934,6 +987,7 @@ function toggleTerminalDockMode(mode) {
 }
 
 function focusTerminal() {
+  if (nativeTerminalExclusive()) return;
   term.focus();
 }
 
@@ -974,6 +1028,7 @@ function openPanel() {
     syncTerminalSize();
     focusTerminal();
   });
+  queueNativeTerminalPanelSync();
 }
 
 function closePanel() {
@@ -982,6 +1037,7 @@ function closePanel() {
   if (toggle) {
     toggle.setAttribute('aria-pressed', 'false');
   }
+  queueNativeTerminalPanelSync();
 }
 
 async function removeProject(relPath, label) {
@@ -1681,6 +1737,7 @@ if (chatResizeHandleEls.length) {
     panel.style.top = `${Math.round(boundedTop)}px`;
     panel.style.right = 'auto';
     panel.style.bottom = 'auto';
+    queueNativeTerminalPanelSync();
   };
 
   for (const handleEl of chatResizeHandleEls) {
@@ -1756,6 +1813,7 @@ if (chatResizeHandleEls.length) {
 
       renderTerminalDockMode();
       syncTerminalSize();
+      queueNativeTerminalPanelSync();
     });
 
     const finishResize = (event) => {
@@ -1796,6 +1854,7 @@ if (chatHeaderEl) {
     panel.style.right = 'auto';
     panel.style.bottom = 'auto';
     syncTerminalSize();
+    queueNativeTerminalPanelSync();
   };
 
   chatHeaderEl.addEventListener('pointerdown', (event) => {
@@ -2019,16 +2078,20 @@ function reloadActivePreview() {
 }
 
 previewFrameEl.addEventListener('did-navigate', (event) => {
-  setPreviewMeta(event.url, 'Live preview');
+  setPreviewMeta(currentPreviewUrl(ensurePreviewState(selectedProjectPath)), 'Live preview');
   updateProjectNavigationControls();
 });
 
 previewFrameEl.addEventListener('did-navigate-in-page', (event) => {
-  setPreviewMeta(event.url, 'Live preview');
+  setPreviewMeta(currentPreviewUrl(ensurePreviewState(selectedProjectPath)), 'Live preview');
   updateProjectNavigationControls();
 });
 
 previewFrameEl.addEventListener('dom-ready', () => {
+  updateProjectNavigationControls();
+});
+
+previewFrameEl.addEventListener('load', () => {
   updateProjectNavigationControls();
 });
 
@@ -2044,8 +2107,10 @@ window.api.onProjectSwitchShortcut(({ direction } = {}) => {
 
 window.addEventListener('resize', () => {
   renderProjectsPanelPosition();
-  if (!panel.classList.contains('open')) return;
-  syncTerminalSize();
+  if (panel.classList.contains('open')) {
+    syncTerminalSize();
+  }
+  queueNativeTerminalPanelSync();
 });
 
 window.addEventListener('pointerdown', (event) => {
@@ -2065,6 +2130,7 @@ window.addEventListener('pointerdown', (event) => {
   loadTerminalLayoutState();
   selectedAiCli = loadSelectedAiCli();
   codexDangerouslyBypassPermissions = loadCodexDangerouslyBypassPermissions();
+  syncTerminalPresentationMode();
   renderTerminalDockMode();
   renderCodexLaunchConfig();
   refreshAgentMonitor().catch(() => {});
@@ -2084,4 +2150,5 @@ window.addEventListener('pointerdown', (event) => {
   await selectProject(selectedProjectPath, { recordHistory: false });
   renderProjectsPanelVisibility();
   renderProjectsPanelPosition();
+  queueNativeTerminalPanelSync();
 })();
