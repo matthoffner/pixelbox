@@ -26,7 +26,7 @@ const PackageTarget = enum {
     linux,
 };
 
-const default_zero_native_path = "node_modules/zero-native";
+const default_zero_native_path = "vendor/zero-native";
 const default_ghostty_path = "vendor/ghostty";
 const default_ghostty_zig = "zig";
 const app_exe_name = "Pixelbox";
