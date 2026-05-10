@@ -1,21 +1,3 @@
-const term = new Terminal({
-  fontSize: 13,
-  cursorBlink: true,
-  disableStdin: false,
-  scrollback: 5000,
-  fastScrollModifier: 'alt',
-  fastScrollSensitivity: 5,
-  allowTransparency: true,
-  theme: {
-    background: 'rgba(0, 0, 0, 0)',
-    foreground: '#e4eeff',
-  },
-});
-
-const fitAddon = new FitAddon.FitAddon();
-term.loadAddon(fitAddon);
-term.open(document.getElementById('terminal'));
-
 const panel = document.getElementById('chat-panel');
 const chatHeaderEl = document.getElementById('chat-header');
 const projectsPanelEl = document.getElementById('projects-panel');
@@ -87,9 +69,6 @@ const projectSessionBootstrapped = new Set();
 const projectSessionExited = new Set();
 const projectSelectionHistory = ['.'];
 let projectSelectionIndex = 0;
-let terminalRenderBuffer = '';
-let terminalFlushRaf = 0;
-let terminalPendingScrollToBottom = false;
 let nativeTerminalPanelSyncRaf = 0;
 let terminalResizePointer = null;
 let terminalDragPointer = null;
@@ -113,6 +92,10 @@ const projectsPanelState = {
 const PIXELBOX_CONTEXT_START = '<!-- PIXELBOX_CONTEXT_START -->';
 const PIXELBOX_CONTEXT_END = '<!-- PIXELBOX_CONTEXT_END -->';
 const TERMINAL_MIN_WIDTH = 420;
+const TERMINAL_MIN_COLS = 80;
+const TERMINAL_MIN_ROWS = 24;
+const TERMINAL_CELL_WIDTH = 8.4;
+const TERMINAL_CELL_HEIGHT = 18;
 const MAX_PROJECT_TERMINAL_OUTPUT = 200000;
 const LAST_SELECTED_PROJECT_KEY = 'pixelbox.lastSelectedProject';
 const PROJECTS_PANEL_HIDDEN_KEY = 'pixelbox.projectsPanelHidden';
@@ -121,6 +104,10 @@ const HIDDEN_PROJECTS_EXPANDED_KEY = 'pixelbox.hiddenProjectsExpanded';
 const AI_CLI_KEY = 'pixelbox.aiCli';
 const CODEX_DANGEROUS_BYPASS_KEY = 'pixelbox.codexDangerouslyBypassPermissions';
 const SUPPORTED_AI_CLIS = ['codex', 'claude', 'gemini', 'hermes', 'openclaw', 'custom'];
+const terminalGridState = {
+  cols: 120,
+  rows: 30,
+};
 
 const previewFrameEl = document.createElement('iframe');
 previewFrameEl.id = 'preview-frame';
@@ -358,8 +345,8 @@ function nativeTerminalPanelPayload() {
       height: Math.round(rect.height),
     },
     terminal: {
-      cols: term.cols,
-      rows: term.rows,
+      cols: terminalGridState.cols,
+      rows: terminalGridState.rows,
     },
     devicePixelRatio: window.devicePixelRatio || 1,
   };
@@ -528,7 +515,7 @@ function pixelboxContextBlock() {
     '## Working Rules',
     '- Keep the main app visually clean and full-bleed where possible.',
     '- Prefer deterministic local dev servers and print the live URL on its own line when ready.',
-    '- Use localhost/127.0.0.1 URLs that can be embedded in an Electron webview.',
+    '- Use localhost/127.0.0.1 URLs that can be embedded in the native preview surface.',
     '- Avoid interactive shell prompts in automation flows; prefer explicit non-interactive commands.',
     '- If adding scripts, ensure `npm run dev` works without extra manual steps.',
     '',
@@ -909,49 +896,20 @@ async function refreshAgentMonitor() {
   }
 }
 
-function queueTerminalWrite(data) {
-  if (!data) return;
-  const activeBuffer = term.buffer?.active;
-  const shouldScrollToBottom =
-    terminalPendingScrollToBottom ||
-    !activeBuffer ||
-    (activeBuffer.baseY - activeBuffer.viewportY) <= 1;
-  terminalRenderBuffer += data;
-  terminalPendingScrollToBottom = shouldScrollToBottom;
-  if (terminalFlushRaf) return;
-  terminalFlushRaf = requestAnimationFrame(() => {
-    terminalFlushRaf = 0;
-    if (!terminalRenderBuffer) return;
-    const pending = terminalRenderBuffer;
-    const scrollToBottom = terminalPendingScrollToBottom;
-    terminalRenderBuffer = '';
-    terminalPendingScrollToBottom = false;
-    term.write(pending, () => {
-      if (scrollToBottom) {
-        term.scrollToBottom();
-      }
-    });
-  });
+function estimateTerminalGrid() {
+  const width = Math.max(terminalEl.clientWidth || panel.clientWidth || 800, TERMINAL_MIN_COLS * TERMINAL_CELL_WIDTH);
+  const height = Math.max(terminalEl.clientHeight || panel.clientHeight || 420, TERMINAL_MIN_ROWS * TERMINAL_CELL_HEIGHT);
+  return {
+    cols: Math.max(TERMINAL_MIN_COLS, Math.floor(width / TERMINAL_CELL_WIDTH)),
+    rows: Math.max(TERMINAL_MIN_ROWS, Math.floor(height / TERMINAL_CELL_HEIGHT)),
+  };
 }
 
 function syncTerminalSize() {
-  const activeBuffer = term.buffer?.active;
-  const shouldScrollToBottom = !activeBuffer || (activeBuffer.baseY - activeBuffer.viewportY) <= 1;
-  fitAddon.fit();
-
-  if (term.cols < 20 || term.rows < 5) {
-    const width = terminalEl.clientWidth || panel.clientWidth || 800;
-    const height = terminalEl.clientHeight || panel.clientHeight || 420;
-    const fallbackCols = Math.max(80, Math.floor(width / 8));
-    const fallbackRows = Math.max(24, Math.floor(height / 18));
-    term.resize(fallbackCols, fallbackRows);
-  }
-
-  if (shouldScrollToBottom) {
-    requestAnimationFrame(() => term.scrollToBottom());
-  }
-
-  window.api.resizeTerminal(term.cols, term.rows, selectedProjectPath);
+  const nextGrid = estimateTerminalGrid();
+  terminalGridState.cols = nextGrid.cols;
+  terminalGridState.rows = nextGrid.rows;
+  window.api.resizeTerminal(terminalGridState.cols, terminalGridState.rows, selectedProjectPath);
   queueNativeTerminalPanelSync();
 }
 
@@ -988,7 +946,7 @@ function toggleTerminalDockMode(mode) {
 
 function focusTerminal() {
   if (nativeTerminalExclusive()) return;
-  term.focus();
+  terminalEl.focus();
 }
 
 function writeToActiveTerminal(data) {
@@ -1366,16 +1324,6 @@ async function bootTerminalForPath(relPath, shouldRunStartup = false, forceStart
   }
 
   window.__pwTerminalOutput = projectTerminalOutput.get(relPath) || '';
-  term.reset();
-  terminalRenderBuffer = '';
-  if (terminalFlushRaf) {
-    cancelAnimationFrame(terminalFlushRaf);
-    terminalFlushRaf = 0;
-  }
-  if (window.__pwTerminalOutput) {
-    queueTerminalWrite(window.__pwTerminalOutput);
-    terminalPendingScrollToBottom = true;
-  }
 
   requestAnimationFrame(() => {
     syncTerminalSize();
@@ -1544,9 +1492,6 @@ async function createProject() {
 
 window.api.onTerminalData(({ key, data }) => {
   appendTerminalOutput(key, data);
-  if (key === selectedProjectPath) {
-    queueTerminalWrite(data);
-  }
 
   const runtimeConfig = projectRuntimeConfig.get(key) || defaultRuntimeConfig();
   const shouldDetectPreviewUrl =
@@ -1601,17 +1546,10 @@ window.api.onPreviewHtmlChanged(({ key }) => {
   refreshSelectedHtmlPreview().catch(() => {});
 });
 
-term.onData((data) => {
-  writeToActiveTerminal(data);
-});
-
 window.api.onTerminalExit(({ key }) => {
   if (!key) return;
   projectSessionExited.add(key);
   appendTerminalOutput(key, '\r\n[terminal exited]');
-  if (key === selectedProjectPath) {
-    queueTerminalWrite('\r\n[terminal exited]\r\n');
-  }
 });
 
 window.api.onRendererChanged(() => {

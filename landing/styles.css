@@ -1,12 +1,12 @@
 :root {
-  --bg: #061019;
-  --panel: rgba(12, 22, 35, 0.72);
-  --panel-strong: rgba(13, 25, 39, 0.9);
-  --line: rgba(133, 184, 255, 0.22);
+  --bg: #07111b;
+  --panel: rgba(10, 20, 33, 0.7);
+  --panel-strong: rgba(11, 23, 37, 0.88);
+  --line: rgba(122, 196, 255, 0.24);
   --text: #f4f8ff;
-  --muted: #a8b8d6;
-  --accent: #88d7ff;
-  --accent-strong: #9af0cf;
+  --muted: #aac0dd;
+  --accent: #7fd4ff;
+  --accent-strong: #7ff2d0;
   --shadow: 0 28px 80px rgba(0, 0, 0, 0.34);
 }
 
@@ -24,9 +24,10 @@ body {
   font-family: "Space Grotesk", sans-serif;
   color: var(--text);
   background:
-    radial-gradient(circle at 10% 0%, rgba(60, 107, 196, 0.22), transparent 30%),
-    radial-gradient(circle at 100% 20%, rgba(40, 213, 181, 0.18), transparent 28%),
-    linear-gradient(180deg, #07111d 0%, #061019 42%, #091521 100%);
+    radial-gradient(circle at 8% 0%, rgba(72, 132, 235, 0.24), transparent 28%),
+    radial-gradient(circle at 100% 18%, rgba(39, 211, 190, 0.18), transparent 26%),
+    radial-gradient(circle at 50% 100%, rgba(38, 79, 138, 0.14), transparent 36%),
+    linear-gradient(180deg, #07111d 0%, #061019 42%, #091722 100%);
 }
 
 body::before {
@@ -64,7 +65,7 @@ body::before {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 16px 18px;
+  padding: 14px 18px;
   border-radius: 24px;
 }
 
@@ -75,24 +76,30 @@ body::before {
 }
 
 .brand-mark {
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  background: linear-gradient(145deg, rgba(136, 215, 255, 0.26), rgba(154, 240, 207, 0.14));
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 42%),
+    linear-gradient(155deg, rgba(127, 212, 255, 0.28), rgba(127, 242, 208, 0.12));
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 4px;
   padding: 8px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 10px 28px rgba(0, 0, 0, 0.18);
 }
 
 .brand-mark span {
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(136, 215, 255, 0.32));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(127, 212, 255, 0.3));
 }
 
-.brand-mark span:nth-child(3) {
-  grid-column: 1 / -1;
+.brand-mark span:nth-child(3),
+.brand-mark span:nth-child(4) {
+  height: 60%;
+  align-self: end;
 }
 
 .eyebrow,
@@ -125,7 +132,8 @@ body::before {
 }
 
 .topbar h1 {
-  font-size: 1.3rem;
+  font-size: 1.16rem;
+  letter-spacing: -0.03em;
 }
 
 .topbar-actions {
@@ -158,15 +166,16 @@ body::before {
 
 .hero h2 {
   max-width: 11ch;
-  font-size: clamp(3rem, 7vw, 6.5rem);
+  font-size: clamp(2.35rem, 5.4vw, 4.8rem);
   letter-spacing: -0.06em;
+  line-height: 0.98;
 }
 
 .hero-text {
   max-width: 58ch;
   margin: 18px 0 0;
   color: var(--muted);
-  font-size: 1.08rem;
+  font-size: 1rem;
   line-height: 1.7;
 }
 
@@ -223,7 +232,7 @@ body::before {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 0.88rem;
 }
 
 .hero-panel {
@@ -231,7 +240,7 @@ body::before {
   padding: 18px;
   align-self: end;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent),
     var(--panel-strong);
 }
 

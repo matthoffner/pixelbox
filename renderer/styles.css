@@ -806,43 +806,12 @@ body.vibrant-window #chat-panel {
 #terminal {
   min-height: 0;
   padding: 10px;
-}
-
-body.native-terminal-active #terminal .xterm,
-body.native-terminal-active #terminal .xterm-viewport,
-body.native-terminal-active #terminal .xterm-screen,
-body.native-terminal-active #terminal .xterm-scroll-area,
-body.native-terminal-active #terminal .xterm-cursor-layer,
-body.native-terminal-active #terminal .xterm-text-layer,
-body.native-terminal-active #terminal .xterm-selection-layer {
-  opacity: 0;
-  pointer-events: none;
-}
-
-body.vibrant-window #terminal {
   background: transparent;
 }
 
 body.vibrant-window #chat-header {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
   border-bottom-color: color-mix(in srgb, var(--border), white 18%);
-}
-
-body.vibrant-window #terminal .xterm,
-body.vibrant-window #terminal .xterm-viewport,
-body.vibrant-window #terminal .xterm-screen,
-body.vibrant-window #terminal .xterm-scroll-area {
-  background: transparent !important;
-}
-
-body.vibrant-window #terminal .xterm-viewport {
-  scrollbar-color: rgba(237, 244, 255, 0.28) transparent;
-}
-
-body.vibrant-window #terminal .xterm-cursor-layer,
-body.vibrant-window #terminal .xterm-text-layer,
-body.vibrant-window #terminal .xterm-selection-layer {
-  mix-blend-mode: normal;
 }
 
 .chat-resize-handle {

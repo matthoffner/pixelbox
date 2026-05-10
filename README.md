@@ -36,7 +36,7 @@ Pixelbox should feel like an AI-native operating surface for software creation:
 
 ## Features (Current)
 
-- Floating terminal panel with xterm.
+- Floating native Ghostty terminal panel.
 - Project switcher and per-project runtime config.
 - Embedded live app view for local URLs/files.
 - Native app runtime support with capture-image previews.
@@ -129,7 +129,7 @@ When done, print:
 # Core test suite
 npm test
 
-# Playwright Electron tests
+# Playwright desktop tests
 npm run test:pw
 npm run test:pw:run
 
@@ -141,9 +141,11 @@ npm run test:pw:next
 
 ## Architecture
 
-- `main.js`: Electron main process, IPC, terminal/runtime managers.
-- `preload.js`: renderer-safe API bridge.
-- `renderer/`: UI shell, terminal wiring, runtime controls.
+- `build.zig`: Zero Native app build, Ghostty linkage, packaging, and platform wiring.
+- `src/main.zig`: application entry point and manifest/runtime boot.
+- `src/runner.zig`: desktop orchestration for windows, bridge events, and runtime actions.
+- `bridge/server.js`: local workspace bridge for project state, runtimes, and PTY-backed sessions.
+- `renderer/`: UI shell, terminal panel integration, and runtime controls.
 - `lib/codexMonitor.js`: active Codex process discovery + transcript summarization helpers.
 - `lib/terminalSession.js`: PTY/stdin shell session wrapper.
 - `lib/terminalManager.js`: multi-session terminal lifecycle by project.

@@ -1,6 +1,17 @@
 {
   "entries": [
     {
+      "date": "2026-05-10",
+      "type": "Release 0.4.0",
+      "title": "Moved Pixelbox onto a native Zig desktop runtime with Ghostty",
+      "summary": "Pixelbox now runs through Zig and Zero Native, with Ghostty taking over the terminal surface and a more polished translucent desktop shell replacing the older layered approach.",
+      "points": [
+        "Migrated the active desktop app flow from the older Electron path to a Zig-powered Zero Native runtime",
+        "Integrated a native Ghostty terminal panel with titleless macOS chrome and tuned translucent styling",
+        "Cleaned up legacy Electron and xterm package usage so the shipped path matches the current product"
+      ]
+    },
+    {
       "date": "2026-04-26",
       "type": "Release 0.3.0",
       "title": "Added agent monitoring, project recovery, and smarter local preview orchestration",
@@ -37,11 +48,11 @@
       "date": "2026-04-08",
       "type": "Core Product",
       "title": "Tightened the local workspace loop",
-      "summary": "Pixelbox continued shifting from a simple Electron shell into a project-aware software workspace.",
+      "summary": "Pixelbox continued shifting from a simple desktop shell into a project-aware software workspace.",
       "points": [
         "Project switching and runtime continuity were stabilized",
         "Preview navigation and runtime controls became more reliable",
-        "Electron and Playwright flows expanded to cover long-session behavior"
+        "Desktop runtime and Playwright flows expanded to cover long-session behavior"
       ]
     }
   ]
