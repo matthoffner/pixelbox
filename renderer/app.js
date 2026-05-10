@@ -65,6 +65,7 @@ const projectPreviewState = new Map();
 const projectRuntimeConfig = new Map();
 const projectRuntimeStatus = new Map();
 const projectTerminalOutput = new Map();
+const projectNativeStartupCommand = new Map();
 const projectSessionBootstrapped = new Set();
 const projectSessionExited = new Set();
 const projectSelectionHistory = ['.'];
@@ -334,8 +335,9 @@ function syncTerminalPresentationMode() {
 
 function nativeTerminalPanelPayload() {
   const rect = terminalEl.getBoundingClientRect();
+  const terminalBootReady = projectSessionBootstrapped.has(selectedProjectPath) || !nativeTerminalExclusive();
   return {
-    visible: panel.classList.contains('open'),
+    visible: panel.classList.contains('open') && terminalBootReady,
     mode: terminalLayoutState.mode,
     projectPath: selectedProjectPath,
     frame: {
@@ -344,6 +346,7 @@ function nativeTerminalPanelPayload() {
       width: Math.round(rect.width),
       height: Math.round(rect.height),
     },
+    startupCommand: projectNativeStartupCommand.get(selectedProjectPath) || '',
     terminal: {
       cols: terminalGridState.cols,
       rows: terminalGridState.rows,
@@ -1014,6 +1017,7 @@ async function removeProject(relPath, label) {
     projectRuntimeConfig.delete(relPath);
     projectRuntimeStatus.delete(relPath);
     projectTerminalOutput.delete(relPath);
+    projectNativeStartupCommand.delete(relPath);
     projectSessionBootstrapped.delete(relPath);
     projectSessionExited.delete(relPath);
     openProjectActionsPath = null;
@@ -1312,8 +1316,13 @@ async function bootTerminalForPath(relPath, shouldRunStartup = false, forceStart
       codexDangerouslyBypassPermissions,
     })
     : '';
-  const result = await window.api.startOrRestartTerminal(relPath, shouldBootstrapProject, { startupCommand });
-  startResult = result;
+  if (shouldBootstrapProject) {
+    projectNativeStartupCommand.set(relPath, startupCommand);
+  }
+  if (!nativeTerminalExclusive()) {
+    const result = await window.api.startOrRestartTerminal(relPath, shouldBootstrapProject, { startupCommand });
+    startResult = result;
+  }
   projectSessionBootstrapped.add(relPath);
   projectSessionExited.delete(relPath);
 
@@ -1329,6 +1338,7 @@ async function bootTerminalForPath(relPath, shouldRunStartup = false, forceStart
     syncTerminalSize();
     focusTerminal();
   });
+  queueNativeTerminalPanelSync();
 }
 
 function recordProjectSelection(relPath) {

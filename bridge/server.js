@@ -46,9 +46,13 @@ function emit(event, payload) {
   }
 }
 
-function terminalSpawnArgs(startupCommand = '') {
-  if (!startupCommand || !startupCommand.trim()) return [];
-  return ['-lc', startupCommand];
+function terminalSpawnArgs(shell, startupCommand = '') {
+  if (process.platform === 'win32') {
+    return (!startupCommand || !startupCommand.trim()) ? [] : ['-Command', startupCommand];
+  }
+
+  if (!startupCommand || !startupCommand.trim()) return ['-il'];
+  return ['-ilc', startupCommand];
 }
 
 function getStartupTerminalCommand(options = {}) {
@@ -107,9 +111,10 @@ function getStartupTerminalCommand(options = {}) {
 
 const terminalManager = new TerminalManager({
   createSession({ cwd, startupCommand }) {
+    const shell = defaultShell();
     return new TerminalSession({
-      shell: defaultShell(),
-      argv: terminalSpawnArgs(startupCommand),
+      shell,
+      argv: terminalSpawnArgs(shell, startupCommand),
       cwd: workspaceFs.resolveWorkspacePath(cwd),
     });
   },

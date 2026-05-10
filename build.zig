@@ -28,7 +28,7 @@ const PackageTarget = enum {
 
 const default_zero_native_path = "vendor/zero-native";
 const default_ghostty_path = "vendor/ghostty";
-const default_ghostty_zig = "zig";
+const default_ghostty_zig = "/opt/homebrew/opt/zig@0.15/bin/zig";
 const app_exe_name = "Pixelbox";
 
 pub fn build(b: *std.Build) void {

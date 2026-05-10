@@ -29,6 +29,8 @@ static void ZeroNativeGhosttyConfirmReadClipboard(void *userdata, const char *va
 static void ZeroNativeGhosttyWriteClipboard(void *userdata, ghostty_clipboard_e clipboard, const ghostty_clipboard_content_s *contents, size_t count, bool confirm);
 static void ZeroNativeGhosttyCloseSurface(void *userdata, bool process_alive);
 static bool ZeroNativeDispatchGhosttyKeyEvent(ZeroNativeAppKitHost *host, NSEvent *event);
+static NSString *ZeroNativeGhosttyShellQuote(NSString *value);
+static NSString *ZeroNativeGhosttyStartupScriptForProject(NSString *projectPath, NSString *workingDirectory, NSString *startupCommand);
 
 @interface ZeroNativeGhosttyTerminalView : NSView
 @property(nonatomic, assign) ZeroNativeAppKitHost *host;
@@ -106,6 +108,10 @@ static bool ZeroNativeDispatchGhosttyKeyEvent(ZeroNativeAppKitHost *host, NSEven
 @property(nonatomic, assign) NSInteger externalLinkAction;
 @property(nonatomic, strong) NSView *rootContentView;
 @property(nonatomic, strong) ZeroNativeGhosttyTerminalView *ghosttyTerminalView;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, ZeroNativeGhosttyTerminalView *> *ghosttyTerminalViews;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, NSValue *> *ghosttySurfaces;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *ghosttyStartupCommands;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *ghosttyLaunchedCommands;
 @property(nonatomic, assign) ghostty_app_t ghosttyApp;
 @property(nonatomic, assign) ghostty_config_t ghosttyConfig;
 @property(nonatomic, assign) ghostty_surface_t ghosttySurface;
@@ -137,12 +143,16 @@ static bool ZeroNativeDispatchGhosttyKeyEvent(ZeroNativeAppKitHost *host, NSEven
 - (BOOL)allowsNavigationURL:(NSURL *)url;
 - (BOOL)openExternalURLIfAllowed:(NSURL *)url;
 - (void)receiveBridgeMessage:(WKScriptMessage *)message windowId:(uint64_t)windowId;
- - (void)handleGhosttyPanelBridgeMessage:(NSString *)messageString windowId:(uint64_t)windowId;
- - (void)applyGhosttyPanelPayload:(NSDictionary *)payload windowId:(uint64_t)windowId;
- - (void)ensureGhosttyRuntime;
- - (void)ensureGhosttySurfaceForProjectPath:(NSString *)projectPath;
- - (void)refreshGhosttySurfaceMetrics;
- - (NSString *)ghosttyWorkingDirectoryForProjectPath:(NSString *)projectPath;
+- (void)handleGhosttyPanelBridgeMessage:(NSString *)messageString windowId:(uint64_t)windowId;
+- (void)applyGhosttyPanelPayload:(NSDictionary *)payload windowId:(uint64_t)windowId;
+- (void)ensureGhosttyRuntime;
+- (void)ensureGhosttySurfaceForProjectPath:(NSString *)projectPath startupCommand:(NSString *)startupCommand;
+- (ghostty_surface_t)ghosttySurfaceForProjectPath:(NSString *)projectPath;
+- (void)setGhosttySurface:(ghostty_surface_t)surface forProjectPath:(NSString *)projectPath;
+- (ZeroNativeGhosttyTerminalView *)ghosttyTerminalViewForProjectPath:(NSString *)projectPath create:(BOOL)create;
+- (void)hideInactiveGhosttyTerminalViewsExceptProjectPath:(NSString *)projectPath;
+- (void)refreshGhosttySurfaceMetrics;
+- (NSString *)ghosttyWorkingDirectoryForProjectPath:(NSString *)projectPath;
 - (void)completeBridgeWithResponse:(NSString *)response;
 - (void)completeBridgeWithResponse:(NSString *)response windowId:(uint64_t)windowId;
 - (void)emitEventNamed:(NSString *)name detailJSON:(NSString *)detailJSON windowId:(uint64_t)windowId;
@@ -273,6 +283,10 @@ static bool ZeroNativeDispatchGhosttyKeyEvent(ZeroNativeAppKitHost *host, NSEven
     self.bridgeScriptHandlers = [[NSMutableDictionary alloc] init];
     self.assetSchemeHandlers = [[NSMutableDictionary alloc] init];
     self.windowLabels = [[NSMutableDictionary alloc] init];
+    self.ghosttyTerminalViews = [[NSMutableDictionary alloc] init];
+    self.ghosttySurfaces = [[NSMutableDictionary alloc] init];
+    self.ghosttyStartupCommands = [[NSMutableDictionary alloc] init];
+    self.ghosttyLaunchedCommands = [[NSMutableDictionary alloc] init];
     self.allowedNavigationOrigins = @[ @"zero://app", @"zero://inline" ];
     self.allowedExternalURLs = @[];
     self.externalLinkAction = 0;
@@ -334,13 +348,7 @@ static bool ZeroNativeDispatchGhosttyKeyEvent(ZeroNativeAppKitHost *host, NSEven
     rootContentView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     rootContentView.wantsLayer = YES;
     rootContentView.layer.backgroundColor = NSColor.clearColor.CGColor;
-    ZeroNativeGhosttyTerminalView *ghosttyTerminalView = [[ZeroNativeGhosttyTerminalView alloc] initWithFrame:NSZeroRect];
-    ghosttyTerminalView.host = self;
-    ghosttyTerminalView.hidden = YES;
-    ghosttyTerminalView.wantsLayer = YES;
-    ghosttyTerminalView.layer.backgroundColor = NSColor.clearColor.CGColor;
     [rootContentView addSubview:webView];
-    [rootContentView addSubview:ghosttyTerminalView];
     window.contentView = rootContentView;
 
     ZeroNativeWindowDelegate *delegate = [[ZeroNativeWindowDelegate alloc] init];
@@ -358,7 +366,6 @@ static bool ZeroNativeDispatchGhosttyKeyEvent(ZeroNativeAppKitHost *host, NSEven
         self.window = window;
         self.webView = webView;
         self.rootContentView = rootContentView;
-        self.ghosttyTerminalView = ghosttyTerminalView;
         self.delegate = delegate;
         self.bridgeScriptHandler = bridgeScriptHandler;
         self.assetSchemeHandler = assetSchemeHandler;
@@ -371,10 +378,15 @@ static bool ZeroNativeDispatchGhosttyKeyEvent(ZeroNativeAppKitHost *host, NSEven
 }
 
 - (void)dealloc {
-    if (self.ghosttySurface) {
-        ghostty_surface_free(self.ghosttySurface);
-        self.ghosttySurface = NULL;
+    for (NSValue *surfaceValue in self.ghosttySurfaces.allValues) {
+        ghostty_surface_t surface = (ghostty_surface_t)[surfaceValue pointerValue];
+        if (surface) {
+            ghostty_surface_free(surface);
+        }
     }
+    [self.ghosttySurfaces removeAllObjects];
+    [self.ghosttyLaunchedCommands removeAllObjects];
+    self.ghosttySurface = NULL;
     if (self.ghosttyApp) {
         ghostty_app_free(self.ghosttyApp);
         self.ghosttyApp = NULL;
@@ -840,10 +852,11 @@ static NSURL *ZeroNativeAssetEntryURL(NSString *origin, NSString *entryPath) {
     BOOL visible = [payload[@"visible"] respondsToSelector:@selector(boolValue)] ? [payload[@"visible"] boolValue] : NO;
     NSDictionary *frame = [payload[@"frame"] isKindOfClass:[NSDictionary class]] ? payload[@"frame"] : nil;
     NSString *projectPath = [payload[@"projectPath"] isKindOfClass:[NSString class]] ? payload[@"projectPath"] : @".";
+    NSString *startupCommand = [payload[@"startupCommand"] isKindOfClass:[NSString class]] ? payload[@"startupCommand"] : @"";
     if (!frame) return;
 
     NSView *root = self.rootContentView ?: self.window.contentView;
-    if (!root || !self.ghosttyTerminalView) return;
+    if (!root) return;
 
     CGFloat x = [frame[@"x"] respondsToSelector:@selector(doubleValue)] ? [frame[@"x"] doubleValue] : 0;
     CGFloat y = [frame[@"y"] respondsToSelector:@selector(doubleValue)] ? [frame[@"y"] doubleValue] : 0;
@@ -853,15 +866,23 @@ static NSURL *ZeroNativeAssetEntryURL(NSString *origin, NSString *entryPath) {
     NSRect ghosttyFrame = NSMakeRect(x, MAX(0, contentHeight - y - height), MAX(0, width), MAX(0, height));
     self.ghosttyPanelFrame = ghosttyFrame;
     self.ghosttyTerminalVisible = visible;
-    self.ghosttyTerminalView.hidden = !visible || width < 10 || height < 10;
-    self.ghosttyTerminalView.frame = ghosttyFrame;
+    self.ghosttyProjectPath = projectPath.length > 0 ? projectPath : @".";
 
-    if (!self.ghosttyTerminalView.hidden) {
-        [self ensureGhosttyRuntime];
-        [self ensureGhosttySurfaceForProjectPath:projectPath ?: @"."];
-        [self.window makeFirstResponder:self.ghosttyTerminalView];
-        [self refreshGhosttySurfaceMetrics];
+    if (!visible || width < 10 || height < 10) {
+        [self hideInactiveGhosttyTerminalViewsExceptProjectPath:nil];
+        if (self.ghosttySurface) {
+            ghostty_surface_set_focus(self.ghosttySurface, false);
+        }
+        return;
     }
+
+    [self ensureGhosttyRuntime];
+    [self ensureGhosttySurfaceForProjectPath:self.ghosttyProjectPath startupCommand:startupCommand];
+    self.ghosttyTerminalView.hidden = NO;
+    self.ghosttyTerminalView.frame = ghosttyFrame;
+    [self hideInactiveGhosttyTerminalViewsExceptProjectPath:self.ghosttyProjectPath];
+    [self.window makeFirstResponder:self.ghosttyTerminalView];
+    [self refreshGhosttySurfaceMetrics];
 }
 
 - (void)ensureGhosttyRuntime {
@@ -893,30 +914,87 @@ static NSURL *ZeroNativeAssetEntryURL(NSString *origin, NSString *entryPath) {
     }
 }
 
-- (void)ensureGhosttySurfaceForProjectPath:(NSString *)projectPath {
-    if (!self.ghosttyApp || !self.ghosttyTerminalView) return;
+- (ghostty_surface_t)ghosttySurfaceForProjectPath:(NSString *)projectPath {
+    NSValue *value = self.ghosttySurfaces[projectPath ?: @"."];
+    return value ? (ghostty_surface_t)[value pointerValue] : NULL;
+}
+
+- (void)setGhosttySurface:(ghostty_surface_t)surface forProjectPath:(NSString *)projectPath {
+    NSString *key = projectPath.length > 0 ? projectPath : @".";
+    if (surface) {
+        self.ghosttySurfaces[key] = [NSValue valueWithPointer:surface];
+    } else {
+        [self.ghosttySurfaces removeObjectForKey:key];
+        [self.ghosttyLaunchedCommands removeObjectForKey:key];
+    }
+}
+
+- (ZeroNativeGhosttyTerminalView *)ghosttyTerminalViewForProjectPath:(NSString *)projectPath create:(BOOL)create {
+    NSString *key = projectPath.length > 0 ? projectPath : @".";
+    ZeroNativeGhosttyTerminalView *view = self.ghosttyTerminalViews[key];
+    if (!view && create) {
+        view = [[ZeroNativeGhosttyTerminalView alloc] initWithFrame:self.ghosttyPanelFrame];
+        view.host = self;
+        view.hidden = YES;
+        view.wantsLayer = YES;
+        view.layer.backgroundColor = NSColor.clearColor.CGColor;
+        [self.rootContentView addSubview:view];
+        self.ghosttyTerminalViews[key] = view;
+    }
+    return view;
+}
+
+- (void)hideInactiveGhosttyTerminalViewsExceptProjectPath:(NSString *)projectPath {
+    NSString *activeKey = projectPath.length > 0 ? projectPath : nil;
+    for (NSString *key in self.ghosttyTerminalViews) {
+        ZeroNativeGhosttyTerminalView *view = self.ghosttyTerminalViews[key];
+        view.hidden = activeKey ? ![key isEqualToString:activeKey] : YES;
+    }
+}
+
+- (void)ensureGhosttySurfaceForProjectPath:(NSString *)projectPath startupCommand:(NSString *)startupCommand {
+    if (!self.ghosttyApp) return;
     NSString *resolvedProjectPath = projectPath.length > 0 ? projectPath : @".";
-    BOOL needsNewSurface = self.ghosttySurface == NULL || ![self.ghosttyProjectPath isEqualToString:resolvedProjectPath];
-    if (!needsNewSurface) return;
-    if (self.ghosttySurface) {
-        ghostty_surface_free(self.ghosttySurface);
-        self.ghosttySurface = NULL;
+    if (startupCommand.length > 0) {
+        self.ghosttyStartupCommands[resolvedProjectPath] = startupCommand;
+    }
+
+    ZeroNativeGhosttyTerminalView *view = [self ghosttyTerminalViewForProjectPath:resolvedProjectPath create:YES];
+    ghostty_surface_t surface = [self ghosttySurfaceForProjectPath:resolvedProjectPath];
+    NSString *desiredStartup = self.ghosttyStartupCommands[resolvedProjectPath] ?: @"";
+    NSString *launchedStartup = self.ghosttyLaunchedCommands[resolvedProjectPath] ?: @"";
+    BOOL startupChanged = ![launchedStartup isEqualToString:desiredStartup];
+    BOOL needsNewSurface = surface == NULL || ghostty_surface_process_exited(surface) || startupChanged;
+    if (surface && needsNewSurface) {
+        ghostty_surface_free(surface);
+        [self setGhosttySurface:NULL forProjectPath:resolvedProjectPath];
+        surface = NULL;
     }
 
     self.ghosttyProjectPath = resolvedProjectPath;
+    self.ghosttyTerminalView = view;
+    if (!needsNewSurface) {
+        self.ghosttySurface = surface;
+        return;
+    }
+
     NSString *workingDirectory = [self ghosttyWorkingDirectoryForProjectPath:resolvedProjectPath];
     const char *cwd = workingDirectory.UTF8String;
-    const char *command = "/bin/zsh";
+    NSString *startupScript = ZeroNativeGhosttyStartupScriptForProject(resolvedProjectPath, workingDirectory, desiredStartup);
+    const char *command = startupScript.length > 0 ? startupScript.UTF8String : "/bin/zsh";
     ghostty_surface_config_s surfaceConfig = ghostty_surface_config_new();
     surfaceConfig.platform_tag = GHOSTTY_PLATFORM_MACOS;
-    surfaceConfig.platform.macos.nsview = (__bridge void *)self.ghosttyTerminalView;
+    surfaceConfig.platform.macos.nsview = (__bridge void *)view;
     surfaceConfig.scale_factor = self.window.backingScaleFactor > 0 ? self.window.backingScaleFactor : 1.0;
     surfaceConfig.font_size = 13.0f;
     surfaceConfig.working_directory = cwd;
     surfaceConfig.command = command;
+    surfaceConfig.initial_input = NULL;
     surfaceConfig.wait_after_command = false;
     surfaceConfig.context = GHOSTTY_SURFACE_CONTEXT_WINDOW;
     self.ghosttySurface = ghostty_surface_new(self.ghosttyApp, &surfaceConfig);
+    [self setGhosttySurface:self.ghosttySurface forProjectPath:resolvedProjectPath];
+    self.ghosttyLaunchedCommands[resolvedProjectPath] = desiredStartup;
 }
 
 - (void)refreshGhosttySurfaceMetrics {
@@ -1040,6 +1118,38 @@ static NSString *ZeroNativeGhosttyEmbeddedConfigPath(void) {
         cachedPath = @"";
     }
     return cachedPath ?: @"";
+}
+
+static NSString *ZeroNativeGhosttyShellQuote(NSString *value) {
+    NSString *escaped = [[value ?: @"" stringByReplacingOccurrencesOfString:@"'" withString:@"'\"'\"'"] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    return [NSString stringWithFormat:@"'%@'", escaped];
+}
+
+static NSString *ZeroNativeGhosttyStartupScriptForProject(NSString *projectPath, NSString *workingDirectory, NSString *startupCommand) {
+    NSString *trimmedCommand = [startupCommand stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    NSString *safeProject = [NSString stringWithFormat:@"%lu", (unsigned long)(projectPath ?: @".").hash];
+    NSString *scriptPath = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"pixelbox-ghostty-%@.sh", safeProject]];
+    NSString *commandLine = trimmedCommand.length > 0
+      ? [NSString stringWithFormat:@"STARTUP_COMMAND=%@\nif [ -n \"$STARTUP_COMMAND\" ]; then\n  eval \"$STARTUP_COMMAND\"\nfi\n", ZeroNativeGhosttyShellQuote(trimmedCommand)]
+      : @"";
+    NSString *script = [NSString stringWithFormat:
+      @"#!/bin/zsh\n"
+       "cd %@ || exit 1\n"
+       "export TERM=\"${TERM:-xterm-256color}\"\n"
+       "%@"
+       "exec /bin/zsh -il\n",
+      ZeroNativeGhosttyShellQuote(workingDirectory ?: NSHomeDirectory()),
+      commandLine
+    ];
+    NSError *error = nil;
+    if (![script writeToFile:scriptPath atomically:YES encoding:NSUTF8StringEncoding error:&error]) {
+        NSLog(@"zero-native: failed to write ghostty startup script: %@", error);
+        return @"/bin/zsh";
+    }
+    if (![[NSFileManager defaultManager] setAttributes:@{ NSFilePosixPermissions: @0755 } ofItemAtPath:scriptPath error:&error]) {
+        NSLog(@"zero-native: failed to chmod ghostty startup script: %@", error);
+    }
+    return scriptPath;
 }
 
 static BOOL ZeroNativeEnsureGhosttyInitialized(void) {

@@ -2,6 +2,17 @@
   "entries": [
     {
       "date": "2026-05-10",
+      "type": "Release 0.4.1",
+      "title": "Restored native Codex relaunch and project terminal persistence",
+      "summary": "Pixelbox now relaunches Codex correctly inside the native Ghostty terminal path again, with project-aware session startup restored after the Zig and Zero Native migration.",
+      "points": [
+        "Fixed native terminal startup so Codex launches from the embedded Ghostty host instead of falling back to a blank login shell",
+        "Restored per-project native terminal continuity so project switching no longer drops the active agent session model",
+        "Added a dedicated native terminal regression probe to verify the live panel state and startup payload contract"
+      ]
+    },
+    {
+      "date": "2026-05-10",
       "type": "Release 0.4.0",
       "title": "Moved Pixelbox onto a native Zig desktop runtime with Ghostty",
       "summary": "Pixelbox now runs through Zig and Zero Native, with Ghostty taking over the terminal surface and a more polished translucent desktop shell replacing the older layered approach.",
