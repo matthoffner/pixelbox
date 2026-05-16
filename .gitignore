@@ -15,6 +15,7 @@ memory/
 .tmp-*/
 .zig-cache/
 zig-out/
+vendor/ghostty/zig-pkg/
 
 # Local agent context files
 AGENTS.md
