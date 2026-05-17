@@ -807,6 +807,11 @@ body.vibrant-window #chat-panel {
   min-height: 0;
   padding: 10px;
   background: transparent;
+  color: rgba(245, 250, 255, 0.92);
+  font: 13px/1.45 "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 body.vibrant-window #chat-header {

@@ -818,6 +818,8 @@ function appendTerminalOutput(projectPath, data) {
   projectTerminalOutput.set(projectPath, next);
   if (projectPath === selectedProjectPath) {
     window.__pwTerminalOutput = next;
+    terminalEl.textContent = next;
+    terminalEl.scrollTop = terminalEl.scrollHeight;
   }
 }
 
@@ -1015,6 +1017,36 @@ function writeToActiveTerminal(data) {
     return;
   }
   window.api.writeTerminal(data, selectedProjectPath);
+}
+
+function terminalInputForKeydown(event) {
+  if (event.metaKey) return null;
+  if (event.ctrlKey) {
+    if (event.key.length === 1) {
+      return String.fromCharCode(event.key.toUpperCase().charCodeAt(0) - 64);
+    }
+    return null;
+  }
+  switch (event.key) {
+    case 'Enter':
+      return '\r';
+    case 'Backspace':
+      return '\x7f';
+    case 'Tab':
+      return '\t';
+    case 'Escape':
+      return '\x1b';
+    case 'ArrowUp':
+      return '\x1b[A';
+    case 'ArrowDown':
+      return '\x1b[B';
+    case 'ArrowRight':
+      return '\x1b[C';
+    case 'ArrowLeft':
+      return '\x1b[D';
+    default:
+      return event.key.length === 1 ? event.key : null;
+  }
 }
 
 function renderTerminalDropActive(active) {
@@ -1386,6 +1418,8 @@ async function bootTerminalForPath(relPath, shouldRunStartup = false, forceStart
   }
 
   window.__pwTerminalOutput = projectTerminalOutput.get(relPath) || '';
+  terminalEl.textContent = window.__pwTerminalOutput;
+  terminalEl.scrollTop = terminalEl.scrollHeight;
 
   requestAnimationFrame(() => {
     syncTerminalSize();
@@ -1685,6 +1719,20 @@ if (agentMonitorRefreshEl) {
   });
 }
 terminalEl.addEventListener('mousedown', focusTerminal);
+terminalEl.addEventListener('keydown', (event) => {
+  if (nativeTerminalExclusive()) return;
+  const input = terminalInputForKeydown(event);
+  if (input === null) return;
+  event.preventDefault();
+  writeToActiveTerminal(input);
+});
+terminalEl.addEventListener('paste', (event) => {
+  if (nativeTerminalExclusive()) return;
+  const text = event.clipboardData?.getData('text/plain') || '';
+  if (!text) return;
+  event.preventDefault();
+  writeToActiveTerminal(text);
+});
 panel.addEventListener('mousedown', focusTerminal);
 for (const dropTarget of [terminalEl, panel]) {
   dropTarget.addEventListener('dragenter', (event) => {

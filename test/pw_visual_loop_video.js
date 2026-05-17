@@ -205,7 +205,13 @@ async function waitForTerminalOutput(collector, needle, timeoutMs = 240000) {
   throw new Error(`Timed out waiting for terminal output "${needle}". Tail:\n${tail}`);
 }
 
-async function runCodexEditThroughPixelboxTerminal(collector, step, marker, index) {
+async function typeTerminalCommand(page, command) {
+  await page.locator('#terminal').click();
+  await page.keyboard.type(command, { delay: 4 });
+  await page.keyboard.press('Enter');
+}
+
+async function runCodexEditThroughPixelboxTerminal(page, collector, step, marker, index) {
   const html = htmlForStep(step);
   const prompt = [
     `Overwrite ${previewRelPath} with the exact HTML below.`,
@@ -234,17 +240,17 @@ exit "$code"
   await postJson('/api/terminal/start', { cwd: '.', options: {} });
   await sleep(500);
   if (!collector.output().includes('__PIXELBOX_TERMINAL_READY__')) {
-    await postJson('/api/terminal/write', { key: '.', data: 'printf "__PIXELBOX_TERMINAL_READY__\\n"\n' });
+    await typeTerminalCommand(page, 'printf "__PIXELBOX_TERMINAL_READY__\\n"');
     await waitForTerminalOutput(collector, '__PIXELBOX_TERMINAL_READY__', 10000);
   }
-  await postJson('/api/terminal/write', { key: '.', data: `bash ${shellEscape(scriptRelPath)}\n` });
+  await typeTerminalCommand(page, `bash ${shellEscape(scriptRelPath)}`);
   await waitForTerminalOutput(collector, `${marker}:START`, 10000);
   await waitForTerminalOutput(collector, `${marker}:0`);
 }
 
-async function applyPreviewEdit(collector, step, marker, index) {
+async function applyPreviewEdit(page, collector, step, marker, index) {
   if (useRealCodex) {
-    await runCodexEditThroughPixelboxTerminal(collector, step, marker, index);
+    await runCodexEditThroughPixelboxTerminal(page, collector, step, marker, index);
     return;
   }
   await writePreviewStep(step);
@@ -339,7 +345,7 @@ async function main() {
       background: '#10284f',
       accent: '#7bdcff',
     };
-    await applyPreviewEdit(terminalCollector, firstStep, '__PIXELBOX_CODEX_EDIT_01_DONE__', 1);
+    await applyPreviewEdit(page, terminalCollector, firstStep, '__PIXELBOX_CODEX_EDIT_01_DONE__', 1);
     await waitForPreviewStep(page, firstStep.label);
     await page.waitForTimeout(800);
     const firstEditRegion = await waitForCaptureRegion((region) => region.updatedAt >= baselineRegion.updatedAt);
@@ -355,7 +361,7 @@ async function main() {
       background: '#163d2f',
       accent: '#8ff2b0',
     };
-    await applyPreviewEdit(terminalCollector, secondStep, '__PIXELBOX_CODEX_EDIT_02_DONE__', 2);
+    await applyPreviewEdit(page, terminalCollector, secondStep, '__PIXELBOX_CODEX_EDIT_02_DONE__', 2);
     await waitForPreviewStep(page, secondStep.label);
     await page.waitForTimeout(900);
     const secondEditRegion = await waitForCaptureRegion((region) => region.updatedAt >= firstEditRegion.updatedAt);
