@@ -14,7 +14,8 @@
     "start": "zig build run",
     "test": "node --test",
     "test:codex": "RUN_CODEX_E2E=1 node --test test/terminal.codex.e2e.test.js",
-    "test:pw:visual-loop": "PW_VISUAL_LOOP_VIDEO=1 node test/pw_visual_loop_video.js"
+    "test:pw:visual-loop": "PW_VISUAL_LOOP_VIDEO=1 node test/pw_visual_loop_video.js",
+    "test:pw:visual-loop:codex": "PW_VISUAL_LOOP_VIDEO=1 PW_VISUAL_LOOP_REAL_CODEX=1 node test/pw_visual_loop_video.js"
   },
   "dependencies": {
     "monaco-editor": "^0.52.0",

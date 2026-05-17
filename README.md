@@ -166,6 +166,7 @@ npm test
 npm run test:pw
 npm run test:pw:run
 npm run test:pw:visual-loop
+npm run test:pw:visual-loop:codex
 
 # Codex/OpenClaw targeted flows
 npm run test:pw:codex
