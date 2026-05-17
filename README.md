@@ -133,6 +133,15 @@ This writes:
 - `screenshots/current-window.png`
 - `screenshots/current-window.json`
 
+For visual polish work, use the local `pixelbox-window-screenshot` skill as a
+loop: capture a baseline, inspect the real rendered image, make one focused
+change, wait for hot reload, then capture `screenshots/visual-loop-01.png`,
+`visual-loop-02.png`, and so on until the screenshot matches the target.
+
+Use the local `pixelbox-video-review` skill after Playwright or visual-loop runs
+to inspect the recorded video, extract representative frames, and answer whether
+the recording actually proves the workflow worked.
+
 ## Suggested Prompt (for "Nothing live yet")
 
 Use this prompt in terminal when a project is empty:
@@ -156,6 +165,7 @@ npm test
 # Playwright desktop tests
 npm run test:pw
 npm run test:pw:run
+npm run test:pw:visual-loop
 
 # Codex/OpenClaw targeted flows
 npm run test:pw:codex

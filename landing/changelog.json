@@ -1,6 +1,17 @@
 {
   "entries": [
     {
+      "date": "2026-05-17",
+      "type": "Release 0.4.3",
+      "title": "Added visual-loop video review for frontend verification",
+      "summary": "Pixelbox now pairs screenshot-driven iteration with a video-review skill and Playwright probe, so visual changes can be checked against recorded evidence instead of code diffs alone.",
+      "points": [
+        "Added a Pixelbox screenshot-loop workflow for capturing, inspecting, patching, and recapturing rendered UI changes",
+        "Added a Pixelbox video-review skill for extracting frames from recordings and judging whether a workflow actually worked",
+        "Added a Playwright visual-loop video probe that records the workspace, captures numbered screenshots, and verifies preview capture-region updates"
+      ]
+    },
+    {
       "date": "2026-05-16",
       "type": "Release 0.4.2",
       "title": "Added screenshot-driven visual iteration for the native workspace",
