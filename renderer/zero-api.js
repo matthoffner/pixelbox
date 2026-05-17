@@ -59,6 +59,8 @@
     stopPreviewRuntime: (projectPath) => request('/api/preview/stopRuntime', { projectPath }),
     watchPreviewHtml: (projectPath, targetPath) => request('/api/preview/watchHtml', { projectPath, path: targetPath }),
     clearPreviewHtmlWatch: () => request('/api/preview/clearHtmlWatch'),
+    setPreviewCaptureRegion: (region) => request('/api/preview/setCaptureRegion', region || {}),
+    getPreviewCaptureRegion: () => request('/api/preview/getCaptureRegion'),
     startTerminal: (cwd, options = {}) => request('/api/terminal/start', { cwd, options }),
     restartTerminal: (cwd, options = {}) => request('/api/terminal/restart', { cwd, options }),
     startOrRestartTerminal: (cwd, restart = false, options = {}) =>

@@ -33,6 +33,8 @@ Pixelbox should feel like an AI-native operating surface for software creation:
 5. **Validation**
    - Expand Playwright smoke tests for project switching + runtime visibility.
    - Add deterministic e2e checks for session persistence.
+6. **Visual Iteration**
+   - First-class screenshot capture of the live Pixelbox window during hot-reload loops.
 
 ## Features (Current)
 
@@ -43,6 +45,7 @@ Pixelbox should feel like an AI-native operating surface for software creation:
 - AI Launch presets for Codex, Claude, Gemini, Hermes, OpenClaw TUI, or a plain terminal.
 - In-app agent monitor for active Codex processes.
 - Hidden-project restore list and cleaner project action menus.
+- Local screenshot skill for capturing the current Pixelbox window during UI iteration.
 - Keyboard project switching with `Cmd/Ctrl+Shift+ArrowLeft` and `Cmd/Ctrl+Shift+ArrowRight`.
 - File-path drag and drop into the terminal.
 - Automatic local port reassignment for colliding localhost dev servers.
@@ -108,6 +111,27 @@ Or:
 - Use **Agent Monitor** to inspect active Codex processes running on the machine.
 - Use project-scoped prompts.
 - Keep runtime and editor tasks coordinated via `.pixelbox/handoff.md`.
+
+### 5. Capture the current Pixelbox window
+
+When a project is already hot reloading inside Pixelbox, capture the real current
+window instead of guessing from code:
+
+```bash
+bash scripts/capture-current-window.sh screenshots/current-window.png Pixelbox
+```
+
+To capture only the embedded preview region, keep Pixelbox frontmost and pass
+`preview` as the capture scope:
+
+```bash
+bash scripts/capture-current-window.sh screenshots/current-preview.png Pixelbox preview
+```
+
+This writes:
+
+- `screenshots/current-window.png`
+- `screenshots/current-window.json`
 
 ## Suggested Prompt (for "Nothing live yet")
 

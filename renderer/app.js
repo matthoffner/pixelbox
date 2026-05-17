@@ -23,6 +23,7 @@ const hiddenProjectsToggleEl = document.getElementById('hidden-projects-toggle')
 const hiddenProjectsListEl = document.getElementById('hidden-projects-list');
 const headlineEl = document.getElementById('headline');
 const previewFrameHostEl = document.getElementById('preview-frame-host');
+const previewViewportEl = document.getElementById('preview-viewport');
 const previewBackEl = document.getElementById('preview-back');
 const previewForwardEl = document.getElementById('preview-forward');
 const previewReloadEl = document.getElementById('preview-reload');
@@ -53,6 +54,19 @@ if (prefersVibrantWindow) {
   document.body.classList.add('vibrant-window');
 }
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', () => {
+    schedulePreviewCaptureRegionPublish();
+  });
+}
+
+if (typeof ResizeObserver !== 'undefined' && previewViewportEl) {
+  const previewViewportObserver = new ResizeObserver(() => {
+    schedulePreviewCaptureRegionPublish();
+  });
+  previewViewportObserver.observe(previewViewportEl);
+}
+
 window.__pwTerminalOutput = '';
 let reloadTimer;
 let selectedProjectPath = '.';
@@ -77,6 +91,7 @@ let terminalMouseDrag = null;
 let projectsDragPointer = null;
 let projectsMouseDrag = null;
 let agentMonitorPollTimer = null;
+let previewCaptureRegionRaf = 0;
 const agentMonitorStoppingPids = new Set();
 let selectedAiCli = 'codex';
 let codexDangerouslyBypassPermissions = false;
@@ -629,6 +644,30 @@ function updatePreviewControls(state) {
   updateProjectNavigationControls();
 }
 
+async function publishPreviewCaptureRegion() {
+  previewCaptureRegionRaf = 0;
+  if (!previewViewportEl || !window.api?.setPreviewCaptureRegion) return;
+  const rect = previewViewportEl.getBoundingClientRect();
+  const region = {
+    x: Math.round(rect.left),
+    y: Math.round(rect.top),
+    width: Math.round(rect.width),
+    height: Math.round(rect.height),
+    scale: window.devicePixelRatio || 1,
+    visible: rect.width > 0 && rect.height > 0,
+  };
+  try {
+    await window.api.setPreviewCaptureRegion(region);
+  } catch {}
+}
+
+function schedulePreviewCaptureRegionPublish() {
+  if (previewCaptureRegionRaf) return;
+  previewCaptureRegionRaf = requestAnimationFrame(() => {
+    publishPreviewCaptureRegion();
+  });
+}
+
 function previewDisplayUrl(rawUrl) {
   const url = sanitizePreviewUrl(rawUrl);
   if (!url) return 'about:blank';
@@ -674,7 +713,20 @@ function renderProjectsPanelVisibility() {
       renderProjectsPanelPosition();
     });
   }
+  schedulePreviewCaptureRegionPublish();
 }
+
+document.addEventListener('transitionend', (event) => {
+  if (!(event.target instanceof Element)) return;
+  if (
+    event.target === previewViewportEl ||
+    event.target === panel ||
+    event.target === projectsPanelEl ||
+    event.target === document.body
+  ) {
+    schedulePreviewCaptureRegionPublish();
+  }
+});
 
 function renderPreviewForProject(projectPath) {
   const state = ensurePreviewState(projectPath);
@@ -695,6 +747,7 @@ function renderPreviewForProject(projectPath) {
   const subtitle = config.sourceType === 'html' ? 'HTML preview' : 'Live preview';
   setPreviewMeta(url, subtitle);
   updatePreviewControls(state);
+  schedulePreviewCaptureRegionPublish();
 }
 
 async function persistPreviewState(projectPath) {
@@ -2059,6 +2112,7 @@ window.addEventListener('resize', () => {
     syncTerminalSize();
   }
   queueNativeTerminalPanelSync();
+  schedulePreviewCaptureRegionPublish();
 });
 
 window.addEventListener('pointerdown', (event) => {
@@ -2099,4 +2153,5 @@ window.addEventListener('pointerdown', (event) => {
   renderProjectsPanelVisibility();
   renderProjectsPanelPosition();
   queueNativeTerminalPanelSync();
+  schedulePreviewCaptureRegionPublish();
 })();

@@ -1,6 +1,17 @@
 {
   "entries": [
     {
+      "date": "2026-05-16",
+      "type": "Release 0.4.2",
+      "title": "Added screenshot-driven visual iteration for the native workspace",
+      "summary": "Pixelbox now publishes the live preview viewport bounds and includes a local capture workflow so agents can verify frontend changes against the actual native window.",
+      "points": [
+        "Added preview capture-region APIs so the renderer can report the active preview geometry to the local backend",
+        "Added a macOS window capture script and Pixelbox screenshot skill for real rendered UI review loops",
+        "Documented the capture workflow for saving window or preview screenshots with matching metadata"
+      ]
+    },
+    {
       "date": "2026-05-10",
       "type": "Release 0.4.1",
       "title": "Restored native Codex relaunch and project terminal persistence",

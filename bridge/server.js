@@ -35,6 +35,7 @@ let previewHtmlWatcher;
 let previewHtmlWatcherKey = '';
 let previewHtmlWatcherPath = '';
 let previewHtmlChangeDebounce;
+let previewCaptureRegion = null;
 
 const sseClients = new Set();
 
@@ -388,6 +389,23 @@ async function handleApi(req, res, pathname) {
   if (pathname === '/api/preview/clearHtmlWatch') {
     clearPreviewHtmlWatcher();
     return sendJson(res, 200, { ok: true });
+  }
+  if (pathname === '/api/preview/setCaptureRegion') {
+    previewCaptureRegion = body && typeof body === 'object'
+      ? {
+          x: Number(body.x) || 0,
+          y: Number(body.y) || 0,
+          width: Number(body.width) || 0,
+          height: Number(body.height) || 0,
+          scale: Number(body.scale) || 1,
+          visible: body.visible !== false,
+          updatedAt: Date.now(),
+        }
+      : null;
+    return sendJson(res, 200, { ok: true, region: previewCaptureRegion });
+  }
+  if (pathname === '/api/preview/getCaptureRegion') {
+    return sendJson(res, 200, previewCaptureRegion || { visible: false });
   }
   if (pathname === '/api/terminal/getStartupCommand') {
     return sendJson(res, 200, getStartupTerminalCommand(body.options || {}));
