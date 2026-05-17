@@ -749,8 +749,8 @@ body:not(.projects-panel-hidden) .projects-fab {
 
 body.vibrant-window #chat-panel {
   background:
-    linear-gradient(180deg, rgba(48, 108, 164, 0.72), rgba(30, 72, 116, 0.62) 96px, rgba(18, 31, 48, 0.46) 96px, rgba(18, 31, 48, 0.46)),
-    rgba(11, 18, 28, 0.24);
+    linear-gradient(180deg, var(--terminal-glass), var(--terminal-glass-strong)),
+    rgba(11, 18, 28, 0.16);
   box-shadow:
     0 30px 60px rgba(0, 0, 0, 0.38),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
