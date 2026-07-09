@@ -7,9 +7,8 @@ SRC_PNG="${ROOT_DIR}/assets/pixelbox-icon.png"
 ICONSET_DIR="${ROOT_DIR}/assets/pixelbox.iconset"
 ICNS_OUT="${ROOT_DIR}/assets/pixelbox.icns"
 
-if [[ -f "${SRC_SVG}" && ! -f "${SRC_PNG}" ]]; then
-  qlmanage -t -s 1024 -o "${ROOT_DIR}/assets" "${SRC_SVG}" >/dev/null
-  mv "${SRC_SVG}.png" "${SRC_PNG}"
+if [[ -f "${SRC_SVG}" && ( ! -f "${SRC_PNG}" || "${SRC_SVG}" -nt "${SRC_PNG}" || "${BASH_SOURCE[0]}" -nt "${SRC_PNG}" ) ]]; then
+  sips -s format png "${SRC_SVG}" --out "${SRC_PNG}" >/dev/null
 fi
 
 if [[ ! -f "${SRC_PNG}" ]]; then

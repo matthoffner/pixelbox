@@ -205,10 +205,19 @@ async function waitForTerminalOutput(collector, needle, timeoutMs = 240000) {
   throw new Error(`Timed out waiting for terminal output "${needle}". Tail:\n${tail}`);
 }
 
-async function typeTerminalCommand(page, command) {
+async function waitForTerminalDomText(page, needle, timeoutMs = 10000) {
+  await page.waitForFunction((text) => {
+    return document.getElementById('terminal')?.textContent?.includes(text);
+  }, needle, { timeout: timeoutMs });
+}
+
+async function typeTerminalCommand(page, command, visibleNeedle = command) {
   await page.locator('#terminal').click();
   await page.keyboard.type(command, { delay: 4 });
   await page.keyboard.press('Enter');
+  if (visibleNeedle) {
+    await waitForTerminalDomText(page, visibleNeedle);
+  }
 }
 
 async function runCodexEditThroughPixelboxTerminal(page, collector, step, marker, index) {
@@ -240,12 +249,14 @@ exit "$code"
   await postJson('/api/terminal/start', { cwd: '.', options: {} });
   await sleep(500);
   if (!collector.output().includes('__PIXELBOX_TERMINAL_READY__')) {
-    await typeTerminalCommand(page, 'printf "__PIXELBOX_TERMINAL_READY__\\n"');
+    await typeTerminalCommand(page, 'printf "__PIXELBOX_TERMINAL_READY__\\n"', 'PIXELBOX_TERMINAL_READY');
     await waitForTerminalOutput(collector, '__PIXELBOX_TERMINAL_READY__', 10000);
   }
-  await typeTerminalCommand(page, `bash ${shellEscape(scriptRelPath)}`);
+  await typeTerminalCommand(page, `bash ${shellEscape(scriptRelPath)}`, null);
   await waitForTerminalOutput(collector, `${marker}:START`, 10000);
+  await waitForTerminalDomText(page, `${marker}:START`);
   await waitForTerminalOutput(collector, `${marker}:0`);
+  await waitForTerminalDomText(page, `${marker}:0`);
 }
 
 async function applyPreviewEdit(page, collector, step, marker, index) {
@@ -327,7 +338,10 @@ async function main() {
     await page.click('#running-page-save');
     await waitForPreviewStep(page, 'BASELINE');
     await page.locator('#projects-minimize').click();
-    if (!useRealCodex) {
+    if (useRealCodex) {
+      await page.locator('#chat-dock-right').click();
+      await page.waitForFunction(() => document.body.classList.contains('terminal-dock-right'));
+    } else {
       await page.locator('#chat-minimize').click();
     }
     await page.waitForTimeout(600);

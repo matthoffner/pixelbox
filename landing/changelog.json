@@ -1,6 +1,17 @@
 {
   "entries": [
     {
+      "date": "2026-07-09",
+      "type": "Release 0.4.5",
+      "title": "Added faster preview starts and native workspace polish",
+      "summary": "Pixelbox now gives new projects a shorter path from empty preview to working app, while the native shell gets cleaner project hiding, more reliable window dragging, terminal scrolling, and a refreshed app icon.",
+      "points": [
+        "Added preview quick actions for starting npm dev servers, creating HTML or Node server starters, and opening the terminal from the empty preview",
+        "Moved hidden projects into a focused restore dialog and pruned hidden paths from project selection history",
+        "Improved native macOS dragging and Ghostty terminal scrolling, then refreshed the app icon with transparent generated PNG and ICNS assets"
+      ]
+    },
+    {
       "date": "2026-05-17",
       "type": "Release 0.4.4",
       "title": "Recorded real Codex terminal work beside the live preview",

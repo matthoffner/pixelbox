@@ -18,7 +18,7 @@
           <strong>Projects</strong>
           <div class="projects-actions">
             <button id="new-project" type="button">New Project</button>
-            <button id="hidden-projects-toggle" type="button" hidden>Hidden</button>
+            <button id="hidden-projects-toggle" type="button" aria-haspopup="dialog" hidden>Hidden</button>
             <button id="projects-minimize" class="icon-button panel-icon-button" type="button" aria-label="Hide menu">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 12h12" />
@@ -35,7 +35,6 @@
         </div>
         <div id="active-project">Active: workspace root</div>
         <div id="projects-list"></div>
-        <div id="hidden-projects-list" hidden></div>
         <section id="running-page-panel" aria-label="Running Page">
           <div class="running-page-header">
             <strong>Running Page</strong>
@@ -132,8 +131,18 @@
         </div>
         <div id="preview-viewport">
           <div id="preview-empty-state">
-            <strong>Nothing live yet</strong>
-            <p>Run your app in the terminal below. It will load here when ready.</p>
+            <div class="preview-empty-content">
+              <strong>Nothing live yet</strong>
+              <p>Start a dev server, create a static page, or open the terminal for a custom setup.</p>
+              <div class="preview-quick-actions" aria-label="Preview quick actions">
+                <button id="quick-start-server" type="button" disabled>Start npm dev</button>
+                <button id="quick-create-html" type="button" disabled>Create HTML starter</button>
+                <button id="quick-create-server" type="button" disabled>Create server starter</button>
+                <button id="quick-surprise" type="button" disabled>Surprise me</button>
+                <button id="quick-open-terminal" type="button" disabled>Open terminal</button>
+              </div>
+              <div id="preview-quick-status" role="status" aria-live="polite"></div>
+            </div>
           </div>
           <div id="preview-frame-host" aria-live="polite"></div>
           <div id="preview-native-host" hidden>
@@ -164,7 +173,7 @@
           </svg>
         </button>
       </div>
-      <button id="chat-toggle" class="icon-button rail-button" aria-label="Toggle terminal" title="Terminal">
+      <button id="chat-toggle" class="icon-button rail-button" aria-label="Toggle terminal" aria-pressed="false" title="Terminal">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M5 7l5 5-5 5" />
           <path d="M12.5 17H19" />
@@ -173,10 +182,30 @@
     </div>
 
     <button id="projects-toggle" class="icon-button rail-button projects-fab" aria-label="Toggle menu" title="Menu">
-      <img src="../assets/pixelbox-icon.svg" alt="" class="menu-logo" />
+      <span class="menu-logo" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+      </span>
     </button>
 
-    <section id="chat-panel" class="open" aria-label="Terminal panel">
+    <div id="hidden-projects-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="hidden-projects-title" hidden>
+      <section class="modal-panel hidden-projects-modal-panel">
+        <header class="modal-header">
+          <strong id="hidden-projects-title">Hidden Projects</strong>
+          <button id="hidden-projects-close" class="icon-button panel-icon-button" type="button" aria-label="Close hidden projects" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12" />
+              <path d="M18 6L6 18" />
+            </svg>
+          </button>
+        </header>
+        <div id="hidden-projects-list"></div>
+      </section>
+    </div>
+
+    <section id="chat-panel" aria-label="Terminal panel">
       <header id="chat-header">
         <span>Directory Terminal</span>
         <div class="chat-header-actions">
@@ -216,6 +245,7 @@
     </section>
 
     <script src="./zero-api.js"></script>
+    <script src="./quick-start-templates.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

@@ -10,6 +10,11 @@
 @class ZeroNativeAppKitHost;
 @class ZeroNativeGhosttyTerminalView;
 
+static const CGFloat ZeroNativeWindowDragHeight = 88.0;
+static const CGFloat ZeroNativeTitlebarSafeTop = 28.0;
+static const CGFloat ZeroNativeControlRailWidth = 280.0;
+static const CGFloat ZeroNativeControlRailHeight = 80.0;
+
 static NSRect constrainFrame(NSRect frame);
 static void ZeroNativeApplyTitlelessWindowChrome(NSWindow *window);
 static NSString *ZeroNativeAppKitBridgeScript(void);
@@ -29,8 +34,77 @@ static void ZeroNativeGhosttyConfirmReadClipboard(void *userdata, const char *va
 static void ZeroNativeGhosttyWriteClipboard(void *userdata, ghostty_clipboard_e clipboard, const ghostty_clipboard_content_s *contents, size_t count, bool confirm);
 static void ZeroNativeGhosttyCloseSurface(void *userdata, bool process_alive);
 static bool ZeroNativeDispatchGhosttyKeyEvent(ZeroNativeAppKitHost *host, NSEvent *event);
+static BOOL ZeroNativeDispatchGhosttyScrollEvent(ZeroNativeAppKitHost *host, NSEvent *event);
 static NSString *ZeroNativeGhosttyShellQuote(NSString *value);
 static NSString *ZeroNativeGhosttyStartupScriptForProject(NSString *projectPath, NSString *workingDirectory, NSString *startupCommand);
+static BOOL ZeroNativeShouldStartWindowDrag(NSWindow *window, NSEvent *event);
+static BOOL ZeroNativeWindowPointHitsStandardButton(NSWindow *window, NSPoint windowPoint);
+static BOOL ZeroNativeViewIsGhosttyTerminalView(NSView *view);
+static ghostty_input_scroll_mods_t ZeroNativeGhosttyScrollMods(NSEvent *event);
+
+@interface ZeroNativeWindow : NSWindow
+@end
+
+@implementation ZeroNativeWindow
+
+- (void)sendEvent:(NSEvent *)event {
+    if (ZeroNativeShouldStartWindowDrag(self, event)) {
+        [self performWindowDragWithEvent:event];
+        return;
+    }
+    [super sendEvent:event];
+}
+
+@end
+
+@interface ZeroNativeWindowDragWebView : WKWebView
+@end
+
+@implementation ZeroNativeWindowDragWebView
+
+- (void)mouseDown:(NSEvent *)event {
+    if (ZeroNativeShouldStartWindowDrag(self.window, event)) {
+        [self.window performWindowDragWithEvent:event];
+        return;
+    }
+    [super mouseDown:event];
+}
+
+@end
+
+static BOOL ZeroNativeShouldStartWindowDrag(NSWindow *window, NSEvent *event) {
+    if (!window || !window.movable || event.type != NSEventTypeLeftMouseDown) return NO;
+    if (event.clickCount != 1) return NO;
+    if (ZeroNativeWindowPointHitsStandardButton(window, event.locationInWindow)) return NO;
+
+    NSView *contentView = window.contentView;
+    if (!contentView) return NO;
+    NSPoint point = [contentView convertPoint:event.locationInWindow fromView:nil];
+    if (!NSPointInRect(point, contentView.bounds)) return NO;
+    NSView *hitView = [contentView hitTest:point];
+    if (ZeroNativeViewIsGhosttyTerminalView(hitView)) return NO;
+
+    CGFloat yFromTop = NSMaxY(contentView.bounds) - point.y;
+    if (yFromTop < 0 || yFromTop > ZeroNativeWindowDragHeight) return NO;
+
+    CGFloat controlRailMinX = MAX(0, NSWidth(contentView.bounds) - ZeroNativeControlRailWidth);
+    BOOL isInControlRailBand = point.x >= controlRailMinX &&
+        yFromTop >= ZeroNativeTitlebarSafeTop &&
+        yFromTop <= ZeroNativeTitlebarSafeTop + ZeroNativeControlRailHeight;
+    return !isInControlRailBand;
+}
+
+static BOOL ZeroNativeWindowPointHitsStandardButton(NSWindow *window, NSPoint windowPoint) {
+    NSWindowButton buttonKinds[] = { NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton };
+    for (NSUInteger i = 0; i < sizeof(buttonKinds) / sizeof(buttonKinds[0]); i++) {
+        NSButton *button = [window standardWindowButton:buttonKinds[i]];
+        if (!button || button.hidden || !button.superview) continue;
+        NSPoint point = [button.superview convertPoint:windowPoint fromView:nil];
+        NSRect hitFrame = NSInsetRect(button.frame, -8.0, -8.0);
+        if (NSPointInRect(point, hitFrame)) return YES;
+    }
+    return NO;
+}
 
 @interface ZeroNativeGhosttyTerminalView : NSView
 @property(nonatomic, assign) ZeroNativeAppKitHost *host;
@@ -53,6 +127,12 @@ static NSString *ZeroNativeGhosttyStartupScriptForProject(NSString *projectPath,
     }
 }
 
+- (void)scrollWheel:(NSEvent *)event {
+    if (!ZeroNativeDispatchGhosttyScrollEvent(self.host, event)) {
+        [super scrollWheel:event];
+    }
+}
+
 - (void)keyDown:(NSEvent *)event {
     if (!ZeroNativeDispatchGhosttyKeyEvent(self.host, event)) {
         [super keyDown:event];
@@ -60,6 +140,46 @@ static NSString *ZeroNativeGhosttyStartupScriptForProject(NSString *projectPath,
 }
 
 @end
+
+static BOOL ZeroNativeViewIsGhosttyTerminalView(NSView *view) {
+    for (NSView *current = view; current; current = current.superview) {
+        if ([current isKindOfClass:[ZeroNativeGhosttyTerminalView class]]) return YES;
+    }
+    return NO;
+}
+
+static ghostty_input_scroll_mods_t ZeroNativeGhosttyScrollMods(NSEvent *event) {
+    ghostty_input_scroll_mods_t mods = 0;
+    if (event.hasPreciseScrollingDeltas) {
+        mods |= 1;
+    }
+
+    ghostty_input_mouse_momentum_e momentum = GHOSTTY_MOUSE_MOMENTUM_NONE;
+    switch (event.momentumPhase) {
+        case NSEventPhaseBegan:
+            momentum = GHOSTTY_MOUSE_MOMENTUM_BEGAN;
+            break;
+        case NSEventPhaseStationary:
+            momentum = GHOSTTY_MOUSE_MOMENTUM_STATIONARY;
+            break;
+        case NSEventPhaseChanged:
+            momentum = GHOSTTY_MOUSE_MOMENTUM_CHANGED;
+            break;
+        case NSEventPhaseEnded:
+            momentum = GHOSTTY_MOUSE_MOMENTUM_ENDED;
+            break;
+        case NSEventPhaseCancelled:
+            momentum = GHOSTTY_MOUSE_MOMENTUM_CANCELLED;
+            break;
+        case NSEventPhaseMayBegin:
+            momentum = GHOSTTY_MOUSE_MOMENTUM_MAY_BEGIN;
+            break;
+        default:
+            break;
+    }
+    mods |= ((ghostty_input_scroll_mods_t)momentum) << 1;
+    return mods;
+}
 
 @interface ZeroNativeWindowDelegate : NSObject <NSWindowDelegate>
 @property(nonatomic, assign) ZeroNativeAppKitHost *host;
@@ -308,14 +428,14 @@ static NSString *ZeroNativeGhosttyStartupScriptForProject(NSString *projectPath,
     if (restoreFrame) {
         rect = constrainFrame(rect);
     }
-    NSWindow *window = [[NSWindow alloc] initWithContentRect:rect
-                                                   styleMask:(NSWindowStyleMaskTitled |
-                                                              NSWindowStyleMaskFullSizeContentView |
-                                                              NSWindowStyleMaskClosable |
-                                                              NSWindowStyleMaskResizable |
-                                                              NSWindowStyleMaskMiniaturizable)
-                                                     backing:NSBackingStoreBuffered
-                                                       defer:NO];
+    NSWindow *window = [[ZeroNativeWindow alloc] initWithContentRect:rect
+                                                           styleMask:(NSWindowStyleMaskTitled |
+                                                                      NSWindowStyleMaskFullSizeContentView |
+                                                                      NSWindowStyleMaskClosable |
+                                                                      NSWindowStyleMaskResizable |
+                                                                      NSWindowStyleMaskMiniaturizable)
+                                                             backing:NSBackingStoreBuffered
+                                                               defer:NO];
     [window setTitle:(title.length > 0 ? title : self.appName)];
     ZeroNativeApplyTitlelessWindowChrome(window);
     if (!restoreFrame) {
@@ -338,7 +458,7 @@ static NSString *ZeroNativeGhosttyStartupScriptForProject(NSString *projectPath,
     if ([configuration.preferences respondsToSelector:NSSelectorFromString(@"setDeveloperExtrasEnabled:")]) {
         [configuration.preferences setValue:@YES forKey:@"developerExtrasEnabled"];
     }
-    WKWebView *webView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, rect.size.width, rect.size.height) configuration:configuration];
+    WKWebView *webView = [[ZeroNativeWindowDragWebView alloc] initWithFrame:NSMakeRect(0, 0, rect.size.width, rect.size.height) configuration:configuration];
     if ([webView respondsToSelector:NSSelectorFromString(@"setInspectable:")]) {
         [webView setValue:@YES forKey:@"inspectable"];
     }
@@ -1199,6 +1319,20 @@ static bool ZeroNativeDispatchGhosttyKeyEvent(ZeroNativeAppKitHost *host, NSEven
     keyEvent.text = text.length > 0 ? text.UTF8String : NULL;
 
     return ghostty_surface_key(host.ghosttySurface, keyEvent);
+}
+
+static BOOL ZeroNativeDispatchGhosttyScrollEvent(ZeroNativeAppKitHost *host, NSEvent *event) {
+    if (!host || !host.ghosttySurface || !event) return NO;
+
+    CGFloat deltaX = event.scrollingDeltaX;
+    CGFloat deltaY = event.scrollingDeltaY;
+    if (event.hasPreciseScrollingDeltas) {
+        deltaX *= 2.0;
+        deltaY *= 2.0;
+    }
+
+    ghostty_surface_mouse_scroll(host.ghosttySurface, deltaX, deltaY, ZeroNativeGhosttyScrollMods(event));
+    return YES;
 }
 
 static void ZeroNativeGhosttyWakeup(void *userdata) {

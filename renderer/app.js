@@ -20,6 +20,8 @@ const newProjectCancelEl = document.getElementById('new-project-cancel');
 const projectsToggleEl = document.getElementById('projects-toggle');
 const projectsMinimizeEl = document.getElementById('projects-minimize');
 const hiddenProjectsToggleEl = document.getElementById('hidden-projects-toggle');
+const hiddenProjectsModalEl = document.getElementById('hidden-projects-modal');
+const hiddenProjectsCloseEl = document.getElementById('hidden-projects-close');
 const hiddenProjectsListEl = document.getElementById('hidden-projects-list');
 const headlineEl = document.getElementById('headline');
 const previewFrameHostEl = document.getElementById('preview-frame-host');
@@ -30,6 +32,12 @@ const previewReloadEl = document.getElementById('preview-reload');
 const previewSubtitleEl = document.getElementById('preview-subtitle');
 const previewUrlEl = document.getElementById('preview-url');
 const previewEmptyStateEl = document.getElementById('preview-empty-state');
+const quickStartServerEl = document.getElementById('quick-start-server');
+const quickCreateHtmlEl = document.getElementById('quick-create-html');
+const quickCreateServerEl = document.getElementById('quick-create-server');
+const quickSurpriseEl = document.getElementById('quick-surprise');
+const quickOpenTerminalEl = document.getElementById('quick-open-terminal');
+const previewQuickStatusEl = document.getElementById('preview-quick-status');
 const runningPageTypeEl = document.getElementById('running-page-type');
 const runningPageHtmlEl = document.getElementById('running-page-html');
 const runningPageCommandEl = document.getElementById('running-page-command');
@@ -72,7 +80,6 @@ let reloadTimer;
 let selectedProjectPath = '.';
 let startResult;
 let projectsPanelHidden = false;
-let hiddenProjectsExpanded = false;
 let openProjectActionsPath = null;
 const hiddenProjects = new Set();
 const projectPreviewState = new Map();
@@ -116,7 +123,6 @@ const MAX_PROJECT_TERMINAL_OUTPUT = 200000;
 const LAST_SELECTED_PROJECT_KEY = 'pixelbox.lastSelectedProject';
 const PROJECTS_PANEL_HIDDEN_KEY = 'pixelbox.projectsPanelHidden';
 const PROJECTS_PANEL_POSITION_KEY = 'pixelbox.projectsPanelPosition';
-const HIDDEN_PROJECTS_EXPANDED_KEY = 'pixelbox.hiddenProjectsExpanded';
 const AI_CLI_KEY = 'pixelbox.aiCli';
 const CODEX_DANGEROUS_BYPASS_KEY = 'pixelbox.codexDangerouslyBypassPermissions';
 const SUPPORTED_AI_CLIS = ['codex', 'claude', 'gemini', 'hermes', 'openclaw', 'custom'];
@@ -124,6 +130,13 @@ const terminalGridState = {
   cols: 120,
   rows: 30,
 };
+const quickStartTemplates = window.PixelboxQuickStartTemplates;
+const {
+  QUICK_SERVER_STARTER_PORT,
+  htmlStarterDocument,
+  serverStarterDocument,
+  starterPackageJson,
+} = quickStartTemplates;
 
 const previewFrameEl = document.createElement('iframe');
 previewFrameEl.id = 'preview-frame';
@@ -151,20 +164,6 @@ function persistHiddenProjects() {
   } catch {}
 }
 
-function loadHiddenProjectsExpanded() {
-  try {
-    return window.localStorage.getItem(HIDDEN_PROJECTS_EXPANDED_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function persistHiddenProjectsExpanded() {
-  try {
-    window.localStorage.setItem(HIDDEN_PROJECTS_EXPANDED_KEY, hiddenProjectsExpanded ? '1' : '0');
-  } catch {}
-}
-
 function loadLastSelectedProject() {
   try {
     const value = window.localStorage.getItem(LAST_SELECTED_PROJECT_KEY);
@@ -178,6 +177,14 @@ function persistLastSelectedProject(projectPath) {
   try {
     window.localStorage.setItem(LAST_SELECTED_PROJECT_KEY, projectPath);
   } catch {}
+}
+
+function isHiddenProjectPath(relPath) {
+  return relPath !== '.' && hiddenProjects.has(relPath);
+}
+
+function visibleProjectPath(relPath) {
+  return isHiddenProjectPath(relPath) ? '.' : relPath;
 }
 
 function loadProjectsPanelHidden() {
@@ -1164,8 +1171,7 @@ function projectButton(label, relPath, active, clickHandler) {
       hideBtn.addEventListener('click', (event) => {
         event.stopPropagation();
         openProjectActionsPath = null;
-        hiddenProjects.add(relPath);
-        persistHiddenProjects();
+        hideProjectPath(relPath);
         if (selectedProjectPath === relPath) {
           selectProject('.', { recordHistory: true }).catch(() => {});
         } else {
@@ -1191,21 +1197,20 @@ function projectButton(label, relPath, active, clickHandler) {
 }
 
 function renderHiddenProjects(projects) {
-  if (!hiddenProjectsToggleEl || !hiddenProjectsListEl) return;
+  if (!hiddenProjectsToggleEl) return;
   const hidden = projects.filter((project) => hiddenProjects.has(project.path));
   hiddenProjectsToggleEl.hidden = hidden.length === 0;
   hiddenProjectsToggleEl.textContent = `Hidden (${hidden.length})`;
-  hiddenProjectsToggleEl.setAttribute('aria-expanded', String(hiddenProjectsExpanded));
-  hiddenProjectsListEl.hidden = !hiddenProjectsExpanded || hidden.length === 0;
-  hiddenProjectsListEl.innerHTML = '';
-  if (!hiddenProjectsExpanded || hidden.length === 0) {
+  hiddenProjectsToggleEl.setAttribute('aria-expanded', String(Boolean(hiddenProjectsModalEl && !hiddenProjectsModalEl.hidden)));
+
+  if (!hiddenProjectsListEl) return;
+  if (hidden.length === 0) {
+    closeHiddenProjectsModal();
+    hiddenProjectsListEl.innerHTML = '';
     return;
   }
 
-  const header = document.createElement('div');
-  header.className = 'hidden-projects-header';
-  header.textContent = 'Hidden projects';
-  hiddenProjectsListEl.appendChild(header);
+  hiddenProjectsListEl.innerHTML = '';
 
   for (const project of hidden) {
     const row = document.createElement('div');
@@ -1229,6 +1234,20 @@ function renderHiddenProjects(projects) {
 
     hiddenProjectsListEl.appendChild(row);
   }
+}
+
+function openHiddenProjectsModal() {
+  if (!hiddenProjectsModalEl) return;
+  hiddenProjectsModalEl.hidden = false;
+  hiddenProjectsToggleEl?.setAttribute('aria-expanded', 'true');
+  renderProjects().catch(() => {});
+  requestAnimationFrame(() => hiddenProjectsCloseEl?.focus());
+}
+
+function closeHiddenProjectsModal() {
+  if (!hiddenProjectsModalEl) return;
+  hiddenProjectsModalEl.hidden = true;
+  hiddenProjectsToggleEl?.setAttribute('aria-expanded', 'false');
 }
 
 function renderRunningPageFields(sourceType) {
@@ -1299,6 +1318,145 @@ function collectRuntimeConfigFromForm() {
     serverUrl: runningPageUrlInputEl.value.trim(),
     autoStart: runningPageAutostartEl.checked,
   };
+}
+
+function setPreviewQuickStatus(message, tone = '') {
+  if (!previewQuickStatusEl) return;
+  previewQuickStatusEl.textContent = message || '';
+  previewQuickStatusEl.dataset.tone = tone;
+}
+
+function setPreviewQuickActionsDisabled(disabled) {
+  for (const button of [quickStartServerEl, quickCreateHtmlEl, quickCreateServerEl, quickSurpriseEl, quickOpenTerminalEl]) {
+    if (button) button.disabled = disabled;
+  }
+}
+
+function projectRelativePath(projectPath, relPath) {
+  return projectPath === '.' ? relPath : `${projectPath}/${relPath}`;
+}
+
+async function quickStartServerRuntime() {
+  const config = {
+    ...defaultRuntimeConfig(),
+    sourceType: 'server',
+    serverCommand: 'npm run dev',
+    autoStart: true,
+  };
+  setPreviewQuickStatus('Starting npm run dev...', 'pending');
+  await applyRuntimeConfig(selectedProjectPath, config, { forceStart: true });
+  await waitForSelectedPreviewUrlReachable(12000);
+  setPreviewQuickStatus('Dev server is running in the preview.', 'success');
+}
+
+async function quickCreateHtmlStarter() {
+  const htmlPath = 'generated/landing.html';
+  const targetPath = projectRelativePath(selectedProjectPath, htmlPath);
+  const existing = await window.api.readFile(targetPath);
+  if (existing.content.trim()) {
+    const ok = window.confirm(`${htmlPath} already exists. Replace it with the Pixelbox starter page?`);
+    if (!ok) return;
+  }
+
+  setPreviewQuickStatus('Creating HTML starter...', 'pending');
+  await window.api.writeFile(targetPath, htmlStarterDocument(selectedProjectPath));
+  await applyRuntimeConfig(selectedProjectPath, {
+    ...defaultRuntimeConfig(),
+    sourceType: 'html',
+    htmlPath,
+    autoStart: false,
+  });
+  setPreviewQuickStatus('HTML starter is live in the preview.', 'success');
+}
+
+async function writeAndRunServerStarter({ variant = 'server', label = 'server starter' } = {}) {
+  const packagePath = projectRelativePath(selectedProjectPath, 'package.json');
+  const serverPath = projectRelativePath(selectedProjectPath, 'server.js');
+  const [existingPackage, existingServer] = await Promise.all([
+    window.api.readFile(packagePath),
+    window.api.readFile(serverPath),
+  ]);
+  let nextPackage;
+  try {
+    nextPackage = starterPackageJson(existingPackage.content, selectedProjectPath);
+  } catch {
+    throw new Error('package.json exists but is not valid JSON');
+  }
+
+  if (existingServer.content.trim()) {
+    const ok = window.confirm(`server.js already exists. Replace it with the Pixelbox ${label}?`);
+    if (!ok) return;
+  }
+
+  const currentDevScript = existingPackage.content.trim()
+    ? JSON.parse(existingPackage.content).scripts?.dev
+    : '';
+  if (currentDevScript && currentDevScript !== 'node server.js') {
+    const ok = window.confirm(`package.json already has a dev script:\n${currentDevScript}\n\nReplace it with "node server.js"?`);
+    if (!ok) return;
+  }
+
+  setPreviewQuickStatus(`Creating ${label}...`, 'pending');
+  await Promise.all([
+    window.api.writeFile(packagePath, `${JSON.stringify(nextPackage, null, 2)}\n`),
+    window.api.writeFile(serverPath, serverStarterDocument(selectedProjectPath, variant)),
+  ]);
+  await applyRuntimeConfig(selectedProjectPath, {
+    ...defaultRuntimeConfig(),
+    sourceType: 'server',
+    serverCommand: 'npm run dev',
+    serverUrl: `http://127.0.0.1:${QUICK_SERVER_STARTER_PORT}`,
+    autoStart: true,
+  }, { forceStart: true });
+  await waitForSelectedPreviewUrlReachable(8000);
+}
+
+async function quickCreateServerStarter() {
+  await writeAndRunServerStarter({ variant: 'server', label: 'server starter' });
+  setPreviewQuickStatus('Server starter is running in the preview.', 'success');
+}
+
+async function quickSurpriseStarter() {
+  await writeAndRunServerStarter({ variant: 'surprise', label: 'launch board' });
+  setPreviewQuickStatus('Launch board is running in the preview.', 'success');
+}
+
+async function waitForSelectedPreviewUrlReachable(timeoutMs) {
+  const startedAt = Date.now();
+  let lastUrl = '';
+  while (Date.now() - startedAt < timeoutMs) {
+    const url = currentPreviewUrl(ensurePreviewState(selectedProjectPath));
+    if (url && url !== 'about:blank') {
+      lastUrl = url;
+      let timer = 0;
+      try {
+        const controller = new AbortController();
+        timer = setTimeout(() => controller.abort(), 900);
+        const response = await fetch(url, {
+          method: 'GET',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (response.ok) return url;
+      } catch {
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error(lastUrl ? `Preview did not respond at ${lastUrl}` : 'Preview URL was not detected');
+}
+
+async function runPreviewQuickAction(action) {
+  setPreviewQuickActionsDisabled(true);
+  try {
+    await action();
+  } catch (error) {
+    setPreviewQuickStatus(error && error.message ? error.message : String(error), 'error');
+  } finally {
+    setPreviewQuickActionsDisabled(false);
+  }
 }
 
 async function applyRuntimeConfig(projectPath, config, options = {}) {
@@ -1439,6 +1597,33 @@ function recordProjectSelection(relPath) {
   updateProjectNavigationControls();
 }
 
+function removeProjectFromSelectionHistory(relPath) {
+  let nextIndex = projectSelectionIndex;
+  for (let index = projectSelectionHistory.length - 1; index >= 0; index -= 1) {
+    if (projectSelectionHistory[index] !== relPath) continue;
+    projectSelectionHistory.splice(index, 1);
+    if (index < nextIndex) {
+      nextIndex -= 1;
+    } else if (index === nextIndex) {
+      nextIndex = Math.min(nextIndex, projectSelectionHistory.length - 1);
+    }
+  }
+
+  if (projectSelectionHistory.length === 0) {
+    projectSelectionHistory.push('.');
+    nextIndex = 0;
+  }
+
+  projectSelectionIndex = Math.min(Math.max(nextIndex, 0), projectSelectionHistory.length - 1);
+  updateProjectNavigationControls();
+}
+
+function hideProjectPath(relPath) {
+  hiddenProjects.add(relPath);
+  persistHiddenProjects();
+  removeProjectFromSelectionHistory(relPath);
+}
+
 function isEditableShortcutTarget(target = document.activeElement) {
   if (!(target instanceof HTMLElement)) {
     return false;
@@ -1527,7 +1712,10 @@ async function renderProjects() {
 
 async function selectProject(relPath, options = {}) {
   const { recordHistory = true } = options;
-  const projectPath = relPath;
+  const projectPath = visibleProjectPath(relPath);
+  if (projectPath !== relPath) {
+    removeProjectFromSelectionHistory(relPath);
+  }
   selectedProjectPath = projectPath;
   persistLastSelectedProject(projectPath);
   if (recordHistory) {
@@ -1708,9 +1896,17 @@ projectsMinimizeEl.addEventListener('click', () => {
 });
 if (hiddenProjectsToggleEl) {
   hiddenProjectsToggleEl.addEventListener('click', () => {
-    hiddenProjectsExpanded = !hiddenProjectsExpanded;
-    persistHiddenProjectsExpanded();
-    renderProjects().catch(() => {});
+    openHiddenProjectsModal();
+  });
+}
+if (hiddenProjectsCloseEl) {
+  hiddenProjectsCloseEl.addEventListener('click', closeHiddenProjectsModal);
+}
+if (hiddenProjectsModalEl) {
+  hiddenProjectsModalEl.addEventListener('click', (event) => {
+    if (event.target === hiddenProjectsModalEl) {
+      closeHiddenProjectsModal();
+    }
   });
 }
 if (agentMonitorRefreshEl) {
@@ -2031,6 +2227,12 @@ if (projectsHeaderEl && projectsPanelEl) {
 }
 
 window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && hiddenProjectsModalEl && !hiddenProjectsModalEl.hidden) {
+    event.preventDefault();
+    closeHiddenProjectsModal();
+    return;
+  }
+
   const isProjectSwitchShortcut =
     !event.repeat &&
     event.shiftKey &&
@@ -2061,6 +2263,29 @@ runningPageStartEl.addEventListener('click', () => {
 runningPageStopEl.addEventListener('click', () => {
   stopConfiguredRuntime().catch(() => {});
 });
+if (quickStartServerEl) {
+  quickStartServerEl.addEventListener('click', () => {
+    runPreviewQuickAction(quickStartServerRuntime);
+  });
+}
+if (quickCreateHtmlEl) {
+  quickCreateHtmlEl.addEventListener('click', () => {
+    runPreviewQuickAction(quickCreateHtmlStarter);
+  });
+}
+if (quickCreateServerEl) {
+  quickCreateServerEl.addEventListener('click', () => {
+    runPreviewQuickAction(quickCreateServerStarter);
+  });
+}
+if (quickSurpriseEl) {
+  quickSurpriseEl.addEventListener('click', () => {
+    runPreviewQuickAction(quickSurpriseStarter);
+  });
+}
+if (quickOpenTerminalEl) {
+  quickOpenTerminalEl.addEventListener('click', openPanel);
+}
 if (aiCliSelectEl) {
   aiCliSelectEl.addEventListener('change', () => {
     if (!SUPPORTED_AI_CLIS.includes(aiCliSelectEl.value)) return;
@@ -2174,7 +2399,6 @@ window.addEventListener('pointerdown', (event) => {
 
 (async () => {
   loadHiddenProjects();
-  hiddenProjectsExpanded = loadHiddenProjectsExpanded();
   projectsPanelHidden = loadProjectsPanelHidden();
   loadProjectsPanelPosition();
   loadTerminalLayoutState();
@@ -2192,12 +2416,12 @@ window.addEventListener('pointerdown', (event) => {
     refreshAgentMonitor().catch(() => {});
   }, 30000);
   await window.api.startRendererWatch();
-  openPanel();
-  selectedProjectPath = loadLastSelectedProject();
+  selectedProjectPath = visibleProjectPath(loadLastSelectedProject());
   projectSelectionHistory[0] = selectedProjectPath;
   projectSelectionIndex = 0;
   await renderProjects();
   await selectProject(selectedProjectPath, { recordHistory: false });
+  setPreviewQuickActionsDisabled(false);
   renderProjectsPanelVisibility();
   renderProjectsPanelPosition();
   queueNativeTerminalPanelSync();
