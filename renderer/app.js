@@ -961,6 +961,26 @@ function appendProofLedgerEntry(config, entry) {
   return [normalized, ...proofLedgerForConfig(config)].slice(0, MAX_PROOF_LEDGER_ENTRIES);
 }
 
+function appendProofLedgerEntryIfNew(config, entry, options = {}) {
+  const { dedupeRecentMs = 0 } = options;
+  const normalized = normalizeProofLedgerEntry(entry);
+  const ledger = proofLedgerForConfig(config);
+  if (!normalized) return ledger;
+  if (dedupeRecentMs > 0 && normalized.type === 'live-check') {
+    const normalizedTime = Date.parse(normalized.at);
+    const hasRecentDuplicate = ledger.some((existing) => {
+      if (existing.type !== 'live-check') return false;
+      if (existing.url !== normalized.url) return false;
+      if (existing.liveCheck?.status !== normalized.liveCheck?.status) return false;
+      const existingTime = Date.parse(existing.at);
+      if (!Number.isFinite(existingTime) || !Number.isFinite(normalizedTime)) return false;
+      return Math.abs(normalizedTime - existingTime) <= dedupeRecentMs;
+    });
+    if (hasRecentDuplicate) return ledger;
+  }
+  return [normalized, ...ledger].slice(0, MAX_PROOF_LEDGER_ENTRIES);
+}
+
 function proofLedgerTimeLabel(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Unknown time';
@@ -1450,6 +1470,7 @@ async function executeProofLiveCheck(projectPath, options = {}) {
     failureText = 'Live Check failed',
     manageButton = projectPath === selectedProjectPath,
     recordLedger = true,
+    dedupeLedgerMs = 0,
   } = options;
   const proof = proofForProject(projectPath);
   if (!proof?.url) return;
@@ -1468,7 +1489,9 @@ async function executeProofLiveCheck(projectPath, options = {}) {
       proofUpdatedAt: Date.now(),
     };
     if (recordLedger) {
-      config.proofLedger = appendProofLedgerEntry(config, liveCheckLedgerEntry(proof, result));
+      config.proofLedger = appendProofLedgerEntryIfNew(config, liveCheckLedgerEntry(proof, result), {
+        dedupeRecentMs: dedupeLedgerMs,
+      });
     }
     projectRuntimeConfig.set(projectPath, config);
     await persistPreviewState(projectPath);
@@ -1523,6 +1546,7 @@ async function runAutoLiveCheck(projectPath, runId) {
       statusText: 'Auto checking live URL...',
       failureText: 'Auto Live Check failed',
       manageButton: projectPath === selectedProjectPath,
+      dedupeLedgerMs: 60000,
     });
     autoLiveCheckCompleted.add(checkKey);
   } finally {
