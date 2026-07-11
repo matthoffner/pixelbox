@@ -395,7 +395,8 @@ input {
 }
 
 #hidden-projects-close,
-#proof-file-close {
+#proof-file-close,
+#proof-ledger-close {
   width: 30px;
   height: 30px;
   padding: 0;
@@ -409,13 +410,15 @@ input {
   grid-template-rows: auto minmax(220px, 1fr) auto;
 }
 
-.proof-file-heading {
+.proof-file-heading,
+.proof-ledger-heading {
   min-width: 0;
   display: grid;
   gap: 4px;
 }
 
-#proof-file-path {
+#proof-file-path,
+#proof-ledger-subtitle {
   max-width: min(560px, 62vw);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -424,14 +427,16 @@ input {
   font-size: 12px;
 }
 
-.proof-file-actions {
+.proof-file-actions,
+.proof-ledger-actions {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
 #proof-file-copy-path,
-#proof-file-copy-content {
+#proof-file-copy-content,
+#proof-ledger-copy {
   min-height: 30px;
   border: 1px solid color-mix(in srgb, var(--border), white 8%);
   border-radius: 999px;
@@ -445,9 +450,94 @@ input {
 
 #proof-file-copy-path:hover,
 #proof-file-copy-content:hover,
+#proof-ledger-copy:hover,
 #proof-file-copy-path:focus-visible,
-#proof-file-copy-content:focus-visible {
+#proof-file-copy-content:focus-visible,
+#proof-ledger-copy:focus-visible {
   background: color-mix(in srgb, var(--cta), transparent 56%);
+}
+
+.proof-ledger-modal-panel {
+  width: min(760px, 100%);
+  display: grid;
+  grid-template-rows: auto minmax(160px, 1fr) auto;
+}
+
+#proof-ledger-list {
+  max-height: min(620px, calc(100vh - 190px));
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.proof-ledger-item {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border), white 6%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface), white 4%);
+}
+
+.proof-ledger-item[data-tone='error'] {
+  border-color: color-mix(in srgb, #ffb3aa, var(--border) 34%);
+}
+
+.proof-ledger-meta,
+.proof-ledger-context,
+.proof-ledger-files {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.proof-ledger-meta {
+  justify-content: space-between;
+}
+
+.proof-ledger-meta span,
+.proof-ledger-detail,
+.proof-ledger-context span,
+.proof-ledger-empty,
+#proof-ledger-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.proof-ledger-detail {
+  color: color-mix(in srgb, var(--text), #9ce8cf 18%);
+}
+
+.proof-ledger-context code,
+.proof-ledger-files code {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+}
+
+.proof-ledger-context code {
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.proof-ledger-files code {
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--border), white 6%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: color-mix(in srgb, var(--text), #9ce8cf 16%);
+}
+
+#proof-ledger-status {
+  min-height: 18px;
+  padding: 0 16px 14px;
 }
 
 #proof-file-content {
@@ -618,10 +708,13 @@ input:focus-visible,
 #proof-check:focus-visible,
 #proof-brief:focus-visible,
 #proof-copy:focus-visible,
+.proof-ledger-toggle:focus-visible,
 .proof-file-chip:focus-visible,
 #proof-file-copy-path:focus-visible,
 #proof-file-copy-content:focus-visible,
-#proof-file-close:focus-visible {
+#proof-file-close:focus-visible,
+#proof-ledger-copy:focus-visible,
+#proof-ledger-close:focus-visible {
   outline: 2px solid color-mix(in srgb, white 55%, var(--cta));
   outline-offset: 2px;
 }
@@ -897,6 +990,24 @@ body.vibrant-window #preview-frame {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.proof-ledger-toggle {
+  justify-self: start;
+  min-height: 28px;
+  border: 1px solid color-mix(in srgb, #9ce8cf, var(--border) 62%);
+  border-radius: 999px;
+  background: color-mix(in srgb, #9ce8cf 12%, var(--surface));
+  color: color-mix(in srgb, var(--text), #9ce8cf 18%);
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.proof-ledger-toggle:hover,
+.proof-ledger-toggle:focus-visible {
+  background: color-mix(in srgb, #9ce8cf 22%, var(--surface));
 }
 
 #proof-check-status[data-tone='success'] {
@@ -1442,16 +1553,19 @@ body.vibrant-window #chat-header {
     grid-template-columns: 1fr;
   }
 
-  .proof-file-modal-panel .modal-header {
+  .proof-file-modal-panel .modal-header,
+  .proof-ledger-modal-panel .modal-header {
     align-items: stretch;
     flex-direction: column;
   }
 
-  #proof-file-path {
+  #proof-file-path,
+  #proof-ledger-subtitle {
     max-width: 100%;
   }
 
-  .proof-file-actions {
+  .proof-file-actions,
+  .proof-ledger-actions {
     justify-content: flex-end;
     flex-wrap: wrap;
   }

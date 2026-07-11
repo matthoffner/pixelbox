@@ -47,6 +47,7 @@ const proofUrlEl = document.getElementById('proof-url');
 const proofFilesEl = document.getElementById('proof-files');
 const proofCheckEl = document.getElementById('proof-check');
 const proofCheckStatusEl = document.getElementById('proof-check-status');
+const proofLedgerToggleEl = document.getElementById('proof-ledger-toggle');
 const proofBriefEl = document.getElementById('proof-brief');
 const proofCopyEl = document.getElementById('proof-copy');
 const proofCopyStatusEl = document.getElementById('proof-copy-status');
@@ -58,6 +59,11 @@ const proofFileContentEl = document.getElementById('proof-file-content');
 const proofFileStatusEl = document.getElementById('proof-file-status');
 const proofFileCopyPathEl = document.getElementById('proof-file-copy-path');
 const proofFileCopyContentEl = document.getElementById('proof-file-copy-content');
+const proofLedgerModalEl = document.getElementById('proof-ledger-modal');
+const proofLedgerCloseEl = document.getElementById('proof-ledger-close');
+const proofLedgerCopyEl = document.getElementById('proof-ledger-copy');
+const proofLedgerListEl = document.getElementById('proof-ledger-list');
+const proofLedgerStatusEl = document.getElementById('proof-ledger-status');
 const runningPageTypeEl = document.getElementById('running-page-type');
 const runningPageHtmlEl = document.getElementById('running-page-html');
 const runningPageCommandEl = document.getElementById('running-page-command');
@@ -151,6 +157,7 @@ const terminalGridState = {
   cols: 120,
   rows: 30,
 };
+const MAX_PROOF_LEDGER_ENTRIES = 12;
 const quickStartTemplates = window.PixelboxQuickStartTemplates;
 const {
   QUICK_SERVER_STARTER_PORT,
@@ -833,6 +840,129 @@ function proofFilesForProject(projectPath, config) {
   return uniqueList(files);
 }
 
+function normalizeProofLedgerEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const type = ['live-check', 'ship-brief'].includes(entry.type) ? entry.type : 'proof';
+  const at = typeof entry.at === 'string' && entry.at.trim()
+    ? entry.at.trim()
+    : new Date().toISOString();
+  const files = Array.isArray(entry.files)
+    ? uniqueList(entry.files.map((file) => String(file || '').trim()).filter(Boolean)).slice(0, 8)
+    : [];
+  const liveCheck = entry.liveCheck && typeof entry.liveCheck === 'object'
+    ? {
+        ok: typeof entry.liveCheck.ok === 'boolean' ? entry.liveCheck.ok : null,
+        status: entry.liveCheck.status,
+        statusText: String(entry.liveCheck.statusText || ''),
+        label: String(entry.liveCheck.label || liveCheckLabel(entry.liveCheck) || '').slice(0, 180),
+        checkedAt: String(entry.liveCheck.checkedAt || ''),
+      }
+    : null;
+  return {
+    type,
+    at,
+    label: String(entry.label || '').slice(0, 180),
+    status: String(entry.status || '').slice(0, 140),
+    command: String(entry.command || '').slice(0, 180),
+    url: String(entry.url || '').slice(0, 260),
+    files,
+    liveCheck,
+  };
+}
+
+function proofLedgerForConfig(config) {
+  const entries = Array.isArray(config.proofLedger) ? config.proofLedger : [];
+  return entries
+    .map(normalizeProofLedgerEntry)
+    .filter(Boolean)
+    .slice(0, MAX_PROOF_LEDGER_ENTRIES);
+}
+
+function appendProofLedgerEntry(config, entry) {
+  const normalized = normalizeProofLedgerEntry(entry);
+  if (!normalized) return proofLedgerForConfig(config);
+  return [normalized, ...proofLedgerForConfig(config)].slice(0, MAX_PROOF_LEDGER_ENTRIES);
+}
+
+function proofLedgerTimeLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown time';
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function proofLedgerKindLabel(entry) {
+  if (entry.type === 'live-check') return entry.liveCheck?.ok === false ? 'Live Check failed' : 'Live Check';
+  if (entry.type === 'ship-brief') return 'Ship Brief';
+  return 'Proof';
+}
+
+function proofLedgerDetail(entry) {
+  if (entry.type === 'live-check') {
+    return entry.liveCheck?.label || entry.label || entry.status || 'Preview probed';
+  }
+  if (entry.type === 'ship-brief') {
+    return entry.liveCheck?.label
+      ? `Brief copied with ${entry.liveCheck.label}`
+      : 'Brief copied';
+  }
+  return entry.label || entry.status || '';
+}
+
+function proofLedgerEntryLine(entry) {
+  const parts = [
+    proofLedgerTimeLabel(entry.at),
+    proofLedgerKindLabel(entry),
+    proofLedgerDetail(entry),
+    entry.url ? previewDisplayUrl(entry.url) : '',
+  ].filter(Boolean);
+  return parts.join(' - ');
+}
+
+function proofLedgerText(entries) {
+  const ledger = Array.isArray(entries) ? entries : [];
+  return [
+    'Proof Ledger',
+    ...(ledger.length > 0 ? ledger.map((entry) => `- ${proofLedgerEntryLine(entry)}`) : ['- n/a']),
+  ].join('\n');
+}
+
+function liveCheckLedgerEntry(proof, result) {
+  return {
+    type: 'live-check',
+    at: result.checkedAt || new Date().toISOString(),
+    status: proof.status,
+    command: proof.command,
+    url: result.url || proof.url || '',
+    files: proof.files,
+    liveCheck: {
+      ...result,
+      label: liveCheckLabel(result),
+    },
+  };
+}
+
+function shipBriefLedgerEntry(proof) {
+  return {
+    type: 'ship-brief',
+    at: new Date().toISOString(),
+    status: proof.status,
+    command: proof.command,
+    url: proof.url || '',
+    files: proof.files,
+    liveCheck: proof.liveCheck
+      ? {
+          ...proof.liveCheck,
+          label: liveCheckLabel(proof.liveCheck),
+        }
+      : null,
+  };
+}
+
 function proofForProject(projectPath) {
   const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
   const status = projectRuntimeStatus.get(projectPath) || { running: false };
@@ -865,6 +995,7 @@ function proofForProject(projectPath) {
     files: proofFilesForProject(projectPath, config),
     updated: proofUpdatedLabel(config.proofUpdatedAt || config.updatedAt),
     liveCheck: config.proofLiveCheck || null,
+    ledger: proofLedgerForConfig(config),
   };
 }
 
@@ -879,6 +1010,10 @@ function proofText(proof) {
   ];
   if (proof.liveCheck) {
     lines.push(`Live Check: ${proof.liveCheckLabel || liveCheckLabel(proof.liveCheck)}`);
+  }
+  if (proof.ledger?.length) {
+    lines.push('Ledger:');
+    lines.push(...proof.ledger.slice(0, 5).map((entry) => `- ${proofLedgerEntryLine(entry)}`));
   }
   return lines.join('\n');
 }
@@ -993,6 +1128,14 @@ async function copyShipBriefToClipboard() {
   const nextHandoff = updateHandoffContent(content, proof);
   await window.api.writeFile(handoffPath, nextHandoff);
   await copyTextToClipboard(shipBriefText(proof, nextHandoff));
+  const currentConfig = projectRuntimeConfig.get(selectedProjectPath) || defaultRuntimeConfig();
+  projectRuntimeConfig.set(selectedProjectPath, {
+    ...currentConfig,
+    proofLedger: appendProofLedgerEntry(currentConfig, shipBriefLedgerEntry(proof)),
+    proofUpdatedAt: Date.now(),
+  });
+  await persistPreviewState(selectedProjectPath);
+  renderProofForProject(selectedProjectPath);
   if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Brief copied + handoff updated';
 }
 
@@ -1012,6 +1155,7 @@ async function runProofLiveCheck() {
       proofLiveCheck: result,
       proofUpdatedAt: Date.now(),
     };
+    config.proofLedger = appendProofLedgerEntry(config, liveCheckLedgerEntry(proof, result));
     projectRuntimeConfig.set(selectedProjectPath, config);
     await persistPreviewState(selectedProjectPath);
     renderProofForProject(selectedProjectPath);
@@ -1070,12 +1214,103 @@ async function copyActiveProofFileContent() {
   if (proofFileStatusEl) proofFileStatusEl.textContent = 'File copied';
 }
 
+function closeProofLedgerModal() {
+  if (!proofLedgerModalEl) return;
+  proofLedgerModalEl.hidden = true;
+  if (proofLedgerStatusEl) proofLedgerStatusEl.textContent = '';
+  window.__pwProofLedgerModal = { open: false, count: window.__pwProofLedger?.length || 0 };
+}
+
+function renderProofLedgerModal(proof) {
+  if (!proofLedgerListEl) return;
+  const ledger = proof?.ledger || [];
+  proofLedgerListEl.innerHTML = '';
+  window.__pwProofLedgerModal = { open: !proofLedgerModalEl?.hidden, count: ledger.length };
+  if (proofLedgerCopyEl) proofLedgerCopyEl.disabled = ledger.length === 0;
+  if (!ledger.length) {
+    const empty = document.createElement('div');
+    empty.className = 'proof-ledger-empty';
+    empty.textContent = 'No proof events yet.';
+    proofLedgerListEl.appendChild(empty);
+    return;
+  }
+
+  for (const entry of ledger) {
+    const item = document.createElement('article');
+    item.className = `proof-ledger-item proof-ledger-item-${entry.type}`;
+    if (entry.liveCheck?.ok === false) item.dataset.tone = 'error';
+
+    const meta = document.createElement('div');
+    meta.className = 'proof-ledger-meta';
+
+    const kind = document.createElement('strong');
+    kind.textContent = proofLedgerKindLabel(entry);
+    meta.appendChild(kind);
+
+    const time = document.createElement('span');
+    time.textContent = proofLedgerTimeLabel(entry.at);
+    meta.appendChild(time);
+    item.appendChild(meta);
+
+    const detail = document.createElement('div');
+    detail.className = 'proof-ledger-detail';
+    detail.textContent = proofLedgerDetail(entry);
+    item.appendChild(detail);
+
+    if (entry.url || entry.command) {
+      const context = document.createElement('div');
+      context.className = 'proof-ledger-context';
+      if (entry.command) {
+        const command = document.createElement('code');
+        command.textContent = entry.command;
+        context.appendChild(command);
+      }
+      if (entry.url) {
+        const url = document.createElement('span');
+        url.textContent = previewDisplayUrl(entry.url);
+        context.appendChild(url);
+      }
+      item.appendChild(context);
+    }
+
+    if (entry.files.length > 0) {
+      const files = document.createElement('div');
+      files.className = 'proof-ledger-files';
+      for (const file of entry.files) {
+        const chip = document.createElement('code');
+        chip.textContent = file;
+        files.appendChild(chip);
+      }
+      item.appendChild(files);
+    }
+
+    proofLedgerListEl.appendChild(item);
+  }
+}
+
+function openProofLedgerModal() {
+  if (!proofLedgerModalEl) return;
+  const proof = proofForProject(selectedProjectPath);
+  proofLedgerModalEl.hidden = false;
+  if (proofLedgerStatusEl) proofLedgerStatusEl.textContent = '';
+  renderProofLedgerModal(proof);
+}
+
+async function copyProofLedgerToClipboard() {
+  const proof = proofForProject(selectedProjectPath);
+  if (!proof?.ledger?.length) return;
+  await copyTextToClipboard(proofLedgerText(proof.ledger));
+  if (proofLedgerStatusEl) proofLedgerStatusEl.textContent = 'Ledger copied';
+}
+
 function renderProofForProject(projectPath) {
   if (!proofDockEl) return;
   const proof = proofForProject(projectPath);
   window.__pwProofSnapshot = proof;
+  window.__pwProofLedger = proof?.ledger || [];
   if (!proof) {
     proofDockEl.hidden = true;
+    if (proofLedgerToggleEl) proofLedgerToggleEl.hidden = true;
     return;
   }
 
@@ -1108,6 +1343,15 @@ function renderProofForProject(projectPath) {
       proofCheckStatusEl.textContent = '';
       proofCheckStatusEl.dataset.tone = '';
     }
+  }
+  if (proofLedgerToggleEl) {
+    const count = proof.ledger.length;
+    proofLedgerToggleEl.hidden = count === 0;
+    proofLedgerToggleEl.disabled = count === 0;
+    proofLedgerToggleEl.textContent = `Ledger (${count})`;
+  }
+  if (proofLedgerModalEl && !proofLedgerModalEl.hidden) {
+    renderProofLedgerModal(proof);
   }
   if (proofFilesEl) {
     proofFilesEl.innerHTML = '';
@@ -2321,6 +2565,26 @@ if (proofFileCopyContentEl) {
     });
   });
 }
+if (proofLedgerToggleEl) {
+  proofLedgerToggleEl.addEventListener('click', openProofLedgerModal);
+}
+if (proofLedgerCloseEl) {
+  proofLedgerCloseEl.addEventListener('click', closeProofLedgerModal);
+}
+if (proofLedgerModalEl) {
+  proofLedgerModalEl.addEventListener('click', (event) => {
+    if (event.target === proofLedgerModalEl) {
+      closeProofLedgerModal();
+    }
+  });
+}
+if (proofLedgerCopyEl) {
+  proofLedgerCopyEl.addEventListener('click', () => {
+    copyProofLedgerToClipboard().catch(() => {
+      if (proofLedgerStatusEl) proofLedgerStatusEl.textContent = 'Copy failed';
+    });
+  });
+}
 if (agentMonitorRefreshEl) {
   agentMonitorRefreshEl.addEventListener('click', () => {
     refreshAgentMonitor().catch(() => {});
@@ -2642,6 +2906,12 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && proofFileModalEl && !proofFileModalEl.hidden) {
     event.preventDefault();
     closeProofFileModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && proofLedgerModalEl && !proofLedgerModalEl.hidden) {
+    event.preventDefault();
+    closeProofLedgerModal();
     return;
   }
 
