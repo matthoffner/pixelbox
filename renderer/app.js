@@ -1060,6 +1060,13 @@ function stoppedServerLabel(status, fallback = 'Server stopped') {
   return fallback;
 }
 
+function runtimeOutputTail(projectPath, maxLength = 1200) {
+  const output = runtimeOutputForProject(projectPath).trim();
+  if (!output) return '';
+  if (output.length <= maxLength) return output;
+  return `...${output.slice(-maxLength)}`;
+}
+
 function proofForProject(projectPath) {
   const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
   const status = projectRuntimeStatus.get(projectPath) || { running: false };
@@ -1093,8 +1100,13 @@ function proofForProject(projectPath) {
     updated: proofUpdatedLabel(config.proofUpdatedAt || config.updatedAt),
     liveCheck: config.proofLiveCheck || null,
     snapshot: config.proofSnapshot || null,
+    runtimeOutput: config.sourceType === 'server' ? runtimeOutputTail(projectPath) : '',
     ledger: proofLedgerForConfig(config),
   };
+}
+
+function fencedProofText(value) {
+  return String(value || '').replace(/```/g, '` ` `');
 }
 
 function proofText(proof) {
@@ -1111,6 +1123,12 @@ function proofText(proof) {
   }
   if (proof.snapshot?.path) {
     lines.push(`Snapshot: ${snapshotLabel(proof.snapshot)}`);
+  }
+  if (proof.runtimeOutput) {
+    lines.push('Runtime Output (tail):');
+    lines.push('```text');
+    lines.push(fencedProofText(proof.runtimeOutput));
+    lines.push('```');
   }
   if (proof.ledger?.length) {
     lines.push('Ledger:');
@@ -1190,6 +1208,9 @@ function handoffLatestBlock(proof) {
   if (proof.snapshot?.path) {
     lines.push(`- snapshot: ${snapshotLabel(proof.snapshot)}`);
   }
+  if (proof.runtimeOutput) {
+    lines.push(`- runtime output: ${singleLine(proof.runtimeOutput, 260)}`);
+  }
   lines.push('- next: continue from the copied Ship Brief and verify the next product improvement in Pixelbox');
   return lines.join('\n');
 }
@@ -1207,6 +1228,9 @@ function handoffHistoryEntry(proof) {
   }
   if (proof.snapshot?.path) {
     lines.push(`- snapshot: ${snapshotLabel(proof.snapshot)}`);
+  }
+  if (proof.runtimeOutput) {
+    lines.push(`- runtime output: ${singleLine(proof.runtimeOutput, 260)}`);
   }
   return lines.join('\n');
 }
