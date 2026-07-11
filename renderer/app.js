@@ -1041,6 +1041,16 @@ function snapshotLedgerEntry(proof, snapshot) {
   };
 }
 
+function stoppedServerLabel(status, fallback = 'Server stopped') {
+  if (Number.isInteger(status?.exitCode)) {
+    return `Server stopped (exit ${status.exitCode})`;
+  }
+  if (typeof status?.signal === 'string' && status.signal) {
+    return `Server stopped (${status.signal})`;
+  }
+  return fallback;
+}
+
 function proofForProject(projectPath) {
   const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
   const status = projectRuntimeStatus.get(projectPath) || { running: false };
@@ -1058,7 +1068,7 @@ function proofForProject(projectPath) {
     : status.running
       ? 'Server live'
       : config.sourceType === 'server'
-        ? 'Server configured'
+        ? stoppedServerLabel(status, 'Server configured')
         : 'Preview configured';
   const command = config.sourceType === 'html'
     ? 'Static HTML preview'
@@ -2158,7 +2168,7 @@ function renderRuntimeStatus(projectPath) {
     runningPageStatusEl.textContent = 'Server live';
     return;
   }
-  runningPageStatusEl.textContent = 'Server stopped';
+  runningPageStatusEl.textContent = stoppedServerLabel(status);
 }
 
 function renderRuntimeConfig(projectPath) {
@@ -2703,11 +2713,13 @@ window.api.onTerminalData(({ key, data }) => {
   }
 });
 
-window.api.onPreviewStatus(({ key, running, url, configuredUrl, sourceType }) => {
+window.api.onPreviewStatus(({ key, running, url, configuredUrl, sourceType, exitCode, signal }) => {
   projectRuntimeStatus.set(key, {
     running,
     sourceType,
     url: url || configuredUrl || '',
+    exitCode: Number.isInteger(exitCode) ? exitCode : null,
+    signal: typeof signal === 'string' ? signal : '',
   });
 
   if (url) {
