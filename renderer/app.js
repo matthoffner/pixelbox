@@ -49,6 +49,7 @@ const proofFilesEl = document.getElementById('proof-files');
 const proofCheckEl = document.getElementById('proof-check');
 const proofOutputEl = document.getElementById('proof-output');
 const proofCheckStatusEl = document.getElementById('proof-check-status');
+const proofVerifyEl = document.getElementById('proof-verify');
 const proofSnapshotEl = document.getElementById('proof-snapshot');
 const proofSnapshotOpenEl = document.getElementById('proof-snapshot-open');
 const proofCompareEl = document.getElementById('proof-compare');
@@ -1333,7 +1334,7 @@ async function executeProofLiveCheck(projectPath, options = {}) {
       retryDelayMs: 300,
     });
     const config = {
-      ...(projectRuntimeConfig.get(selectedProjectPath) || defaultRuntimeConfig()),
+      ...(projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig()),
       proofLiveCheck: result,
       proofUpdatedAt: Date.now(),
     };
@@ -1406,11 +1407,16 @@ function proofSnapshotCaptureSize() {
   };
 }
 
-async function runProofSnapshotCapture() {
+async function runProofSnapshotCapture(options = {}) {
+  const {
+    statusText = 'Capturing visual snapshot...',
+    openModal = true,
+    manageButton = true,
+  } = options;
   const proof = proofForProject(selectedProjectPath);
   if (!proof?.url) return;
-  if (proofSnapshotEl) proofSnapshotEl.disabled = true;
-  if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Capturing visual snapshot...';
+  if (manageButton && proofSnapshotEl) proofSnapshotEl.disabled = true;
+  if (proofCopyStatusEl) proofCopyStatusEl.textContent = statusText;
   try {
     const result = await window.api.capturePreviewSnapshot(selectedProjectPath, proof.url, {
       ...proofSnapshotCaptureSize(),
@@ -1428,11 +1434,47 @@ async function runProofSnapshotCapture() {
     await persistPreviewState(selectedProjectPath);
     renderProofForProject(selectedProjectPath);
     if (proofCopyStatusEl) proofCopyStatusEl.textContent = `Snapshot saved: ${result.path}`;
-    openProofSnapshotModal(result);
+    if (openModal) openProofSnapshotModal(result);
+    return result;
   } catch (error) {
     const message = error && error.message ? error.message : 'Snapshot failed';
     if (proofCopyStatusEl) proofCopyStatusEl.textContent = message;
+    return null;
   } finally {
+    if (manageButton && proofSnapshotEl) proofSnapshotEl.disabled = false;
+  }
+}
+
+async function runProofVerify() {
+  const proof = proofForProject(selectedProjectPath);
+  if (!proof?.url) return;
+  if (proofVerifyEl) proofVerifyEl.disabled = true;
+  if (proofCheckEl) proofCheckEl.disabled = true;
+  if (proofSnapshotEl) proofSnapshotEl.disabled = true;
+  if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Verifying live preview...';
+  try {
+    const liveCheck = await executeProofLiveCheck(selectedProjectPath, {
+      statusText: 'Verifying live URL...',
+      failureText: 'Verify failed',
+      manageButton: false,
+    });
+    if (!liveCheck?.ok) {
+      if (proofCopyStatusEl) {
+        proofCopyStatusEl.textContent = liveCheck ? `Verify failed: ${liveCheckLabel(liveCheck)}` : 'Verify failed';
+      }
+      return;
+    }
+    const snapshot = await runProofSnapshotCapture({
+      statusText: 'Capturing verified snapshot...',
+      openModal: true,
+      manageButton: false,
+    });
+    if (snapshot?.path && proofCopyStatusEl) {
+      proofCopyStatusEl.textContent = `Verified with snapshot: ${snapshot.path}`;
+    }
+  } finally {
+    if (proofVerifyEl) proofVerifyEl.disabled = false;
+    if (proofCheckEl) proofCheckEl.disabled = false;
     if (proofSnapshotEl) proofSnapshotEl.disabled = false;
   }
 }
@@ -1721,6 +1763,7 @@ function renderProofForProject(projectPath) {
     if (proofOutputEl) proofOutputEl.hidden = true;
     if (proofLedgerToggleEl) proofLedgerToggleEl.hidden = true;
     if (proofSnapshotOpenEl) proofSnapshotOpenEl.hidden = true;
+    if (proofVerifyEl) proofVerifyEl.disabled = true;
     if (proofCompareEl) proofCompareEl.hidden = true;
     return;
   }
@@ -1746,6 +1789,9 @@ function renderProofForProject(projectPath) {
   }
   if (proofCheckEl) {
     proofCheckEl.disabled = !proof.url;
+  }
+  if (proofVerifyEl) {
+    proofVerifyEl.disabled = !proof.url;
   }
   if (proofOutputEl) {
     const hasOutput = runtimeOutputForProject(projectPath).trim().length > 0;
@@ -3058,6 +3104,13 @@ if (proofOutputCopyEl) {
   proofOutputCopyEl.addEventListener('click', () => {
     copyProofOutputToClipboard().catch(() => {
       if (proofOutputStatusEl) proofOutputStatusEl.textContent = 'Copy failed';
+    });
+  });
+}
+if (proofVerifyEl) {
+  proofVerifyEl.addEventListener('click', () => {
+    runProofVerify().catch(() => {
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Verify failed';
     });
   });
 }

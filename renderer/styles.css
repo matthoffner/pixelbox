@@ -1165,6 +1165,11 @@ body.vibrant-window #preview-frame {
   cursor: pointer;
 }
 
+.proof-verify-button {
+  background: color-mix(in srgb, #9ce8cf 24%, var(--surface));
+  color: var(--text);
+}
+
 .proof-snapshot-chip {
   max-width: 100%;
   text-align: left;
@@ -1180,6 +1185,16 @@ body.vibrant-window #preview-frame {
 .proof-snapshot-chip:hover,
 .proof-snapshot-chip:focus-visible {
   background: color-mix(in srgb, #9ce8cf 22%, var(--surface));
+}
+
+.proof-verify-button:hover,
+.proof-verify-button:focus-visible {
+  background: color-mix(in srgb, #9ce8cf 34%, var(--surface));
+}
+
+.proof-evidence-button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
 }
 
 #proof-check-status[data-tone='success'] {
