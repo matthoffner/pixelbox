@@ -1801,8 +1801,19 @@ function renderProofLedgerModal(proof) {
       const files = document.createElement('div');
       files.className = 'proof-ledger-files';
       for (const file of entry.files) {
-        const chip = document.createElement('code');
-        chip.textContent = file;
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'proof-ledger-file-chip';
+        chip.title = `Open ${file}`;
+        chip.addEventListener('click', () => {
+          closeProofLedgerModal();
+          openProofFileModal(file).catch(() => {
+            if (proofFileStatusEl) proofFileStatusEl.textContent = 'Load failed';
+          });
+        });
+        const code = document.createElement('code');
+        code.textContent = file;
+        chip.appendChild(code);
         files.appendChild(chip);
       }
       item.appendChild(files);

@@ -554,7 +554,7 @@ input {
 }
 
 .proof-ledger-context code,
-.proof-ledger-files code {
+.proof-ledger-file-chip code {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -569,12 +569,20 @@ input {
   background: rgba(255, 255, 255, 0.055);
 }
 
-.proof-ledger-files code {
+.proof-ledger-file-chip {
+  max-width: 100%;
   padding: 4px 7px;
   border: 1px solid color-mix(in srgb, var(--border), white 6%);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.04);
   color: color-mix(in srgb, var(--text), #9ce8cf 16%);
+  cursor: pointer;
+}
+
+.proof-ledger-file-chip:hover,
+.proof-ledger-file-chip:focus-visible {
+  border-color: color-mix(in srgb, #9ce8cf, white 12%);
+  background: color-mix(in srgb, #9ce8cf 14%, var(--surface));
 }
 
 #proof-ledger-status {
