@@ -39,6 +39,7 @@ const quickSurpriseEl = document.getElementById('quick-surprise');
 const quickOpenTerminalEl = document.getElementById('quick-open-terminal');
 const previewQuickStatusEl = document.getElementById('preview-quick-status');
 const proofDockEl = document.getElementById('proof-dock');
+const proofStatusDotEl = document.querySelector('.proof-status-dot');
 const proofTitleEl = document.getElementById('proof-title');
 const proofStatusEl = document.getElementById('proof-status');
 const proofProjectEl = document.getElementById('proof-project');
@@ -1064,6 +1065,15 @@ function stoppedServerLabel(status, fallback = 'Server stopped') {
   return fallback;
 }
 
+function proofTone(proof) {
+  if (!proof) return 'idle';
+  if (proof.liveCheck?.ok === false) return 'error';
+  if (/stopped|exit|SIG/i.test(proof.status || '')) return 'error';
+  if (/configured|missing/i.test(proof.status || '')) return 'waiting';
+  if (/live|HTML:/i.test(proof.status || '')) return 'success';
+  return 'idle';
+}
+
 function runtimeOutputTail(projectPath, maxLength = 1200) {
   const output = runtimeOutputForProject(projectPath).trim();
   if (!output) return '';
@@ -1707,6 +1717,7 @@ function renderProofForProject(projectPath) {
   window.__pwProofLedger = proof?.ledger || [];
   if (!proof) {
     proofDockEl.hidden = true;
+    if (proofStatusDotEl) proofStatusDotEl.dataset.tone = 'idle';
     if (proofOutputEl) proofOutputEl.hidden = true;
     if (proofLedgerToggleEl) proofLedgerToggleEl.hidden = true;
     if (proofSnapshotOpenEl) proofSnapshotOpenEl.hidden = true;
@@ -1715,6 +1726,7 @@ function renderProofForProject(projectPath) {
   }
 
   proofDockEl.hidden = false;
+  if (proofStatusDotEl) proofStatusDotEl.dataset.tone = proofTone(proof);
   if (proofTitleEl) proofTitleEl.textContent = proof.title;
   if (proofStatusEl) {
     proofStatusEl.textContent = proof.updated ? `${proof.status} · ${proof.updated}` : proof.status;

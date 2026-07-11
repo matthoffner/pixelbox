@@ -14,6 +14,7 @@
 - Added automatic Live Checks after managed server previews start so proof receipts gain HTTP/title evidence without a manual click.
 - Improved server runtime restarts so live projects show a Restart action, relaunch on the same managed port, reload the preview after code edits, and hide irrelevant source fields.
 - Improved runtime failure visibility by showing managed server exit codes in the Running Page and proof receipt.
+- Improved proof receipt status tones so healthy, waiting, and failed runtimes no longer share the same green indicator.
 - Fixed hidden-state styling so first-load panels do not show dormant forms or controls before the user opens them.
 - Improved narrow-screen preview flow so fresh mobile sessions and successful preview launches keep quick actions and proof controls reachable.
 - Scoped `npm test` to Pixelbox-owned test files so ignored local `projects/` workspaces no longer break the product test suite.

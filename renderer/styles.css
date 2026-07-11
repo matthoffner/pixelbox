@@ -1042,8 +1042,23 @@ body.vibrant-window #preview-frame {
   width: 10px;
   height: 10px;
   border-radius: 999px;
+  background: #7f92a8;
+  box-shadow: 0 0 12px rgba(127, 146, 168, 0.45);
+}
+
+.proof-status-dot[data-tone='success'] {
   background: #9ce8cf;
   box-shadow: 0 0 18px rgba(156, 232, 207, 0.62);
+}
+
+.proof-status-dot[data-tone='waiting'] {
+  background: #ffd166;
+  box-shadow: 0 0 18px rgba(255, 209, 102, 0.45);
+}
+
+.proof-status-dot[data-tone='error'] {
+  background: #ff8a7a;
+  box-shadow: 0 0 18px rgba(255, 138, 122, 0.58);
 }
 
 .proof-title-group {
