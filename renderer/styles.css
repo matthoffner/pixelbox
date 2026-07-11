@@ -29,6 +29,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -778,11 +782,6 @@ input {
   gap: 6px;
   font-size: 12px;
   color: var(--muted);
-}
-
-.running-field[hidden],
-.running-checkbox[hidden] {
-  display: none !important;
 }
 
 .running-checkbox {

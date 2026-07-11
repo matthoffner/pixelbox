@@ -10,6 +10,7 @@
 - Added a one-click Ship Brief action that copies an agent-ready continuation prompt and writes the current live proof into `.pixelbox/handoff.md`.
 - Added File Peek for proof receipt files so generated/touched files can be inspected and copied without leaving Pixelbox.
 - Improved server runtime restarts so live projects show a Restart action, relaunch on the same managed port, reload the preview after code edits, and hide irrelevant source fields.
+- Fixed hidden-state styling so first-load panels do not show dormant forms or controls before the user opens them.
 - Improved narrow-screen preview flow so fresh mobile sessions and successful preview launches keep quick actions and proof controls reachable.
 - Scoped `npm test` to Pixelbox-owned test files so ignored local `projects/` workspaces no longer break the product test suite.
 
