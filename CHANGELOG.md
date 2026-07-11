@@ -15,6 +15,7 @@
 - Added a Verify proof action that runs a Live Check and captures a proof snapshot in one click.
 - Added Verified Run proof ledger events that bundle successful Verify HTTP evidence with the captured snapshot.
 - Added Markdown Proof Packs that save the current proof, files, runtime tail, snapshot, and ledger into `.pixelbox/proof-packs/`.
+- Added and deployed the landing page `0.4.6` release entry for proof receipts, Verified Runs, and Markdown Proof Packs.
 - Improved Proof Ledger file chips so evidence files can be opened directly in File Peek from ledger rows.
 - Improved automatic Live Check ledger behavior by deduping recent identical background checks.
 - Fixed Proof Pack export paths so nested projects save packs inside their own `.pixelbox/proof-packs/` directory.
