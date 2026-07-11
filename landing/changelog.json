@@ -1,6 +1,17 @@
 {
   "entries": [
     {
+      "date": "2026-07-11",
+      "type": "Release 0.4.6",
+      "title": "Added proof receipts, verified snapshots, and exportable proof packs",
+      "summary": "Pixelbox now turns a live preview into durable shipping evidence: Verify probes the running URL, captures a snapshot, records a Verified Run, and saves Markdown Proof Packs for handoffs.",
+      "points": [
+        "Added proof receipts with one-click Verify, automatic Live Checks, Proof Snapshot PNGs, Snapshot Compare, and scoped Markdown Proof Packs",
+        "Added a Proof Ledger with Verified Run and Proof Pack events, clickable evidence files, copied ledger exports, and duplicate auto-check cleanup",
+        "Carried runtime output tails, Live Check status, snapshots, and proof pack paths into copyable handoffs so the next agent gets executable context"
+      ]
+    },
+    {
       "date": "2026-07-09",
       "type": "Release 0.4.5",
       "title": "Added faster preview starts and native workspace polish",
