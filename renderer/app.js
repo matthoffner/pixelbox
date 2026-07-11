@@ -158,6 +158,7 @@ const terminalGridState = {
   rows: 30,
 };
 const MAX_PROOF_LEDGER_ENTRIES = 12;
+const PREVIEW_FOCUS_MAX_WIDTH = 760;
 const quickStartTemplates = window.PixelboxQuickStartTemplates;
 const {
   QUICK_SERVER_STARTER_PORT,
@@ -165,6 +166,11 @@ const {
   serverStarterDocument,
   starterPackageJson,
 } = quickStartTemplates;
+
+if (loadProjectsPanelHidden()) {
+  projectsPanelHidden = true;
+  document.body.classList.add('projects-panel-hidden');
+}
 
 const previewFrameEl = document.createElement('iframe');
 previewFrameEl.id = 'preview-frame';
@@ -217,9 +223,12 @@ function visibleProjectPath(relPath) {
 
 function loadProjectsPanelHidden() {
   try {
-    return window.localStorage.getItem(PROJECTS_PANEL_HIDDEN_KEY) === '1';
+    const stored = window.localStorage.getItem(PROJECTS_PANEL_HIDDEN_KEY);
+    if (stored === '1') return true;
+    if (stored === '0') return false;
+    return window.innerWidth <= PREVIEW_FOCUS_MAX_WIDTH;
   } catch {
-    return false;
+    return window.innerWidth <= PREVIEW_FOCUS_MAX_WIDTH;
   }
 }
 
@@ -227,6 +236,20 @@ function persistProjectsPanelHidden() {
   try {
     window.localStorage.setItem(PROJECTS_PANEL_HIDDEN_KEY, projectsPanelHidden ? '1' : '0');
   } catch {}
+}
+
+function setProjectsPanelHidden(hidden) {
+  const nextHidden = Boolean(hidden);
+  const changed = projectsPanelHidden !== nextHidden;
+  projectsPanelHidden = nextHidden;
+  persistProjectsPanelHidden();
+  renderProjectsPanelVisibility();
+  return changed;
+}
+
+function focusPreviewOnNarrowScreen() {
+  if (window.innerWidth > PREVIEW_FOCUS_MAX_WIDTH) return false;
+  return setProjectsPanelHidden(true);
 }
 
 function loadProjectsPanelPosition() {
@@ -2080,12 +2103,15 @@ async function waitForSelectedPreviewUrlReachable(timeoutMs) {
 
 async function runPreviewQuickAction(action) {
   setPreviewQuickActionsDisabled(true);
+  let succeeded = false;
   try {
     await action();
+    succeeded = true;
   } catch (error) {
     setPreviewQuickStatus(error && error.message ? error.message : String(error), 'error');
   } finally {
     setPreviewQuickActionsDisabled(false);
+    if (succeeded) focusPreviewOnNarrowScreen();
   }
 }
 
@@ -2151,6 +2177,7 @@ async function saveRunningPageConfig() {
   const config = collectRuntimeConfigFromForm();
   try {
     await applyRuntimeConfig(selectedProjectPath, config);
+    if (config.sourceType !== 'none') focusPreviewOnNarrowScreen();
   } catch (error) {
     window.alert(error.message);
   }
@@ -2161,6 +2188,7 @@ async function startConfiguredRuntime() {
   if (config.sourceType !== 'server') return;
   try {
     await applyRuntimeConfig(selectedProjectPath, config, { forceStart: true });
+    focusPreviewOnNarrowScreen();
   } catch (error) {
     window.alert(error.message);
   }
@@ -2517,14 +2545,10 @@ newProjectNameEl.addEventListener('keydown', (event) => {
   }
 });
 projectsToggleEl.addEventListener('click', () => {
-  projectsPanelHidden = !projectsPanelHidden;
-  persistProjectsPanelHidden();
-  renderProjectsPanelVisibility();
+  setProjectsPanelHidden(!projectsPanelHidden);
 });
 projectsMinimizeEl.addEventListener('click', () => {
-  projectsPanelHidden = true;
-  persistProjectsPanelHidden();
-  renderProjectsPanelVisibility();
+  setProjectsPanelHidden(true);
 });
 if (hiddenProjectsToggleEl) {
   hiddenProjectsToggleEl.addEventListener('click', () => {

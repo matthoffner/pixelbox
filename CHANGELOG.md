@@ -7,6 +7,7 @@
 - Added an in-app Proof Ledger that records recent Live Checks and Ship Briefs, persists them in preview config, and copies a shareable evidence trail.
 - Added a one-click Ship Brief action that copies an agent-ready continuation prompt and writes the current live proof into `.pixelbox/handoff.md`.
 - Added File Peek for proof receipt files so generated/touched files can be inspected and copied without leaving Pixelbox.
+- Improved narrow-screen preview flow so fresh mobile sessions and successful preview launches keep quick actions and proof controls reachable.
 - Scoped `npm test` to Pixelbox-owned test files so ignored local `projects/` workspaces no longer break the product test suite.
 
 ## 0.3.0 - 2026-04-26
