@@ -1209,7 +1209,8 @@ function proofPackTimestamp(date) {
 
 function proofPackPathForProject(projectPath, generatedAt) {
   const slug = sanitizeProjectName(projectDisplayLabel(projectPath)) || 'workspace';
-  return `.pixelbox/proof-packs/${slug}-${proofPackTimestamp(generatedAt)}.md`;
+  const directory = projectPath === '.' ? '.pixelbox/proof-packs' : `${projectPath}/.pixelbox/proof-packs`;
+  return `${directory}/${slug}-${proofPackTimestamp(generatedAt)}.md`;
 }
 
 function proofPackText(proof, packPath, generatedAt) {

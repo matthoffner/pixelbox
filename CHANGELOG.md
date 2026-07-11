@@ -16,6 +16,7 @@
 - Added Verified Run proof ledger events that bundle successful Verify HTTP evidence with the captured snapshot.
 - Added Markdown Proof Packs that save the current proof, files, runtime tail, snapshot, and ledger into `.pixelbox/proof-packs/`.
 - Improved Proof Ledger file chips so evidence files can be opened directly in File Peek from ledger rows.
+- Fixed Proof Pack export paths so nested projects save packs inside their own `.pixelbox/proof-packs/` directory.
 - Improved server runtime restarts so live projects show a Restart action, relaunch on the same managed port, reload the preview after code edits, and hide irrelevant source fields.
 - Improved runtime failure visibility by showing managed server exit codes in the Running Page and proof receipt.
 - Improved proof receipt status tones so healthy, waiting, and failed runtimes no longer share the same green indicator.
