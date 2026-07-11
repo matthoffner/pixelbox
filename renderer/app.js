@@ -136,7 +136,11 @@ const hiddenProjects = new Set();
 const projectPreviewState = new Map();
 const projectRuntimeConfig = new Map();
 const projectRuntimeStatus = new Map();
+const projectRuntimeRunId = new Map();
 const projectRuntimeOutput = new Map();
+const autoLiveCheckTimers = new Map();
+const autoLiveCheckInFlight = new Set();
+const autoLiveCheckCompleted = new Set();
 const projectTerminalOutput = new Map();
 const projectNativeStartupCommand = new Map();
 const projectSessionBootstrapped = new Set();
@@ -1301,11 +1305,17 @@ async function copyShipBriefToClipboard() {
   if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Brief copied + handoff updated';
 }
 
-async function runProofLiveCheck() {
-  const proof = proofForProject(selectedProjectPath);
+async function executeProofLiveCheck(projectPath, options = {}) {
+  const {
+    statusText = 'Checking live URL...',
+    failureText = 'Live Check failed',
+    manageButton = projectPath === selectedProjectPath,
+  } = options;
+  const proof = proofForProject(projectPath);
   if (!proof?.url) return;
-  if (proofCheckEl) proofCheckEl.disabled = true;
-  if (proofCheckStatusEl) proofCheckStatusEl.textContent = 'Checking live URL...';
+  const shouldUpdateUi = projectPath === selectedProjectPath;
+  if (shouldUpdateUi && proofCheckStatusEl) proofCheckStatusEl.textContent = statusText;
+  if (manageButton && proofCheckEl) proofCheckEl.disabled = true;
   try {
     const result = await window.api.probePreviewUrl(proof.url, {
       timeoutMs: 2500,
@@ -1318,14 +1328,63 @@ async function runProofLiveCheck() {
       proofUpdatedAt: Date.now(),
     };
     config.proofLedger = appendProofLedgerEntry(config, liveCheckLedgerEntry(proof, result));
-    projectRuntimeConfig.set(selectedProjectPath, config);
-    await persistPreviewState(selectedProjectPath);
-    renderProofForProject(selectedProjectPath);
+    projectRuntimeConfig.set(projectPath, config);
+    await persistPreviewState(projectPath);
+    if (shouldUpdateUi) renderProofForProject(projectPath);
+    return result;
   } catch (error) {
-    const message = error && error.message ? error.message : 'Live Check failed';
-    if (proofCheckStatusEl) proofCheckStatusEl.textContent = message;
+    const message = error && error.message ? error.message : failureText;
+    if (shouldUpdateUi && proofCheckStatusEl) proofCheckStatusEl.textContent = message;
+    return null;
   } finally {
-    if (proofCheckEl) proofCheckEl.disabled = false;
+    if (manageButton && proofCheckEl) proofCheckEl.disabled = false;
+  }
+}
+
+async function runProofLiveCheck() {
+  await executeProofLiveCheck(selectedProjectPath, {
+    statusText: 'Checking live URL...',
+    failureText: 'Live Check failed',
+    manageButton: true,
+  });
+}
+
+function scheduleAutoLiveCheck(projectPath) {
+  const status = projectRuntimeStatus.get(projectPath) || { running: false };
+  const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+  if (!status.running || config.sourceType !== 'server') return;
+  const runId = projectRuntimeRunId.get(projectPath) || 0;
+  const checkKey = `${projectPath}:${runId}`;
+  if (autoLiveCheckInFlight.has(checkKey) || autoLiveCheckCompleted.has(checkKey)) return;
+  if (autoLiveCheckTimers.has(projectPath)) {
+    return;
+  }
+  const timer = setTimeout(() => {
+    autoLiveCheckTimers.delete(projectPath);
+    runAutoLiveCheck(projectPath, runId).catch(() => {});
+  }, 450);
+  autoLiveCheckTimers.set(projectPath, timer);
+}
+
+async function runAutoLiveCheck(projectPath, runId) {
+  if (runId !== (projectRuntimeRunId.get(projectPath) || 0)) return;
+  const status = projectRuntimeStatus.get(projectPath) || { running: false };
+  const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+  if (!status.running || config.sourceType !== 'server') return;
+  const proof = proofForProject(projectPath);
+  if (!proof?.url) return;
+  const checkKey = `${projectPath}:${runId}`;
+  if (autoLiveCheckInFlight.has(checkKey) || autoLiveCheckCompleted.has(checkKey)) return;
+  autoLiveCheckInFlight.add(checkKey);
+  try {
+    await executeProofLiveCheck(projectPath, {
+      statusText: 'Auto checking live URL...',
+      failureText: 'Auto Live Check failed',
+      manageButton: projectPath === selectedProjectPath,
+    });
+    autoLiveCheckCompleted.add(checkKey);
+  } finally {
+    autoLiveCheckInFlight.delete(checkKey);
   }
 }
 
@@ -2818,6 +2877,7 @@ window.api.onTerminalData(({ key, data }) => {
 window.api.onPreviewStatus(({ key, running, url, configuredUrl, sourceType, exitCode, signal }) => {
   const previousStatus = projectRuntimeStatus.get(key) || { running: false };
   if (running && !previousStatus.running) {
+    projectRuntimeRunId.set(key, (projectRuntimeRunId.get(key) || 0) + 1);
     projectRuntimeOutput.set(key, '');
     if (key === selectedProjectPath && proofOutputModalEl && !proofOutputModalEl.hidden) {
       renderProofOutputModal(key);
@@ -2831,22 +2891,25 @@ window.api.onPreviewStatus(({ key, running, url, configuredUrl, sourceType, exit
     signal: typeof signal === 'string' ? signal : '',
   });
 
+  const handlePreviewStatusReady = () => {
+    if (key === selectedProjectPath) {
+      renderRuntimeConfig(key);
+    }
+    if (running && sourceType === 'server') {
+      scheduleAutoLiveCheck(key);
+    }
+  };
+
   if (url) {
     pushPreviewUrl(key, url)
-      .then(() => {
-        if (key === selectedProjectPath) {
-          renderRuntimeConfig(key);
-        }
-      })
+      .then(handlePreviewStatusReady)
       .catch(() => {});
   } else if (configuredUrl && sourceType === 'server') {
     pushPreviewUrl(key, configuredUrl)
-      .then(() => {
-        if (key === selectedProjectPath) {
-          renderRuntimeConfig(key);
-        }
-      })
+      .then(handlePreviewStatusReady)
       .catch(() => {});
+  } else {
+    handlePreviewStatusReady();
   }
 
   if (key === selectedProjectPath) {
