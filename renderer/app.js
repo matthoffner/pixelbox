@@ -38,6 +38,15 @@ const quickCreateServerEl = document.getElementById('quick-create-server');
 const quickSurpriseEl = document.getElementById('quick-surprise');
 const quickOpenTerminalEl = document.getElementById('quick-open-terminal');
 const previewQuickStatusEl = document.getElementById('preview-quick-status');
+const proofDockEl = document.getElementById('proof-dock');
+const proofTitleEl = document.getElementById('proof-title');
+const proofStatusEl = document.getElementById('proof-status');
+const proofProjectEl = document.getElementById('proof-project');
+const proofCommandEl = document.getElementById('proof-command');
+const proofUrlEl = document.getElementById('proof-url');
+const proofFilesEl = document.getElementById('proof-files');
+const proofCopyEl = document.getElementById('proof-copy');
+const proofCopyStatusEl = document.getElementById('proof-copy-status');
 const runningPageTypeEl = document.getElementById('running-page-type');
 const runningPageHtmlEl = document.getElementById('running-page-html');
 const runningPageCommandEl = document.getElementById('running-page-command');
@@ -743,6 +752,7 @@ function renderPreviewForProject(projectPath) {
     previewEmptyStateEl.style.display = 'grid';
     setPreviewMeta('', 'Preview');
     updatePreviewControls(state);
+    renderProofForProject(projectPath);
     return;
   }
 
@@ -755,6 +765,163 @@ function renderPreviewForProject(projectPath) {
   setPreviewMeta(url, subtitle);
   updatePreviewControls(state);
   schedulePreviewCaptureRegionPublish();
+  renderProofForProject(projectPath);
+}
+
+function projectDisplayLabel(projectPath) {
+  return projectPath === '.' ? 'workspace root' : projectPath;
+}
+
+function proofUpdatedLabel(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `Verified ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function uniqueList(values) {
+  const seen = new Set();
+  const next = [];
+  for (const value of values) {
+    const normalized = String(value || '').trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    next.push(normalized);
+  }
+  return next;
+}
+
+function proofFilesForProject(projectPath, config) {
+  if (Array.isArray(config.proofFiles) && config.proofFiles.length > 0) {
+    return uniqueList(config.proofFiles);
+  }
+
+  const files = [];
+  if (config.sourceType === 'html' && config.htmlPath) {
+    files.push(projectRelativePath(projectPath, config.htmlPath));
+  }
+  if (config.sourceType === 'server') {
+    if (/\bnpm\s+run\b/.test(config.serverCommand || '')) {
+      files.push(projectRelativePath(projectPath, 'package.json'));
+    }
+    if (
+      (config.serverCommand || '').trim() === 'npm run dev' &&
+      sanitizePreviewUrl(config.serverUrl) === `http://127.0.0.1:${QUICK_SERVER_STARTER_PORT}`
+    ) {
+      files.push(projectRelativePath(projectPath, 'server.js'));
+    }
+  }
+  if (config.sourceType !== 'none') {
+    files.push(configPathForProject(projectPath));
+  }
+  return uniqueList(files);
+}
+
+function proofForProject(projectPath) {
+  const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+  const status = projectRuntimeStatus.get(projectPath) || { running: false };
+  const state = ensurePreviewState(projectPath);
+  const url = currentPreviewUrl(state) || status.url || config.serverUrl || '';
+  if (config.sourceType === 'none' && !url) return null;
+
+  const sourceLabel = config.sourceType === 'html'
+    ? 'HTML preview'
+    : config.sourceType === 'server'
+      ? 'Server runtime'
+      : 'Preview';
+  const statusLabel = config.sourceType === 'html'
+    ? (config.htmlPath ? `HTML: ${config.htmlPath}` : 'HTML file missing')
+    : status.running
+      ? 'Server live'
+      : config.sourceType === 'server'
+        ? 'Server configured'
+        : 'Preview configured';
+  const command = config.sourceType === 'html'
+    ? 'Static HTML preview'
+    : config.serverCommand || 'n/a';
+
+  return {
+    title: sourceLabel,
+    status: statusLabel,
+    project: projectDisplayLabel(projectPath),
+    command,
+    url,
+    files: proofFilesForProject(projectPath, config),
+    updated: proofUpdatedLabel(config.proofUpdatedAt || config.updatedAt),
+  };
+}
+
+function proofText(proof) {
+  return [
+    `Project: ${proof.project}`,
+    `Status: ${proof.status}`,
+    `Command: ${proof.command}`,
+    `URL: ${proof.url || 'about:blank'}`,
+    'Files:',
+    ...(proof.files.length > 0 ? proof.files.map((file) => `- ${file}`) : ['- n/a']),
+  ].join('\n');
+}
+
+async function copyProofToClipboard() {
+  const proof = proofForProject(selectedProjectPath);
+  if (!proof) return;
+  const text = proofText(proof);
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+    if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Copied';
+  } catch {
+    if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Copy failed';
+  }
+}
+
+function renderProofForProject(projectPath) {
+  if (!proofDockEl) return;
+  const proof = proofForProject(projectPath);
+  window.__pwProofSnapshot = proof;
+  if (!proof) {
+    proofDockEl.hidden = true;
+    return;
+  }
+
+  proofDockEl.hidden = false;
+  if (proofTitleEl) proofTitleEl.textContent = proof.title;
+  if (proofStatusEl) {
+    proofStatusEl.textContent = proof.updated ? `${proof.status} · ${proof.updated}` : proof.status;
+  }
+  if (proofProjectEl) proofProjectEl.textContent = proof.project;
+  if (proofCommandEl) proofCommandEl.textContent = proof.command;
+  if (proofUrlEl) {
+    const displayUrl = previewDisplayUrl(proof.url);
+    proofUrlEl.textContent = displayUrl;
+    if (proof.url) {
+      proofUrlEl.href = proof.url;
+      proofUrlEl.removeAttribute('aria-disabled');
+    } else {
+      proofUrlEl.href = '#';
+      proofUrlEl.setAttribute('aria-disabled', 'true');
+    }
+  }
+  if (proofFilesEl) {
+    proofFilesEl.innerHTML = '';
+    for (const file of proof.files) {
+      const item = document.createElement('code');
+      item.textContent = file;
+      proofFilesEl.appendChild(item);
+    }
+  }
+  if (proofCopyStatusEl) proofCopyStatusEl.textContent = '';
 }
 
 async function persistPreviewState(projectPath) {
@@ -767,6 +934,12 @@ async function persistPreviewState(projectPath) {
     history: state.history,
     index: state.index,
   };
+  if (payload.sourceType !== 'none' && (!Array.isArray(payload.proofFiles) || payload.proofFiles.length === 0)) {
+    payload.proofFiles = proofFilesForProject(projectPath, payload);
+  }
+  if (payload.sourceType !== 'none' && !payload.proofUpdatedAt && payload.proofFiles.length > 0) {
+    payload.proofUpdatedAt = Date.now();
+  }
   await window.api.writeFile(configPathForProject(projectPath), `${JSON.stringify(payload, null, 2)}\n`);
 }
 
@@ -1285,6 +1458,7 @@ function renderRuntimeConfig(projectPath) {
   runningPageAutostartEl.checked = config.autoStart !== false;
   renderRunningPageFields(config.sourceType);
   renderRuntimeStatus(projectPath);
+  renderProofForProject(projectPath);
 }
 
 async function loadRuntimeConfig(projectPath) {
@@ -1342,6 +1516,8 @@ async function quickStartServerRuntime() {
     sourceType: 'server',
     serverCommand: 'npm run dev',
     autoStart: true,
+    proofFiles: [configPathForProject(selectedProjectPath)],
+    proofUpdatedAt: Date.now(),
   };
   setPreviewQuickStatus('Starting npm run dev...', 'pending');
   await applyRuntimeConfig(selectedProjectPath, config, { forceStart: true });
@@ -1365,6 +1541,8 @@ async function quickCreateHtmlStarter() {
     sourceType: 'html',
     htmlPath,
     autoStart: false,
+    proofFiles: [targetPath, configPathForProject(selectedProjectPath)],
+    proofUpdatedAt: Date.now(),
   });
   setPreviewQuickStatus('HTML starter is live in the preview.', 'success');
 }
@@ -1407,6 +1585,8 @@ async function writeAndRunServerStarter({ variant = 'server', label = 'server st
     serverCommand: 'npm run dev',
     serverUrl: `http://127.0.0.1:${QUICK_SERVER_STARTER_PORT}`,
     autoStart: true,
+    proofFiles: [packagePath, serverPath, configPathForProject(selectedProjectPath)],
+    proofUpdatedAt: Date.now(),
   }, { forceStart: true });
   await waitForSelectedPreviewUrlReachable(8000);
 }
@@ -1547,6 +1727,7 @@ async function stopConfiguredRuntime() {
     url: config.serverUrl || currentPreviewUrl(ensurePreviewState(selectedProjectPath)) || '',
   });
   renderRuntimeStatus(selectedProjectPath);
+  renderProofForProject(selectedProjectPath);
 }
 
 async function bootTerminalForPath(relPath, shouldRunStartup = false, forceStartup = false) {
@@ -1821,6 +2002,7 @@ window.api.onPreviewStatus(({ key, running, url, configuredUrl, sourceType }) =>
 
   if (key === selectedProjectPath) {
     renderRuntimeStatus(key);
+    renderProofForProject(key);
   }
 });
 
@@ -2285,6 +2467,13 @@ if (quickSurpriseEl) {
 }
 if (quickOpenTerminalEl) {
   quickOpenTerminalEl.addEventListener('click', openPanel);
+}
+if (proofCopyEl) {
+  proofCopyEl.addEventListener('click', () => {
+    copyProofToClipboard().catch(() => {
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Copy failed';
+    });
+  });
 }
 if (aiCliSelectEl) {
   aiCliSelectEl.addEventListener('change', () => {

@@ -145,6 +145,32 @@
             </div>
           </div>
           <div id="preview-frame-host" aria-live="polite"></div>
+          <section id="proof-dock" aria-label="Run proof" hidden>
+            <header class="proof-header">
+              <span class="proof-status-dot" aria-hidden="true"></span>
+              <div class="proof-title-group">
+                <strong id="proof-title">No proof yet</strong>
+                <span id="proof-status">Not configured</span>
+              </div>
+              <button id="proof-copy" type="button">Copy</button>
+            </header>
+            <dl class="proof-grid">
+              <div>
+                <dt>Project</dt>
+                <dd id="proof-project">workspace root</dd>
+              </div>
+              <div>
+                <dt>Command</dt>
+                <dd><code id="proof-command">n/a</code></dd>
+              </div>
+              <div>
+                <dt>URL</dt>
+                <dd><a id="proof-url" href="#" target="_blank" rel="noreferrer">about:blank</a></dd>
+              </div>
+            </dl>
+            <div id="proof-files" aria-label="Proof files"></div>
+            <div id="proof-copy-status" role="status" aria-live="polite"></div>
+          </section>
           <div id="preview-native-host" hidden>
             <img id="preview-native-image" alt="Native app preview" />
           </div>
