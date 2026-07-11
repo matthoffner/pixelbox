@@ -50,6 +50,7 @@ const proofCheckEl = document.getElementById('proof-check');
 const proofOutputEl = document.getElementById('proof-output');
 const proofCheckStatusEl = document.getElementById('proof-check-status');
 const proofVerifyEl = document.getElementById('proof-verify');
+const proofPackEl = document.getElementById('proof-pack');
 const proofSnapshotEl = document.getElementById('proof-snapshot');
 const proofSnapshotOpenEl = document.getElementById('proof-snapshot-open');
 const proofCompareEl = document.getElementById('proof-compare');
@@ -906,7 +907,9 @@ function proofFilesForProject(projectPath, config) {
 
 function normalizeProofLedgerEntry(entry) {
   if (!entry || typeof entry !== 'object') return null;
-  const type = ['live-check', 'ship-brief', 'snapshot', 'verification'].includes(entry.type) ? entry.type : 'proof';
+  const type = ['live-check', 'ship-brief', 'snapshot', 'verification', 'proof-pack'].includes(entry.type)
+    ? entry.type
+    : 'proof';
   const at = typeof entry.at === 'string' && entry.at.trim()
     ? entry.at.trim()
     : new Date().toISOString();
@@ -974,6 +977,7 @@ function proofLedgerKindLabel(entry) {
   if (entry.type === 'ship-brief') return 'Ship Brief';
   if (entry.type === 'snapshot') return 'Snapshot';
   if (entry.type === 'verification') return entry.liveCheck?.ok === false ? 'Verification failed' : 'Verified Run';
+  if (entry.type === 'proof-pack') return 'Proof Pack';
   return 'Proof';
 }
 
@@ -997,6 +1001,9 @@ function proofLedgerDetail(entry) {
       entry.liveCheck?.label || 'Live URL verified',
       entry.snapshot?.path ? `Snapshot ${snapshotShortName(entry.snapshot)}` : '',
     ].filter(Boolean).join(' · ');
+  }
+  if (entry.type === 'proof-pack') {
+    return entry.label || 'Markdown proof pack saved';
   }
   return entry.label || entry.status || '';
 }
@@ -1078,6 +1085,25 @@ function verificationLedgerEntry(proof, liveCheck, snapshot) {
         }
       : null,
     snapshot,
+  };
+}
+
+function proofPackLedgerEntry(proof, packPath, generatedAt) {
+  return {
+    type: 'proof-pack',
+    at: generatedAt.toISOString(),
+    label: packPath,
+    status: proof.status,
+    command: proof.command,
+    url: proof.url || '',
+    files: uniqueList([packPath, ...proof.files]),
+    liveCheck: proof.liveCheck
+      ? {
+          ...proof.liveCheck,
+          label: liveCheckLabel(proof.liveCheck),
+        }
+      : null,
+    snapshot: proof.snapshot || null,
   };
 }
 
@@ -1174,6 +1200,49 @@ function proofText(proof) {
     lines.push('Ledger:');
     lines.push(...proof.ledger.slice(0, 5).map((entry) => `- ${proofLedgerEntryLine(entry)}`));
   }
+  return lines.join('\n');
+}
+
+function proofPackTimestamp(date) {
+  return date.toISOString().replace(/[:.]/g, '-');
+}
+
+function proofPackPathForProject(projectPath, generatedAt) {
+  const slug = sanitizeProjectName(projectDisplayLabel(projectPath)) || 'workspace';
+  return `.pixelbox/proof-packs/${slug}-${proofPackTimestamp(generatedAt)}.md`;
+}
+
+function proofPackText(proof, packPath, generatedAt) {
+  const lines = [
+    '# Pixelbox Proof Pack',
+    '',
+    `Generated: ${generatedAt.toISOString()}`,
+    `Pack: ${packPath}`,
+    '',
+    '## Run',
+    '',
+    `- Project: ${proof.project}`,
+    `- Status: ${proof.status}`,
+    `- Command: ${proof.command}`,
+    `- URL: ${proof.url || 'about:blank'}`,
+  ];
+  if (proof.liveCheck) {
+    lines.push(`- Live Check: ${liveCheckLabel(proof.liveCheck)}`);
+  }
+  if (proof.snapshot?.path) {
+    lines.push(`- Snapshot: ${snapshotLabel(proof.snapshot)}`);
+  }
+
+  lines.push('', '## Files', '');
+  lines.push(...(proof.files.length > 0 ? proof.files.map((file) => `- ${file}`) : ['- n/a']));
+
+  if (proof.runtimeOutput) {
+    lines.push('', '## Runtime Output Tail', '', '```text', fencedProofText(proof.runtimeOutput), '```');
+  }
+
+  lines.push('', '## Ledger', '');
+  lines.push(...(proof.ledger.length > 0 ? proof.ledger.map((entry) => `- ${proofLedgerEntryLine(entry)}`) : ['- n/a']));
+  lines.push('');
   return lines.join('\n');
 }
 
@@ -1339,6 +1408,39 @@ async function copyShipBriefToClipboard() {
   await persistPreviewState(selectedProjectPath);
   renderProofForProject(selectedProjectPath);
   if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Brief copied + handoff updated';
+}
+
+async function saveProofPack() {
+  const projectPath = selectedProjectPath;
+  const proof = proofForProject(projectPath);
+  if (!proof) return;
+  const generatedAt = new Date();
+  const packPath = proofPackPathForProject(projectPath, generatedAt);
+  if (proofPackEl) proofPackEl.disabled = true;
+  if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Writing proof pack...';
+  try {
+    await window.api.writeFile(packPath, proofPackText(proof, packPath, generatedAt));
+    const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+    projectRuntimeConfig.set(projectPath, {
+      ...currentConfig,
+      proofFiles: uniqueList([...proof.files, packPath]),
+      proofLedger: appendProofLedgerEntry(currentConfig, proofPackLedgerEntry(proof, packPath, generatedAt)),
+      proofUpdatedAt: Date.now(),
+    });
+    await persistPreviewState(projectPath);
+    if (projectPath === selectedProjectPath) {
+      renderProofForProject(projectPath);
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = `Proof pack saved: ${packPath}`;
+      await openProofFileModal(packPath);
+    }
+    return packPath;
+  } catch (error) {
+    const message = error && error.message ? error.message : 'Proof pack failed';
+    if (proofCopyStatusEl) proofCopyStatusEl.textContent = message;
+    return null;
+  } finally {
+    if (proofPackEl) proofPackEl.disabled = false;
+  }
 }
 
 async function executeProofLiveCheck(projectPath, options = {}) {
@@ -1814,6 +1916,7 @@ function renderProofForProject(projectPath) {
     if (proofLedgerToggleEl) proofLedgerToggleEl.hidden = true;
     if (proofSnapshotOpenEl) proofSnapshotOpenEl.hidden = true;
     if (proofVerifyEl) proofVerifyEl.disabled = true;
+    if (proofPackEl) proofPackEl.disabled = true;
     if (proofCompareEl) proofCompareEl.hidden = true;
     return;
   }
@@ -1842,6 +1945,9 @@ function renderProofForProject(projectPath) {
   }
   if (proofVerifyEl) {
     proofVerifyEl.disabled = !proof.url;
+  }
+  if (proofPackEl) {
+    proofPackEl.disabled = !proof.url;
   }
   if (proofOutputEl) {
     const hasOutput = runtimeOutputForProject(projectPath).trim().length > 0;
@@ -3161,6 +3267,13 @@ if (proofVerifyEl) {
   proofVerifyEl.addEventListener('click', () => {
     runProofVerify().catch(() => {
       if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Verify failed';
+    });
+  });
+}
+if (proofPackEl) {
+  proofPackEl.addEventListener('click', () => {
+    saveProofPack().catch(() => {
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Proof pack failed';
     });
   });
 }
