@@ -397,7 +397,8 @@ input {
 #hidden-projects-close,
 #proof-file-close,
 #proof-ledger-close,
-#proof-snapshot-close {
+#proof-snapshot-close,
+#proof-compare-close {
   width: 30px;
   height: 30px;
   padding: 0;
@@ -413,7 +414,8 @@ input {
 
 .proof-file-heading,
 .proof-ledger-heading,
-.proof-snapshot-heading {
+.proof-snapshot-heading,
+.proof-compare-heading {
   min-width: 0;
   display: grid;
   gap: 4px;
@@ -421,7 +423,8 @@ input {
 
 #proof-file-path,
 #proof-ledger-subtitle,
-#proof-snapshot-path {
+#proof-snapshot-path,
+#proof-compare-summary {
   max-width: min(560px, 62vw);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -432,7 +435,8 @@ input {
 
 .proof-file-actions,
 .proof-ledger-actions,
-.proof-snapshot-actions {
+.proof-snapshot-actions,
+.proof-compare-actions {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -441,7 +445,8 @@ input {
 #proof-file-copy-path,
 #proof-file-copy-content,
 #proof-ledger-copy,
-#proof-snapshot-copy-path {
+#proof-snapshot-copy-path,
+#proof-compare-copy {
   min-height: 30px;
   border: 1px solid color-mix(in srgb, var(--border), white 8%);
   border-radius: 999px;
@@ -457,22 +462,30 @@ input {
 #proof-file-copy-content:hover,
 #proof-ledger-copy:hover,
 #proof-snapshot-copy-path:hover,
+#proof-compare-copy:hover,
 #proof-file-copy-path:focus-visible,
 #proof-file-copy-content:focus-visible,
 #proof-ledger-copy:focus-visible,
-#proof-snapshot-copy-path:focus-visible {
+#proof-snapshot-copy-path:focus-visible,
+#proof-compare-copy:focus-visible {
   background: color-mix(in srgb, var(--cta), transparent 56%);
 }
 
 .proof-ledger-modal-panel,
-.proof-snapshot-modal-panel {
+.proof-snapshot-modal-panel,
+.proof-compare-modal-panel {
   width: min(760px, 100%);
   display: grid;
   grid-template-rows: auto minmax(160px, 1fr) auto;
 }
 
-.proof-snapshot-modal-panel {
+.proof-snapshot-modal-panel,
+.proof-compare-modal-panel {
   width: min(920px, 100%);
+}
+
+.proof-compare-modal-panel {
+  width: min(1120px, 100%);
 }
 
 #proof-ledger-list {
@@ -572,6 +585,61 @@ input {
 }
 
 #proof-snapshot-status {
+  min-height: 18px;
+  padding: 10px 16px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.proof-compare-grid {
+  max-height: min(680px, calc(100vh - 190px));
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  background: #07111b;
+}
+
+.proof-compare-grid figure {
+  min-width: 0;
+  margin: 0;
+  display: grid;
+  grid-template-rows: auto minmax(180px, 1fr);
+  gap: 8px;
+}
+
+.proof-compare-grid figcaption {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.proof-compare-grid figcaption span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+}
+
+#proof-compare-before,
+#proof-compare-after {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid color-mix(in srgb, var(--border), white 8%);
+  border-radius: 8px;
+  background: #07111b;
+}
+
+#proof-compare-status {
   min-height: 18px;
   padding: 10px 16px 14px;
   color: var(--muted);
@@ -755,7 +823,9 @@ input:focus-visible,
 #proof-ledger-copy:focus-visible,
 #proof-ledger-close:focus-visible,
 #proof-snapshot-copy-path:focus-visible,
-#proof-snapshot-close:focus-visible {
+#proof-snapshot-close:focus-visible,
+#proof-compare-copy:focus-visible,
+#proof-compare-close:focus-visible {
   outline: 2px solid color-mix(in srgb, white 55%, var(--cta));
   outline-offset: 2px;
 }
@@ -1616,22 +1686,29 @@ body.vibrant-window #chat-header {
 
   .proof-file-modal-panel .modal-header,
   .proof-ledger-modal-panel .modal-header,
-  .proof-snapshot-modal-panel .modal-header {
+  .proof-snapshot-modal-panel .modal-header,
+  .proof-compare-modal-panel .modal-header {
     align-items: stretch;
     flex-direction: column;
   }
 
   #proof-file-path,
   #proof-ledger-subtitle,
-  #proof-snapshot-path {
+  #proof-snapshot-path,
+  #proof-compare-summary {
     max-width: 100%;
   }
 
   .proof-file-actions,
   .proof-ledger-actions,
-  .proof-snapshot-actions {
+  .proof-snapshot-actions,
+  .proof-compare-actions {
     justify-content: flex-end;
     flex-wrap: wrap;
+  }
+
+  .proof-compare-grid {
+    grid-template-columns: 1fr;
   }
 }
 

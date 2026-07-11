@@ -49,6 +49,7 @@ const proofCheckEl = document.getElementById('proof-check');
 const proofCheckStatusEl = document.getElementById('proof-check-status');
 const proofSnapshotEl = document.getElementById('proof-snapshot');
 const proofSnapshotOpenEl = document.getElementById('proof-snapshot-open');
+const proofCompareEl = document.getElementById('proof-compare');
 const proofLedgerToggleEl = document.getElementById('proof-ledger-toggle');
 const proofBriefEl = document.getElementById('proof-brief');
 const proofCopyEl = document.getElementById('proof-copy');
@@ -72,6 +73,15 @@ const proofSnapshotPathEl = document.getElementById('proof-snapshot-path');
 const proofSnapshotImageEl = document.getElementById('proof-snapshot-image');
 const proofSnapshotStatusEl = document.getElementById('proof-snapshot-status');
 const proofSnapshotCopyPathEl = document.getElementById('proof-snapshot-copy-path');
+const proofCompareModalEl = document.getElementById('proof-compare-modal');
+const proofCompareCloseEl = document.getElementById('proof-compare-close');
+const proofCompareCopyEl = document.getElementById('proof-compare-copy');
+const proofCompareSummaryEl = document.getElementById('proof-compare-summary');
+const proofCompareBeforeEl = document.getElementById('proof-compare-before');
+const proofCompareAfterEl = document.getElementById('proof-compare-after');
+const proofCompareBeforeLabelEl = document.getElementById('proof-compare-before-label');
+const proofCompareAfterLabelEl = document.getElementById('proof-compare-after-label');
+const proofCompareStatusEl = document.getElementById('proof-compare-status');
 const runningPageTypeEl = document.getElementById('running-page-type');
 const runningPageHtmlEl = document.getElementById('running-page-html');
 const runningPageCommandEl = document.getElementById('running-page-command');
@@ -135,6 +145,7 @@ let agentMonitorPollTimer = null;
 let previewCaptureRegionRaf = 0;
 let activeProofFile = null;
 let activeProofSnapshot = null;
+let activeProofCompare = null;
 const agentMonitorStoppingPids = new Set();
 let selectedAiCli = 'codex';
 let codexDangerouslyBypassPermissions = false;
@@ -1104,6 +1115,30 @@ function snapshotLabel(snapshot) {
   return [snapshot.path, size, bytes].filter(Boolean).join(' · ');
 }
 
+function proofSnapshotHistory(proof) {
+  const snapshots = [];
+  const seen = new Set();
+  const addSnapshot = (snapshot, at = '') => {
+    if (!snapshot?.path || seen.has(snapshot.path)) return;
+    seen.add(snapshot.path);
+    snapshots.push({
+      ...snapshot,
+      capturedAt: snapshot.capturedAt || at,
+    });
+  };
+
+  addSnapshot(proof?.snapshot);
+  for (const entry of proof?.ledger || []) {
+    if (entry.type !== 'snapshot') continue;
+    addSnapshot(entry.snapshot, entry.at);
+  }
+  return snapshots;
+}
+
+function snapshotShortName(snapshot) {
+  return String(snapshot?.path || '').split('/').pop() || 'snapshot';
+}
+
 async function copyTextToClipboard(text) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -1453,6 +1488,56 @@ async function copyActiveProofSnapshotPath() {
   if (proofSnapshotStatusEl) proofSnapshotStatusEl.textContent = 'Snapshot path copied';
 }
 
+function closeProofCompareModal() {
+  if (!proofCompareModalEl) return;
+  proofCompareModalEl.hidden = true;
+  activeProofCompare = null;
+  if (proofCompareBeforeEl) proofCompareBeforeEl.removeAttribute('src');
+  if (proofCompareAfterEl) proofCompareAfterEl.removeAttribute('src');
+  if (proofCompareStatusEl) proofCompareStatusEl.textContent = '';
+  window.__pwProofCompareModal = { open: false, latestPath: '', previousPath: '' };
+}
+
+function openProofCompareModal() {
+  if (!proofCompareModalEl || !proofCompareBeforeEl || !proofCompareAfterEl) return;
+  const proof = proofForProject(selectedProjectPath);
+  const [latest, previous] = proofSnapshotHistory(proof);
+  if (!latest || !previous) return;
+
+  activeProofCompare = { latest, previous };
+  proofCompareModalEl.hidden = false;
+  proofCompareBeforeEl.src = previous.previewUrl || workspaceFileUrl(previous.path);
+  proofCompareAfterEl.src = latest.previewUrl || workspaceFileUrl(latest.path);
+  proofCompareBeforeEl.alt = `Previous proof snapshot ${previous.path}`;
+  proofCompareAfterEl.alt = `Latest proof snapshot ${latest.path}`;
+  if (proofCompareBeforeLabelEl) proofCompareBeforeLabelEl.textContent = snapshotShortName(previous);
+  if (proofCompareAfterLabelEl) proofCompareAfterLabelEl.textContent = snapshotShortName(latest);
+  if (proofCompareSummaryEl) {
+    proofCompareSummaryEl.textContent = `${snapshotShortName(previous)} -> ${snapshotShortName(latest)}`;
+  }
+  if (proofCompareStatusEl) {
+    proofCompareStatusEl.textContent = [
+      `Previous: ${snapshotLabel(previous)}`,
+      `Latest: ${snapshotLabel(latest)}`,
+    ].join(' | ');
+  }
+  window.__pwProofCompareModal = {
+    open: true,
+    latestPath: latest.path,
+    previousPath: previous.path,
+  };
+}
+
+async function copyProofComparePaths() {
+  if (!activeProofCompare) return;
+  await copyTextToClipboard([
+    'Proof Snapshot Compare',
+    `Previous: ${activeProofCompare.previous.path}`,
+    `Latest: ${activeProofCompare.latest.path}`,
+  ].join('\n'));
+  if (proofCompareStatusEl) proofCompareStatusEl.textContent = 'Compare paths copied';
+}
+
 function renderProofForProject(projectPath) {
   if (!proofDockEl) return;
   const proof = proofForProject(projectPath);
@@ -1462,6 +1547,7 @@ function renderProofForProject(projectPath) {
     proofDockEl.hidden = true;
     if (proofLedgerToggleEl) proofLedgerToggleEl.hidden = true;
     if (proofSnapshotOpenEl) proofSnapshotOpenEl.hidden = true;
+    if (proofCompareEl) proofCompareEl.hidden = true;
     return;
   }
 
@@ -1503,6 +1589,12 @@ function renderProofForProject(projectPath) {
     proofLedgerToggleEl.hidden = count === 0;
     proofLedgerToggleEl.disabled = count === 0;
     proofLedgerToggleEl.textContent = `Ledger (${count})`;
+  }
+  if (proofCompareEl) {
+    const snapshotCount = proofSnapshotHistory(proof).length;
+    proofCompareEl.hidden = snapshotCount < 2;
+    proofCompareEl.disabled = snapshotCount < 2;
+    proofCompareEl.textContent = `Compare (${snapshotCount})`;
   }
   if (proofLedgerModalEl && !proofLedgerModalEl.hidden) {
     renderProofLedgerModal(proof);
@@ -2734,6 +2826,9 @@ if (proofSnapshotEl) {
     });
   });
 }
+if (proofCompareEl) {
+  proofCompareEl.addEventListener('click', openProofCompareModal);
+}
 if (proofLedgerToggleEl) {
   proofLedgerToggleEl.addEventListener('click', openProofLedgerModal);
 }
@@ -2768,6 +2863,23 @@ if (proofSnapshotCopyPathEl) {
   proofSnapshotCopyPathEl.addEventListener('click', () => {
     copyActiveProofSnapshotPath().catch(() => {
       if (proofSnapshotStatusEl) proofSnapshotStatusEl.textContent = 'Copy failed';
+    });
+  });
+}
+if (proofCompareCloseEl) {
+  proofCompareCloseEl.addEventListener('click', closeProofCompareModal);
+}
+if (proofCompareModalEl) {
+  proofCompareModalEl.addEventListener('click', (event) => {
+    if (event.target === proofCompareModalEl) {
+      closeProofCompareModal();
+    }
+  });
+}
+if (proofCompareCopyEl) {
+  proofCompareCopyEl.addEventListener('click', () => {
+    copyProofComparePaths().catch(() => {
+      if (proofCompareStatusEl) proofCompareStatusEl.textContent = 'Copy failed';
     });
   });
 }
@@ -3104,6 +3216,12 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && proofSnapshotModalEl && !proofSnapshotModalEl.hidden) {
     event.preventDefault();
     closeProofSnapshotModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && proofCompareModalEl && !proofCompareModalEl.hidden) {
+    event.preventDefault();
+    closeProofCompareModal();
     return;
   }
 
