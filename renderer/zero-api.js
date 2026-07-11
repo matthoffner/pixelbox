@@ -53,6 +53,7 @@
     removeDir: (targetPath) => request('/api/fs/removeDir', { path: targetPath }),
     resolvePreviewHtmlFile: (targetPath) => request('/api/preview/resolveHtmlFile', { path: targetPath }),
     resolvePreviewFile: (targetPath) => request('/api/preview/resolveFile', { path: targetPath }),
+    probePreviewUrl: (url, options = {}) => request('/api/preview/probeUrl', { url, ...options }),
     execPreviewCommand: (projectPath, command) => request('/api/preview/execCommand', { projectPath, command }),
     syncPreviewRuntime: (projectPath, options = {}) => request('/api/preview/syncRuntime', { projectPath, options }),
     startPreviewRuntime: (projectPath, options = {}) => request('/api/preview/startRuntime', { projectPath, options }),

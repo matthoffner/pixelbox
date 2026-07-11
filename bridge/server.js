@@ -10,6 +10,7 @@ const { createWorkspaceFs } = require('../lib/workspaceFs');
 const { PreviewRuntimeManager } = require('../lib/previewRuntimeManager');
 const { TerminalManager } = require('../lib/terminalManager');
 const { TerminalSession, defaultShell } = require('../lib/terminalSession');
+const { probeUrl } = require('../lib/previewProbe');
 const codexMonitor = require('../lib/codexMonitor');
 
 const host = '127.0.0.1';
@@ -335,6 +336,13 @@ async function handleApi(req, res, pathname) {
   }
   if (pathname === '/api/preview/resolveFile') {
     return sendJson(res, 200, resolveWorkspaceFile(body.path));
+  }
+  if (pathname === '/api/preview/probeUrl') {
+    return sendJson(res, 200, await probeUrl(body.url, {
+      timeoutMs: body.timeoutMs,
+      attempts: body.attempts,
+      retryDelayMs: body.retryDelayMs,
+    }));
   }
   if (pathname === '/api/preview/execCommand') {
     const cwd = workspaceFs.resolveWorkspacePath(body.projectPath || '.');

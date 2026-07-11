@@ -45,6 +45,8 @@ const proofProjectEl = document.getElementById('proof-project');
 const proofCommandEl = document.getElementById('proof-command');
 const proofUrlEl = document.getElementById('proof-url');
 const proofFilesEl = document.getElementById('proof-files');
+const proofCheckEl = document.getElementById('proof-check');
+const proofCheckStatusEl = document.getElementById('proof-check-status');
 const proofBriefEl = document.getElementById('proof-brief');
 const proofCopyEl = document.getElementById('proof-copy');
 const proofCopyStatusEl = document.getElementById('proof-copy-status');
@@ -862,18 +864,31 @@ function proofForProject(projectPath) {
     url,
     files: proofFilesForProject(projectPath, config),
     updated: proofUpdatedLabel(config.proofUpdatedAt || config.updatedAt),
+    liveCheck: config.proofLiveCheck || null,
   };
 }
 
 function proofText(proof) {
-  return [
+  const lines = [
     `Project: ${proof.project}`,
     `Status: ${proof.status}`,
     `Command: ${proof.command}`,
     `URL: ${proof.url || 'about:blank'}`,
     'Files:',
     ...(proof.files.length > 0 ? proof.files.map((file) => `- ${file}`) : ['- n/a']),
-  ].join('\n');
+  ];
+  if (proof.liveCheck) {
+    lines.push(`Live Check: ${proof.liveCheckLabel || liveCheckLabel(proof.liveCheck)}`);
+  }
+  return lines.join('\n');
+}
+
+function liveCheckLabel(check) {
+  if (!check) return '';
+  const status = check.status ? `${check.status}${check.ok ? ' OK' : ''}` : (check.statusText || 'Failed');
+  const latency = Number.isFinite(Number(check.latencyMs)) ? `${Math.round(Number(check.latencyMs))} ms` : '';
+  const title = check.title || check.heading || '';
+  return [status, latency, title].filter(Boolean).join(' · ');
 }
 
 async function copyTextToClipboard(text) {
@@ -893,7 +908,7 @@ async function copyTextToClipboard(text) {
 }
 
 function handoffLatestBlock(proof) {
-  return [
+  const lines = [
     '## Latest',
     '- lane: runtime',
     `- status: ${proof.status}`,
@@ -901,18 +916,26 @@ function handoffLatestBlock(proof) {
     `- command: ${proof.command}`,
     `- url: ${proof.url || 'about:blank'}`,
     `- files: ${proof.files.length > 0 ? proof.files.join(', ') : 'n/a'}`,
-    '- next: continue from the copied Ship Brief and verify the next product improvement in Pixelbox',
-  ].join('\n');
+  ];
+  if (proof.liveCheck) {
+    lines.push(`- live check: ${liveCheckLabel(proof.liveCheck)}`);
+  }
+  lines.push('- next: continue from the copied Ship Brief and verify the next product improvement in Pixelbox');
+  return lines.join('\n');
 }
 
 function handoffHistoryEntry(proof) {
-  return [
+  const lines = [
     `## Ship Brief - ${new Date().toISOString()}`,
     `- status: ${proof.status}`,
     `- command: ${proof.command}`,
     `- url: ${proof.url || 'about:blank'}`,
     `- files: ${proof.files.length > 0 ? proof.files.join(', ') : 'n/a'}`,
-  ].join('\n');
+  ];
+  if (proof.liveCheck) {
+    lines.push(`- live check: ${liveCheckLabel(proof.liveCheck)}`);
+  }
+  return lines.join('\n');
 }
 
 function updateHandoffContent(existingContent, proof) {
@@ -971,6 +994,33 @@ async function copyShipBriefToClipboard() {
   await window.api.writeFile(handoffPath, nextHandoff);
   await copyTextToClipboard(shipBriefText(proof, nextHandoff));
   if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Brief copied + handoff updated';
+}
+
+async function runProofLiveCheck() {
+  const proof = proofForProject(selectedProjectPath);
+  if (!proof?.url) return;
+  if (proofCheckEl) proofCheckEl.disabled = true;
+  if (proofCheckStatusEl) proofCheckStatusEl.textContent = 'Checking live URL...';
+  try {
+    const result = await window.api.probePreviewUrl(proof.url, {
+      timeoutMs: 2500,
+      attempts: 6,
+      retryDelayMs: 300,
+    });
+    const config = {
+      ...(projectRuntimeConfig.get(selectedProjectPath) || defaultRuntimeConfig()),
+      proofLiveCheck: result,
+      proofUpdatedAt: Date.now(),
+    };
+    projectRuntimeConfig.set(selectedProjectPath, config);
+    await persistPreviewState(selectedProjectPath);
+    renderProofForProject(selectedProjectPath);
+  } catch (error) {
+    const message = error && error.message ? error.message : 'Live Check failed';
+    if (proofCheckStatusEl) proofCheckStatusEl.textContent = message;
+  } finally {
+    if (proofCheckEl) proofCheckEl.disabled = false;
+  }
 }
 
 function closeProofFileModal() {
@@ -1045,6 +1095,18 @@ function renderProofForProject(projectPath) {
     } else {
       proofUrlEl.href = '#';
       proofUrlEl.setAttribute('aria-disabled', 'true');
+    }
+  }
+  if (proofCheckEl) {
+    proofCheckEl.disabled = !proof.url;
+  }
+  if (proofCheckStatusEl) {
+    if (proof.liveCheck) {
+      proofCheckStatusEl.textContent = `Live Check: ${liveCheckLabel(proof.liveCheck)}`;
+      proofCheckStatusEl.dataset.tone = proof.liveCheck.ok ? 'success' : 'error';
+    } else {
+      proofCheckStatusEl.textContent = '';
+      proofCheckStatusEl.dataset.tone = '';
     }
   }
   if (proofFilesEl) {
@@ -2641,6 +2703,13 @@ if (quickSurpriseEl) {
 }
 if (quickOpenTerminalEl) {
   quickOpenTerminalEl.addEventListener('click', openPanel);
+}
+if (proofCheckEl) {
+  proofCheckEl.addEventListener('click', () => {
+    runProofLiveCheck().catch(() => {
+      if (proofCheckStatusEl) proofCheckStatusEl.textContent = 'Live Check failed';
+    });
+  });
 }
 if (proofBriefEl) {
   proofBriefEl.addEventListener('click', () => {

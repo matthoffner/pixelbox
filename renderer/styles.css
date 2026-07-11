@@ -615,6 +615,7 @@ input:focus-visible,
 .project-btn:focus-visible,
 #running-page-actions button:focus-visible,
 #preview-nav button:focus-visible,
+#proof-check:focus-visible,
 #proof-brief:focus-visible,
 #proof-copy:focus-visible,
 .proof-file-chip:focus-visible,
@@ -840,6 +841,7 @@ body.vibrant-window #preview-frame {
 }
 
 #proof-status,
+#proof-check-status,
 #proof-copy-status {
   color: var(--muted);
   font-size: 12px;
@@ -851,6 +853,7 @@ body.vibrant-window #preview-frame {
   align-items: center;
 }
 
+#proof-check,
 #proof-brief,
 #proof-copy {
   min-height: 30px;
@@ -863,6 +866,10 @@ body.vibrant-window #preview-frame {
   cursor: pointer;
 }
 
+#proof-check {
+  background: color-mix(in srgb, #7fd4ff 18%, var(--surface));
+}
+
 #proof-brief {
   background: color-mix(in srgb, #9ce8cf 26%, var(--surface));
 }
@@ -871,11 +878,33 @@ body.vibrant-window #preview-frame {
   background: color-mix(in srgb, #9ce8cf 12%, var(--surface));
 }
 
+#proof-check:hover,
+#proof-check:focus-visible,
 #proof-brief:hover,
 #proof-brief:focus-visible,
 #proof-copy:hover,
 #proof-copy:focus-visible {
   background: color-mix(in srgb, #9ce8cf 28%, var(--surface));
+}
+
+#proof-check:disabled {
+  opacity: 0.58;
+  cursor: wait;
+}
+
+#proof-check-status {
+  min-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#proof-check-status[data-tone='success'] {
+  color: #9ce8cf;
+}
+
+#proof-check-status[data-tone='error'] {
+  color: #ffb3aa;
 }
 
 .proof-grid {
@@ -1405,12 +1434,8 @@ body.vibrant-window #chat-header {
 
   #proof-dock {
     right: 10px;
-    bottom: 10px;
-    width: calc(100% - 20px);
-  }
-
-  body.projects-panel-hidden #proof-dock {
     bottom: 72px;
+    width: calc(100% - 20px);
   }
 
   .proof-grid {
