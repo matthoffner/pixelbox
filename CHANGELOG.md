@@ -9,6 +9,7 @@
 - Added Snapshot Compare for reviewing the latest proof snapshot beside the previous snapshot directly inside Pixelbox.
 - Added a one-click Ship Brief action that copies an agent-ready continuation prompt and writes the current live proof into `.pixelbox/handoff.md`.
 - Added File Peek for proof receipt files so generated/touched files can be inspected and copied without leaving Pixelbox.
+- Added Runtime Output for proof receipts so managed server stdout/stderr can be inspected and copied from inside Pixelbox.
 - Improved server runtime restarts so live projects show a Restart action, relaunch on the same managed port, reload the preview after code edits, and hide irrelevant source fields.
 - Improved runtime failure visibility by showing managed server exit codes in the Running Page and proof receipt.
 - Fixed hidden-state styling so first-load panels do not show dormant forms or controls before the user opens them.

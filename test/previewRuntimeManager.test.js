@@ -36,11 +36,15 @@ test('PreviewRuntimeManager starts a server command and emits running/stopped st
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pxcode-preview-runtime-'));
   const port = await getFreePort();
   const statuses = [];
+  const logs = [];
   const scriptPath = path.join(tmpDir, 'server.js');
   const manager = new PreviewRuntimeManager({
     shell: '/bin/zsh',
     sendStatus(payload) {
       statuses.push(payload);
+    },
+    sendLog(payload) {
+      logs.push(payload);
     },
   });
 
@@ -68,6 +72,7 @@ test('PreviewRuntimeManager starts a server command and emits running/stopped st
     await waitForCondition(() => statuses.some((entry) => entry.running && entry.url === `http://127.0.0.1:${port}`), {
       message: 'Timed out waiting for preview runtime to report URL',
     });
+    assert.ok(logs.some((entry) => entry.stream === 'stdout' && entry.data.includes(`http://127.0.0.1:${port}`)));
 
     manager.stop('project-a');
 

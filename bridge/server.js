@@ -134,6 +134,9 @@ const previewRuntimeManager = new PreviewRuntimeManager({
   sendStatus(payload) {
     emit('preview:status', payload);
   },
+  sendLog(payload) {
+    emit('preview:log', payload);
+  },
 });
 
 function watchRendererFiles() {

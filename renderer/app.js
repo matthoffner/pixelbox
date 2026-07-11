@@ -46,6 +46,7 @@ const proofCommandEl = document.getElementById('proof-command');
 const proofUrlEl = document.getElementById('proof-url');
 const proofFilesEl = document.getElementById('proof-files');
 const proofCheckEl = document.getElementById('proof-check');
+const proofOutputEl = document.getElementById('proof-output');
 const proofCheckStatusEl = document.getElementById('proof-check-status');
 const proofSnapshotEl = document.getElementById('proof-snapshot');
 const proofSnapshotOpenEl = document.getElementById('proof-snapshot-open');
@@ -62,6 +63,12 @@ const proofFileContentEl = document.getElementById('proof-file-content');
 const proofFileStatusEl = document.getElementById('proof-file-status');
 const proofFileCopyPathEl = document.getElementById('proof-file-copy-path');
 const proofFileCopyContentEl = document.getElementById('proof-file-copy-content');
+const proofOutputModalEl = document.getElementById('proof-output-modal');
+const proofOutputCloseEl = document.getElementById('proof-output-close');
+const proofOutputCopyEl = document.getElementById('proof-output-copy');
+const proofOutputSubtitleEl = document.getElementById('proof-output-subtitle');
+const proofOutputContentEl = document.getElementById('proof-output-content');
+const proofOutputStatusEl = document.getElementById('proof-output-status');
 const proofLedgerModalEl = document.getElementById('proof-ledger-modal');
 const proofLedgerCloseEl = document.getElementById('proof-ledger-close');
 const proofLedgerCopyEl = document.getElementById('proof-ledger-copy');
@@ -129,6 +136,7 @@ const hiddenProjects = new Set();
 const projectPreviewState = new Map();
 const projectRuntimeConfig = new Map();
 const projectRuntimeStatus = new Map();
+const projectRuntimeOutput = new Map();
 const projectTerminalOutput = new Map();
 const projectNativeStartupCommand = new Map();
 const projectSessionBootstrapped = new Set();
@@ -167,6 +175,7 @@ const TERMINAL_MIN_ROWS = 24;
 const TERMINAL_CELL_WIDTH = 8.4;
 const TERMINAL_CELL_HEIGHT = 18;
 const MAX_PROJECT_TERMINAL_OUTPUT = 200000;
+const MAX_PROJECT_RUNTIME_OUTPUT = 60000;
 const LAST_SELECTED_PROJECT_KEY = 'pixelbox.lastSelectedProject';
 const PROJECTS_PANEL_HIDDEN_KEY = 'pixelbox.projectsPanelHidden';
 const PROJECTS_PANEL_POSITION_KEY = 'pixelbox.projectsPanelPosition';
@@ -1382,6 +1391,66 @@ async function copyActiveProofFileContent() {
   if (proofFileStatusEl) proofFileStatusEl.textContent = 'File copied';
 }
 
+function runtimeOutputForProject(projectPath) {
+  return projectRuntimeOutput.get(projectPath) || '';
+}
+
+function appendPreviewRuntimeOutput(projectPath, data) {
+  const chunk = String(data || '');
+  if (!chunk) return;
+  const next = `${runtimeOutputForProject(projectPath)}${chunk}`.slice(-MAX_PROJECT_RUNTIME_OUTPUT);
+  projectRuntimeOutput.set(projectPath, next);
+  if (projectPath !== selectedProjectPath) return;
+  if (proofOutputEl) proofOutputEl.disabled = next.trim().length === 0;
+  if (proofOutputModalEl && !proofOutputModalEl.hidden) {
+    renderProofOutputModal(projectPath);
+  }
+}
+
+function renderProofOutputModal(projectPath) {
+  if (!proofOutputContentEl) return;
+  const output = runtimeOutputForProject(projectPath);
+  const hasOutput = output.trim().length > 0;
+  proofOutputContentEl.textContent = hasOutput ? output : 'No managed runtime output captured yet.';
+  if (proofOutputSubtitleEl) {
+    proofOutputSubtitleEl.textContent = hasOutput
+      ? `${projectDisplayLabel(projectPath)} · ${output.length.toLocaleString()} chars`
+      : projectDisplayLabel(projectPath);
+  }
+  if (proofOutputStatusEl) {
+    proofOutputStatusEl.textContent = hasOutput
+      ? 'Captured from the managed preview runtime'
+      : 'Start or restart a server runtime to capture output';
+  }
+  window.__pwProofOutputModal = {
+    open: Boolean(proofOutputModalEl && !proofOutputModalEl.hidden),
+    project: projectPath,
+    output,
+  };
+}
+
+function closeProofOutputModal() {
+  if (!proofOutputModalEl) return;
+  proofOutputModalEl.hidden = true;
+  if (proofOutputStatusEl) proofOutputStatusEl.textContent = '';
+  window.__pwProofOutputModal = { open: false, project: selectedProjectPath, output: runtimeOutputForProject(selectedProjectPath) };
+}
+
+function openProofOutputModal() {
+  if (!proofOutputModalEl || !proofOutputContentEl) return;
+  proofOutputModalEl.hidden = false;
+  if (proofOutputStatusEl) proofOutputStatusEl.textContent = '';
+  renderProofOutputModal(selectedProjectPath);
+  requestAnimationFrame(() => proofOutputContentEl.focus());
+}
+
+async function copyProofOutputToClipboard() {
+  const output = runtimeOutputForProject(selectedProjectPath);
+  if (!output.trim()) return;
+  await copyTextToClipboard(output);
+  if (proofOutputStatusEl) proofOutputStatusEl.textContent = 'Runtime output copied';
+}
+
 function closeProofLedgerModal() {
   if (!proofLedgerModalEl) return;
   proofLedgerModalEl.hidden = true;
@@ -1555,6 +1624,7 @@ function renderProofForProject(projectPath) {
   window.__pwProofLedger = proof?.ledger || [];
   if (!proof) {
     proofDockEl.hidden = true;
+    if (proofOutputEl) proofOutputEl.hidden = true;
     if (proofLedgerToggleEl) proofLedgerToggleEl.hidden = true;
     if (proofSnapshotOpenEl) proofSnapshotOpenEl.hidden = true;
     if (proofCompareEl) proofCompareEl.hidden = true;
@@ -1581,6 +1651,14 @@ function renderProofForProject(projectPath) {
   }
   if (proofCheckEl) {
     proofCheckEl.disabled = !proof.url;
+  }
+  if (proofOutputEl) {
+    const hasOutput = runtimeOutputForProject(projectPath).trim().length > 0;
+    proofOutputEl.hidden = proof.command === 'Static HTML preview';
+    proofOutputEl.disabled = !hasOutput;
+    proofOutputEl.title = hasOutput
+      ? 'Show managed runtime output'
+      : 'No managed runtime output captured yet';
   }
   if (proofSnapshotEl) {
     proofSnapshotEl.disabled = !proof.url;
@@ -2714,6 +2792,13 @@ window.api.onTerminalData(({ key, data }) => {
 });
 
 window.api.onPreviewStatus(({ key, running, url, configuredUrl, sourceType, exitCode, signal }) => {
+  const previousStatus = projectRuntimeStatus.get(key) || { running: false };
+  if (running && !previousStatus.running) {
+    projectRuntimeOutput.set(key, '');
+    if (key === selectedProjectPath && proofOutputModalEl && !proofOutputModalEl.hidden) {
+      renderProofOutputModal(key);
+    }
+  }
   projectRuntimeStatus.set(key, {
     running,
     sourceType,
@@ -2745,6 +2830,12 @@ window.api.onPreviewStatus(({ key, running, url, configuredUrl, sourceType, exit
     renderProofForProject(key);
   }
 });
+
+if (window.api.onPreviewLog) {
+  window.api.onPreviewLog(({ key, data }) => {
+    appendPreviewRuntimeOutput(key, data);
+  });
+}
 
 window.api.onPreviewHtmlChanged(({ key }) => {
   if (key !== selectedProjectPath) return;
@@ -2848,6 +2939,26 @@ if (proofFileCopyContentEl) {
   proofFileCopyContentEl.addEventListener('click', () => {
     copyActiveProofFileContent().catch(() => {
       if (proofFileStatusEl) proofFileStatusEl.textContent = 'Copy failed';
+    });
+  });
+}
+if (proofOutputEl) {
+  proofOutputEl.addEventListener('click', openProofOutputModal);
+}
+if (proofOutputCloseEl) {
+  proofOutputCloseEl.addEventListener('click', closeProofOutputModal);
+}
+if (proofOutputModalEl) {
+  proofOutputModalEl.addEventListener('click', (event) => {
+    if (event.target === proofOutputModalEl) {
+      closeProofOutputModal();
+    }
+  });
+}
+if (proofOutputCopyEl) {
+  proofOutputCopyEl.addEventListener('click', () => {
+    copyProofOutputToClipboard().catch(() => {
+      if (proofOutputStatusEl) proofOutputStatusEl.textContent = 'Copy failed';
     });
   });
 }
@@ -3236,6 +3347,12 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && proofFileModalEl && !proofFileModalEl.hidden) {
     event.preventDefault();
     closeProofFileModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && proofOutputModalEl && !proofOutputModalEl.hidden) {
+    event.preventDefault();
+    closeProofOutputModal();
     return;
   }
 

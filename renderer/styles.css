@@ -400,6 +400,7 @@ input {
 
 #hidden-projects-close,
 #proof-file-close,
+#proof-output-close,
 #proof-ledger-close,
 #proof-snapshot-close,
 #proof-compare-close {
@@ -410,13 +411,15 @@ input {
   background: transparent;
 }
 
-.proof-file-modal-panel {
+.proof-file-modal-panel,
+.proof-output-modal-panel {
   width: min(860px, 100%);
   display: grid;
   grid-template-rows: auto minmax(220px, 1fr) auto;
 }
 
 .proof-file-heading,
+.proof-output-heading,
 .proof-ledger-heading,
 .proof-snapshot-heading,
 .proof-compare-heading {
@@ -426,6 +429,7 @@ input {
 }
 
 #proof-file-path,
+#proof-output-subtitle,
 #proof-ledger-subtitle,
 #proof-snapshot-path,
 #proof-compare-summary {
@@ -438,6 +442,7 @@ input {
 }
 
 .proof-file-actions,
+.proof-output-actions,
 .proof-ledger-actions,
 .proof-snapshot-actions,
 .proof-compare-actions {
@@ -448,6 +453,7 @@ input {
 
 #proof-file-copy-path,
 #proof-file-copy-content,
+#proof-output-copy,
 #proof-ledger-copy,
 #proof-snapshot-copy-path,
 #proof-compare-copy {
@@ -464,11 +470,13 @@ input {
 
 #proof-file-copy-path:hover,
 #proof-file-copy-content:hover,
+#proof-output-copy:hover,
 #proof-ledger-copy:hover,
 #proof-snapshot-copy-path:hover,
 #proof-compare-copy:hover,
 #proof-file-copy-path:focus-visible,
 #proof-file-copy-content:focus-visible,
+#proof-output-copy:focus-visible,
 #proof-ledger-copy:focus-visible,
 #proof-snapshot-copy-path:focus-visible,
 #proof-compare-copy:focus-visible {
@@ -650,7 +658,8 @@ input {
   font-size: 12px;
 }
 
-#proof-file-content {
+#proof-file-content,
+#proof-output-content {
   min-height: 220px;
   max-height: min(620px, calc(100vh - 190px));
   margin: 0;
@@ -664,7 +673,8 @@ input {
   word-break: normal;
 }
 
-#proof-file-status {
+#proof-file-status,
+#proof-output-status {
   min-height: 18px;
   padding: 10px 16px 14px;
   color: var(--muted);
@@ -1062,6 +1072,7 @@ body.vibrant-window #preview-frame {
 }
 
 #proof-check,
+#proof-output,
 #proof-brief,
 #proof-copy {
   min-height: 30px;
@@ -1078,6 +1089,10 @@ body.vibrant-window #preview-frame {
   background: color-mix(in srgb, #7fd4ff 18%, var(--surface));
 }
 
+#proof-output {
+  background: color-mix(in srgb, #7fd4ff 12%, var(--surface));
+}
+
 #proof-brief {
   background: color-mix(in srgb, #9ce8cf 26%, var(--surface));
 }
@@ -1088,6 +1103,8 @@ body.vibrant-window #preview-frame {
 
 #proof-check:hover,
 #proof-check:focus-visible,
+#proof-output:hover,
+#proof-output:focus-visible,
 #proof-brief:hover,
 #proof-brief:focus-visible,
 #proof-copy:hover,
@@ -1098,6 +1115,11 @@ body.vibrant-window #preview-frame {
 #proof-check:disabled {
   opacity: 0.58;
   cursor: wait;
+}
+
+#proof-output:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
 }
 
 #proof-check-status {
@@ -1689,6 +1711,7 @@ body.vibrant-window #chat-header {
   }
 
   .proof-file-modal-panel .modal-header,
+  .proof-output-modal-panel .modal-header,
   .proof-ledger-modal-panel .modal-header,
   .proof-snapshot-modal-panel .modal-header,
   .proof-compare-modal-panel .modal-header {
@@ -1697,6 +1720,7 @@ body.vibrant-window #chat-header {
   }
 
   #proof-file-path,
+  #proof-output-subtitle,
   #proof-ledger-subtitle,
   #proof-snapshot-path,
   #proof-compare-summary {
@@ -1704,6 +1728,7 @@ body.vibrant-window #chat-header {
   }
 
   .proof-file-actions,
+  .proof-output-actions,
   .proof-ledger-actions,
   .proof-snapshot-actions,
   .proof-compare-actions {
