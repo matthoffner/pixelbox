@@ -546,6 +546,7 @@ input:focus-visible,
 .project-btn:focus-visible,
 #running-page-actions button:focus-visible,
 #preview-nav button:focus-visible,
+#proof-brief:focus-visible,
 #proof-copy:focus-visible {
   outline: 2px solid color-mix(in srgb, white 55%, var(--cta));
   outline-offset: 2px;
@@ -771,11 +772,17 @@ body.vibrant-window #preview-frame {
   font-size: 12px;
 }
 
+.proof-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+#proof-brief,
 #proof-copy {
   min-height: 30px;
   border: 1px solid color-mix(in srgb, #9ce8cf, var(--border) 55%);
   border-radius: 999px;
-  background: color-mix(in srgb, #9ce8cf 18%, var(--surface));
   color: var(--text);
   padding: 0 10px;
   font: inherit;
@@ -783,6 +790,16 @@ body.vibrant-window #preview-frame {
   cursor: pointer;
 }
 
+#proof-brief {
+  background: color-mix(in srgb, #9ce8cf 26%, var(--surface));
+}
+
+#proof-copy {
+  background: color-mix(in srgb, #9ce8cf 12%, var(--surface));
+}
+
+#proof-brief:hover,
+#proof-brief:focus-visible,
 #proof-copy:hover,
 #proof-copy:focus-visible {
   background: color-mix(in srgb, #9ce8cf 28%, var(--surface));

@@ -45,6 +45,7 @@ const proofProjectEl = document.getElementById('proof-project');
 const proofCommandEl = document.getElementById('proof-command');
 const proofUrlEl = document.getElementById('proof-url');
 const proofFilesEl = document.getElementById('proof-files');
+const proofBriefEl = document.getElementById('proof-brief');
 const proofCopyEl = document.getElementById('proof-copy');
 const proofCopyStatusEl = document.getElementById('proof-copy-status');
 const runningPageTypeEl = document.getElementById('running-page-type');
@@ -567,10 +568,14 @@ function pixelboxContextBlock() {
   ].join('\n');
 }
 
-async function ensureAgentHandoffFile(projectPath) {
-  const handoffPath = projectPath === '.'
+function handoffPathForProject(projectPath) {
+  return projectPath === '.'
     ? '.pixelbox/handoff.md'
     : `${projectPath}/.pixelbox/handoff.md`;
+}
+
+async function ensureAgentHandoffFile(projectPath) {
+  const handoffPath = handoffPathForProject(projectPath);
   const { content } = await window.api.readFile(handoffPath);
   if ((content || '').trim()) return;
   const seed = [
@@ -862,28 +867,101 @@ function proofText(proof) {
   ].join('\n');
 }
 
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+}
+
+function handoffLatestBlock(proof) {
+  return [
+    '## Latest',
+    '- lane: runtime',
+    `- status: ${proof.status}`,
+    `- project: ${proof.project}`,
+    `- command: ${proof.command}`,
+    `- url: ${proof.url || 'about:blank'}`,
+    `- files: ${proof.files.length > 0 ? proof.files.join(', ') : 'n/a'}`,
+    '- next: continue from the copied Ship Brief and verify the next product improvement in Pixelbox',
+  ].join('\n');
+}
+
+function handoffHistoryEntry(proof) {
+  return [
+    `## Ship Brief - ${new Date().toISOString()}`,
+    `- status: ${proof.status}`,
+    `- command: ${proof.command}`,
+    `- url: ${proof.url || 'about:blank'}`,
+    `- files: ${proof.files.length > 0 ? proof.files.join(', ') : 'n/a'}`,
+  ].join('\n');
+}
+
+function updateHandoffContent(existingContent, proof) {
+  const existing = String(existingContent || '').trimEnd();
+  const base = existing || '# Pixelbox Agent Handoff\n\nUse this file to coordinate between editor/runtime lanes.';
+  const latest = handoffLatestBlock(proof);
+  const latestPattern = /(^|\n)## Latest\n[\s\S]*?(?=\n## |$)/;
+  const updated = latestPattern.test(base)
+    ? base.replace(latestPattern, (match, leadingNewline) => `${leadingNewline}${latest}\n`)
+    : `${base}\n\n${latest}`;
+  return `${updated}\n\n${handoffHistoryEntry(proof)}\n`;
+}
+
+function shipBriefText(proof, handoffContent) {
+  const handoffExcerpt = String(handoffContent || '')
+    .trim()
+    .slice(0, 1800) || 'No handoff notes yet.';
+  return [
+    'Pixelbox Ship Brief',
+    '',
+    'You are inside Pixelbox. Continue from the live running product state below.',
+    '',
+    proofText(proof),
+    '',
+    'Current handoff:',
+    handoffExcerpt,
+    '',
+    'Task:',
+    '- Inspect the live preview before changing code.',
+    '- Make one high-impact usability or product-momentum improvement.',
+    '- Keep local run commands deterministic and embeddable in Pixelbox.',
+    '- Update CHANGELOG.md with the shipped update.',
+    '- Verify with tests and real product use.',
+    '- When done, report changed files, commands run, and the exact local URL.',
+  ].join('\n');
+}
+
 async function copyProofToClipboard() {
   const proof = proofForProject(selectedProjectPath);
   if (!proof) return;
-  const text = proofText(proof);
   try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.setAttribute('readonly', '');
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      textarea.remove();
-    }
+    await copyTextToClipboard(proofText(proof));
     if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Copied';
   } catch {
     if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Copy failed';
   }
+}
+
+async function copyShipBriefToClipboard() {
+  const proof = proofForProject(selectedProjectPath);
+  if (!proof) return;
+  if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Writing handoff...';
+  const handoffPath = handoffPathForProject(selectedProjectPath);
+  const { content } = await window.api.readFile(handoffPath);
+  const nextHandoff = updateHandoffContent(content, proof);
+  await window.api.writeFile(handoffPath, nextHandoff);
+  await copyTextToClipboard(shipBriefText(proof, nextHandoff));
+  if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Brief copied + handoff updated';
 }
 
 function renderProofForProject(projectPath) {
@@ -2467,6 +2545,13 @@ if (quickSurpriseEl) {
 }
 if (quickOpenTerminalEl) {
   quickOpenTerminalEl.addEventListener('click', openPanel);
+}
+if (proofBriefEl) {
+  proofBriefEl.addEventListener('click', () => {
+    copyShipBriefToClipboard().catch(() => {
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Brief failed';
+    });
+  });
 }
 if (proofCopyEl) {
   proofCopyEl.addEventListener('click', () => {

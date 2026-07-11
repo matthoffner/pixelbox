@@ -41,7 +41,7 @@ Pixelbox should feel like an AI-native operating surface for software creation:
 - Floating native Ghostty terminal panel.
 - Project switcher and per-project runtime config.
 - Embedded live app view for local URLs/files.
-- Live run proof receipts with project, command, URL, touched files, and copyable verification text.
+- Live run proof receipts with project, command, URL, touched files, copyable verification text, and one-click Ship Brief handoffs.
 - Native app runtime support with capture-image previews.
 - AI Launch presets for Codex, Claude, Gemini, Hermes, OpenClaw TUI, or a plain terminal.
 - In-app agent monitor for active Codex processes.
