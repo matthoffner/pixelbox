@@ -234,6 +234,29 @@
       </section>
     </div>
 
+    <div id="proof-file-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="proof-file-title" hidden>
+      <section class="modal-panel proof-file-modal-panel">
+        <header class="modal-header">
+          <div class="proof-file-heading">
+            <strong id="proof-file-title">File Peek</strong>
+            <span id="proof-file-path">No file selected</span>
+          </div>
+          <div class="proof-file-actions">
+            <button id="proof-file-copy-path" type="button">Copy path</button>
+            <button id="proof-file-copy-content" type="button">Copy file</button>
+            <button id="proof-file-close" class="icon-button panel-icon-button" type="button" aria-label="Close file peek" title="Close">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12" />
+                <path d="M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+        </header>
+        <pre id="proof-file-content" tabindex="0"></pre>
+        <div id="proof-file-status" role="status" aria-live="polite"></div>
+      </section>
+    </div>
+
     <section id="chat-panel" aria-label="Terminal panel">
       <header id="chat-header">
         <span>Directory Terminal</span>

@@ -4,6 +4,7 @@
 
 - Added a live run proof receipt over the preview with project, command, URL, touched files, copy-to-clipboard, and persisted proof metadata for quick-start generated runtimes.
 - Added a one-click Ship Brief action that copies an agent-ready continuation prompt and writes the current live proof into `.pixelbox/handoff.md`.
+- Added File Peek for proof receipt files so generated/touched files can be inspected and copied without leaving Pixelbox.
 - Scoped `npm test` to Pixelbox-owned test files so ignored local `projects/` workspaces no longer break the product test suite.
 
 ## 0.3.0 - 2026-04-26

@@ -48,6 +48,14 @@ const proofFilesEl = document.getElementById('proof-files');
 const proofBriefEl = document.getElementById('proof-brief');
 const proofCopyEl = document.getElementById('proof-copy');
 const proofCopyStatusEl = document.getElementById('proof-copy-status');
+const proofFileModalEl = document.getElementById('proof-file-modal');
+const proofFileCloseEl = document.getElementById('proof-file-close');
+const proofFileTitleEl = document.getElementById('proof-file-title');
+const proofFilePathEl = document.getElementById('proof-file-path');
+const proofFileContentEl = document.getElementById('proof-file-content');
+const proofFileStatusEl = document.getElementById('proof-file-status');
+const proofFileCopyPathEl = document.getElementById('proof-file-copy-path');
+const proofFileCopyContentEl = document.getElementById('proof-file-copy-content');
 const runningPageTypeEl = document.getElementById('running-page-type');
 const runningPageHtmlEl = document.getElementById('running-page-html');
 const runningPageCommandEl = document.getElementById('running-page-command');
@@ -109,6 +117,7 @@ let projectsDragPointer = null;
 let projectsMouseDrag = null;
 let agentMonitorPollTimer = null;
 let previewCaptureRegionRaf = 0;
+let activeProofFile = null;
 const agentMonitorStoppingPids = new Set();
 let selectedAiCli = 'codex';
 let codexDangerouslyBypassPermissions = false;
@@ -964,6 +973,53 @@ async function copyShipBriefToClipboard() {
   if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Brief copied + handoff updated';
 }
 
+function closeProofFileModal() {
+  if (!proofFileModalEl) return;
+  proofFileModalEl.hidden = true;
+  activeProofFile = null;
+  if (proofFileStatusEl) proofFileStatusEl.textContent = '';
+}
+
+async function openProofFileModal(filePath) {
+  if (!proofFileModalEl || !proofFileContentEl || !proofFilePathEl) return;
+  const cleanedPath = String(filePath || '').trim();
+  if (!cleanedPath) return;
+  activeProofFile = { path: cleanedPath, content: '' };
+  proofFileModalEl.hidden = false;
+  if (proofFileTitleEl) proofFileTitleEl.textContent = 'File Peek';
+  proofFilePathEl.textContent = cleanedPath;
+  proofFileContentEl.textContent = 'Loading...';
+  if (proofFileStatusEl) proofFileStatusEl.textContent = '';
+  window.__pwProofFilePeek = { path: cleanedPath, content: '', loading: true };
+  requestAnimationFrame(() => proofFileContentEl.focus());
+
+  try {
+    const { content } = await window.api.readFile(cleanedPath);
+    if (!activeProofFile || activeProofFile.path !== cleanedPath) return;
+    activeProofFile.content = content || '';
+    proofFileContentEl.textContent = activeProofFile.content || '(empty file)';
+    if (proofFileStatusEl) proofFileStatusEl.textContent = 'Loaded from workspace';
+    window.__pwProofFilePeek = { path: cleanedPath, content: activeProofFile.content, loading: false };
+  } catch (error) {
+    const message = error && error.message ? error.message : 'Could not read file';
+    proofFileContentEl.textContent = message;
+    if (proofFileStatusEl) proofFileStatusEl.textContent = 'Load failed';
+    window.__pwProofFilePeek = { path: cleanedPath, content: '', loading: false, error: message };
+  }
+}
+
+async function copyActiveProofFilePath() {
+  if (!activeProofFile?.path) return;
+  await copyTextToClipboard(activeProofFile.path);
+  if (proofFileStatusEl) proofFileStatusEl.textContent = 'Path copied';
+}
+
+async function copyActiveProofFileContent() {
+  if (!activeProofFile) return;
+  await copyTextToClipboard(activeProofFile.content || '');
+  if (proofFileStatusEl) proofFileStatusEl.textContent = 'File copied';
+}
+
 function renderProofForProject(projectPath) {
   if (!proofDockEl) return;
   const proof = proofForProject(projectPath);
@@ -994,8 +1050,18 @@ function renderProofForProject(projectPath) {
   if (proofFilesEl) {
     proofFilesEl.innerHTML = '';
     for (const file of proof.files) {
-      const item = document.createElement('code');
-      item.textContent = file;
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'proof-file-chip';
+      item.title = `Peek ${file}`;
+      item.addEventListener('click', () => {
+        openProofFileModal(file).catch(() => {
+          if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'File peek failed';
+        });
+      });
+      const label = document.createElement('code');
+      label.textContent = file;
+      item.appendChild(label);
       proofFilesEl.appendChild(item);
     }
   }
@@ -2169,6 +2235,30 @@ if (hiddenProjectsModalEl) {
     }
   });
 }
+if (proofFileCloseEl) {
+  proofFileCloseEl.addEventListener('click', closeProofFileModal);
+}
+if (proofFileModalEl) {
+  proofFileModalEl.addEventListener('click', (event) => {
+    if (event.target === proofFileModalEl) {
+      closeProofFileModal();
+    }
+  });
+}
+if (proofFileCopyPathEl) {
+  proofFileCopyPathEl.addEventListener('click', () => {
+    copyActiveProofFilePath().catch(() => {
+      if (proofFileStatusEl) proofFileStatusEl.textContent = 'Copy failed';
+    });
+  });
+}
+if (proofFileCopyContentEl) {
+  proofFileCopyContentEl.addEventListener('click', () => {
+    copyActiveProofFileContent().catch(() => {
+      if (proofFileStatusEl) proofFileStatusEl.textContent = 'Copy failed';
+    });
+  });
+}
 if (agentMonitorRefreshEl) {
   agentMonitorRefreshEl.addEventListener('click', () => {
     refreshAgentMonitor().catch(() => {});
@@ -2487,6 +2577,12 @@ if (projectsHeaderEl && projectsPanelEl) {
 }
 
 window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && proofFileModalEl && !proofFileModalEl.hidden) {
+    event.preventDefault();
+    closeProofFileModal();
+    return;
+  }
+
   if (event.key === 'Escape' && hiddenProjectsModalEl && !hiddenProjectsModalEl.hidden) {
     event.preventDefault();
     closeHiddenProjectsModal();

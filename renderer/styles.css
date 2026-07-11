@@ -394,12 +394,81 @@ input {
   padding: 14px;
 }
 
-#hidden-projects-close {
+#hidden-projects-close,
+#proof-file-close {
   width: 30px;
   height: 30px;
   padding: 0;
   border-radius: 10px;
   background: transparent;
+}
+
+.proof-file-modal-panel {
+  width: min(860px, 100%);
+  display: grid;
+  grid-template-rows: auto minmax(220px, 1fr) auto;
+}
+
+.proof-file-heading {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+#proof-file-path {
+  max-width: min(560px, 62vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.proof-file-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#proof-file-copy-path,
+#proof-file-copy-content {
+  min-height: 30px;
+  border: 1px solid color-mix(in srgb, var(--border), white 8%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cta), transparent 72%);
+  color: var(--text);
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#proof-file-copy-path:hover,
+#proof-file-copy-content:hover,
+#proof-file-copy-path:focus-visible,
+#proof-file-copy-content:focus-visible {
+  background: color-mix(in srgb, var(--cta), transparent 56%);
+}
+
+#proof-file-content {
+  min-height: 220px;
+  max-height: min(620px, calc(100vh - 190px));
+  margin: 0;
+  overflow: auto;
+  padding: 16px;
+  border: 0;
+  background: #07111b;
+  color: rgba(245, 250, 255, 0.92);
+  font: 12px/1.55 "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  white-space: pre;
+  word-break: normal;
+}
+
+#proof-file-status {
+  min-height: 18px;
+  padding: 10px 16px 14px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 #new-project-form {
@@ -547,7 +616,11 @@ input:focus-visible,
 #running-page-actions button:focus-visible,
 #preview-nav button:focus-visible,
 #proof-brief:focus-visible,
-#proof-copy:focus-visible {
+#proof-copy:focus-visible,
+.proof-file-chip:focus-visible,
+#proof-file-copy-path:focus-visible,
+#proof-file-copy-content:focus-visible,
+#proof-file-close:focus-visible {
   outline: 2px solid color-mix(in srgb, white 55%, var(--cta));
   outline-offset: 2px;
 }
@@ -839,7 +912,7 @@ body.vibrant-window #preview-frame {
 }
 
 .proof-grid code,
-#proof-files code {
+.proof-file-chip code {
   font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
 }
 
@@ -854,16 +927,28 @@ body.vibrant-window #preview-frame {
   gap: 6px;
 }
 
-#proof-files code {
+.proof-file-chip {
+  max-width: 100%;
+  border: 1px solid color-mix(in srgb, var(--border), white 6%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: color-mix(in srgb, var(--text), #9ce8cf 18%);
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.proof-file-chip:hover,
+.proof-file-chip:focus-visible {
+  border-color: color-mix(in srgb, #9ce8cf, white 12%);
+  background: color-mix(in srgb, #9ce8cf 14%, var(--surface));
+}
+
+.proof-file-chip code {
+  display: block;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border: 1px solid color-mix(in srgb, var(--border), white 6%);
-  border-radius: 999px;
-  padding: 5px 8px;
-  color: color-mix(in srgb, var(--text), #9ce8cf 18%);
-  background: rgba(255, 255, 255, 0.04);
   font-size: 11px;
 }
 
@@ -1330,6 +1415,20 @@ body.vibrant-window #chat-header {
 
   .proof-grid {
     grid-template-columns: 1fr;
+  }
+
+  .proof-file-modal-panel .modal-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  #proof-file-path {
+    max-width: 100%;
+  }
+
+  .proof-file-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
   }
 }
 
