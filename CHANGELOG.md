@@ -5,6 +5,7 @@
 - Added a live run proof receipt over the preview with project, command, URL, touched files, copy-to-clipboard, and persisted proof metadata for quick-start generated runtimes.
 - Added a Live Check action that probes the preview URL, captures HTTP status, latency, and page title/heading, and carries that evidence into Ship Briefs.
 - Added an in-app Proof Ledger that records recent Live Checks and Ship Briefs, persists them in preview config, and copies a shareable evidence trail.
+- Added Proof Snapshot capture so the proof receipt can save a live preview PNG into `.pixelbox/proof-snapshots/`, view it in-app, and record it in the ledger.
 - Added a one-click Ship Brief action that copies an agent-ready continuation prompt and writes the current live proof into `.pixelbox/handoff.md`.
 - Added File Peek for proof receipt files so generated/touched files can be inspected and copied without leaving Pixelbox.
 - Improved narrow-screen preview flow so fresh mobile sessions and successful preview launches keep quick actions and proof controls reachable.

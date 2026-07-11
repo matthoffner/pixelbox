@@ -396,7 +396,8 @@ input {
 
 #hidden-projects-close,
 #proof-file-close,
-#proof-ledger-close {
+#proof-ledger-close,
+#proof-snapshot-close {
   width: 30px;
   height: 30px;
   padding: 0;
@@ -411,14 +412,16 @@ input {
 }
 
 .proof-file-heading,
-.proof-ledger-heading {
+.proof-ledger-heading,
+.proof-snapshot-heading {
   min-width: 0;
   display: grid;
   gap: 4px;
 }
 
 #proof-file-path,
-#proof-ledger-subtitle {
+#proof-ledger-subtitle,
+#proof-snapshot-path {
   max-width: min(560px, 62vw);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -428,7 +431,8 @@ input {
 }
 
 .proof-file-actions,
-.proof-ledger-actions {
+.proof-ledger-actions,
+.proof-snapshot-actions {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -436,7 +440,8 @@ input {
 
 #proof-file-copy-path,
 #proof-file-copy-content,
-#proof-ledger-copy {
+#proof-ledger-copy,
+#proof-snapshot-copy-path {
   min-height: 30px;
   border: 1px solid color-mix(in srgb, var(--border), white 8%);
   border-radius: 999px;
@@ -451,16 +456,23 @@ input {
 #proof-file-copy-path:hover,
 #proof-file-copy-content:hover,
 #proof-ledger-copy:hover,
+#proof-snapshot-copy-path:hover,
 #proof-file-copy-path:focus-visible,
 #proof-file-copy-content:focus-visible,
-#proof-ledger-copy:focus-visible {
+#proof-ledger-copy:focus-visible,
+#proof-snapshot-copy-path:focus-visible {
   background: color-mix(in srgb, var(--cta), transparent 56%);
 }
 
-.proof-ledger-modal-panel {
+.proof-ledger-modal-panel,
+.proof-snapshot-modal-panel {
   width: min(760px, 100%);
   display: grid;
   grid-template-rows: auto minmax(160px, 1fr) auto;
+}
+
+.proof-snapshot-modal-panel {
+  width: min(920px, 100%);
 }
 
 #proof-ledger-list {
@@ -538,6 +550,32 @@ input {
 #proof-ledger-status {
   min-height: 18px;
   padding: 0 16px 14px;
+}
+
+.proof-snapshot-stage {
+  min-height: 220px;
+  max-height: min(680px, calc(100vh - 190px));
+  overflow: auto;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  background: #07111b;
+}
+
+#proof-snapshot-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid color-mix(in srgb, var(--border), white 8%);
+  border-radius: 8px;
+  background: #07111b;
+}
+
+#proof-snapshot-status {
+  min-height: 18px;
+  padding: 10px 16px 14px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 #proof-file-content {
@@ -708,13 +746,16 @@ input:focus-visible,
 #proof-check:focus-visible,
 #proof-brief:focus-visible,
 #proof-copy:focus-visible,
-.proof-ledger-toggle:focus-visible,
+.proof-evidence-button:focus-visible,
+.proof-snapshot-chip:focus-visible,
 .proof-file-chip:focus-visible,
 #proof-file-copy-path:focus-visible,
 #proof-file-copy-content:focus-visible,
 #proof-file-close:focus-visible,
 #proof-ledger-copy:focus-visible,
-#proof-ledger-close:focus-visible {
+#proof-ledger-close:focus-visible,
+#proof-snapshot-copy-path:focus-visible,
+#proof-snapshot-close:focus-visible {
   outline: 2px solid color-mix(in srgb, white 55%, var(--cta));
   outline-offset: 2px;
 }
@@ -992,7 +1033,15 @@ body.vibrant-window #preview-frame {
   white-space: nowrap;
 }
 
-.proof-ledger-toggle {
+.proof-evidence-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.proof-evidence-button,
+.proof-snapshot-chip {
   justify-self: start;
   min-height: 28px;
   border: 1px solid color-mix(in srgb, #9ce8cf, var(--border) 62%);
@@ -1005,8 +1054,20 @@ body.vibrant-window #preview-frame {
   cursor: pointer;
 }
 
-.proof-ledger-toggle:hover,
-.proof-ledger-toggle:focus-visible {
+.proof-snapshot-chip {
+  max-width: 100%;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+}
+
+.proof-evidence-button:hover,
+.proof-evidence-button:focus-visible,
+.proof-snapshot-chip:hover,
+.proof-snapshot-chip:focus-visible {
   background: color-mix(in srgb, #9ce8cf 22%, var(--surface));
 }
 
@@ -1554,18 +1615,21 @@ body.vibrant-window #chat-header {
   }
 
   .proof-file-modal-panel .modal-header,
-  .proof-ledger-modal-panel .modal-header {
+  .proof-ledger-modal-panel .modal-header,
+  .proof-snapshot-modal-panel .modal-header {
     align-items: stretch;
     flex-direction: column;
   }
 
   #proof-file-path,
-  #proof-ledger-subtitle {
+  #proof-ledger-subtitle,
+  #proof-snapshot-path {
     max-width: 100%;
   }
 
   .proof-file-actions,
-  .proof-ledger-actions {
+  .proof-ledger-actions,
+  .proof-snapshot-actions {
     justify-content: flex-end;
     flex-wrap: wrap;
   }

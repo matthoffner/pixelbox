@@ -47,6 +47,8 @@ const proofUrlEl = document.getElementById('proof-url');
 const proofFilesEl = document.getElementById('proof-files');
 const proofCheckEl = document.getElementById('proof-check');
 const proofCheckStatusEl = document.getElementById('proof-check-status');
+const proofSnapshotEl = document.getElementById('proof-snapshot');
+const proofSnapshotOpenEl = document.getElementById('proof-snapshot-open');
 const proofLedgerToggleEl = document.getElementById('proof-ledger-toggle');
 const proofBriefEl = document.getElementById('proof-brief');
 const proofCopyEl = document.getElementById('proof-copy');
@@ -64,6 +66,12 @@ const proofLedgerCloseEl = document.getElementById('proof-ledger-close');
 const proofLedgerCopyEl = document.getElementById('proof-ledger-copy');
 const proofLedgerListEl = document.getElementById('proof-ledger-list');
 const proofLedgerStatusEl = document.getElementById('proof-ledger-status');
+const proofSnapshotModalEl = document.getElementById('proof-snapshot-modal');
+const proofSnapshotCloseEl = document.getElementById('proof-snapshot-close');
+const proofSnapshotPathEl = document.getElementById('proof-snapshot-path');
+const proofSnapshotImageEl = document.getElementById('proof-snapshot-image');
+const proofSnapshotStatusEl = document.getElementById('proof-snapshot-status');
+const proofSnapshotCopyPathEl = document.getElementById('proof-snapshot-copy-path');
 const runningPageTypeEl = document.getElementById('running-page-type');
 const runningPageHtmlEl = document.getElementById('running-page-html');
 const runningPageCommandEl = document.getElementById('running-page-command');
@@ -126,6 +134,7 @@ let projectsMouseDrag = null;
 let agentMonitorPollTimer = null;
 let previewCaptureRegionRaf = 0;
 let activeProofFile = null;
+let activeProofSnapshot = null;
 const agentMonitorStoppingPids = new Set();
 let selectedAiCli = 'codex';
 let codexDangerouslyBypassPermissions = false;
@@ -736,6 +745,12 @@ function previewDisplayUrl(rawUrl) {
   return url.replace(/^file:\/\/\/?/, '/');
 }
 
+function workspaceFileUrl(filePath) {
+  const cleaned = String(filePath || '').trim();
+  if (!cleaned) return '';
+  return `${window.location.origin}/__workspace__/${encodeURIComponent(cleaned)}`;
+}
+
 function setPreviewMeta(rawUrl, subtitle = 'Preview') {
   if (previewSubtitleEl) previewSubtitleEl.textContent = subtitle;
   if (previewUrlEl) previewUrlEl.textContent = previewDisplayUrl(rawUrl);
@@ -865,7 +880,7 @@ function proofFilesForProject(projectPath, config) {
 
 function normalizeProofLedgerEntry(entry) {
   if (!entry || typeof entry !== 'object') return null;
-  const type = ['live-check', 'ship-brief'].includes(entry.type) ? entry.type : 'proof';
+  const type = ['live-check', 'ship-brief', 'snapshot'].includes(entry.type) ? entry.type : 'proof';
   const at = typeof entry.at === 'string' && entry.at.trim()
     ? entry.at.trim()
     : new Date().toISOString();
@@ -881,6 +896,15 @@ function normalizeProofLedgerEntry(entry) {
         checkedAt: String(entry.liveCheck.checkedAt || ''),
       }
     : null;
+  const snapshot = entry.snapshot && typeof entry.snapshot === 'object'
+    ? {
+        path: String(entry.snapshot.path || '').slice(0, 260),
+        previewUrl: String(entry.snapshot.previewUrl || '').slice(0, 320),
+        bytes: Number(entry.snapshot.bytes) || 0,
+        width: Number(entry.snapshot.width) || 0,
+        height: Number(entry.snapshot.height) || 0,
+      }
+    : null;
   return {
     type,
     at,
@@ -890,6 +914,7 @@ function normalizeProofLedgerEntry(entry) {
     url: String(entry.url || '').slice(0, 260),
     files,
     liveCheck,
+    snapshot,
   };
 }
 
@@ -921,6 +946,7 @@ function proofLedgerTimeLabel(value) {
 function proofLedgerKindLabel(entry) {
   if (entry.type === 'live-check') return entry.liveCheck?.ok === false ? 'Live Check failed' : 'Live Check';
   if (entry.type === 'ship-brief') return 'Ship Brief';
+  if (entry.type === 'snapshot') return 'Snapshot';
   return 'Proof';
 }
 
@@ -932,6 +958,12 @@ function proofLedgerDetail(entry) {
     return entry.liveCheck?.label
       ? `Brief copied with ${entry.liveCheck.label}`
       : 'Brief copied';
+  }
+  if (entry.type === 'snapshot') {
+    const size = entry.snapshot?.width && entry.snapshot?.height
+      ? `${entry.snapshot.width}x${entry.snapshot.height}`
+      : '';
+    return [entry.snapshot?.path || entry.label || 'Visual proof captured', size].filter(Boolean).join(' · ');
   }
   return entry.label || entry.status || '';
 }
@@ -986,6 +1018,18 @@ function shipBriefLedgerEntry(proof) {
   };
 }
 
+function snapshotLedgerEntry(proof, snapshot) {
+  return {
+    type: 'snapshot',
+    at: snapshot.capturedAt || new Date().toISOString(),
+    status: proof.status,
+    command: proof.command,
+    url: snapshot.url || proof.url || '',
+    files: proof.files,
+    snapshot,
+  };
+}
+
 function proofForProject(projectPath) {
   const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
   const status = projectRuntimeStatus.get(projectPath) || { running: false };
@@ -1018,6 +1062,7 @@ function proofForProject(projectPath) {
     files: proofFilesForProject(projectPath, config),
     updated: proofUpdatedLabel(config.proofUpdatedAt || config.updatedAt),
     liveCheck: config.proofLiveCheck || null,
+    snapshot: config.proofSnapshot || null,
     ledger: proofLedgerForConfig(config),
   };
 }
@@ -1034,6 +1079,9 @@ function proofText(proof) {
   if (proof.liveCheck) {
     lines.push(`Live Check: ${proof.liveCheckLabel || liveCheckLabel(proof.liveCheck)}`);
   }
+  if (proof.snapshot?.path) {
+    lines.push(`Snapshot: ${snapshotLabel(proof.snapshot)}`);
+  }
   if (proof.ledger?.length) {
     lines.push('Ledger:');
     lines.push(...proof.ledger.slice(0, 5).map((entry) => `- ${proofLedgerEntryLine(entry)}`));
@@ -1047,6 +1095,13 @@ function liveCheckLabel(check) {
   const latency = Number.isFinite(Number(check.latencyMs)) ? `${Math.round(Number(check.latencyMs))} ms` : '';
   const title = check.title || check.heading || '';
   return [status, latency, title].filter(Boolean).join(' · ');
+}
+
+function snapshotLabel(snapshot) {
+  if (!snapshot) return '';
+  const size = snapshot.width && snapshot.height ? `${snapshot.width}x${snapshot.height}` : '';
+  const bytes = Number(snapshot.bytes) ? `${Math.round(Number(snapshot.bytes) / 1024)} KB` : '';
+  return [snapshot.path, size, bytes].filter(Boolean).join(' · ');
 }
 
 async function copyTextToClipboard(text) {
@@ -1078,6 +1133,9 @@ function handoffLatestBlock(proof) {
   if (proof.liveCheck) {
     lines.push(`- live check: ${liveCheckLabel(proof.liveCheck)}`);
   }
+  if (proof.snapshot?.path) {
+    lines.push(`- snapshot: ${snapshotLabel(proof.snapshot)}`);
+  }
   lines.push('- next: continue from the copied Ship Brief and verify the next product improvement in Pixelbox');
   return lines.join('\n');
 }
@@ -1092,6 +1150,9 @@ function handoffHistoryEntry(proof) {
   ];
   if (proof.liveCheck) {
     lines.push(`- live check: ${liveCheckLabel(proof.liveCheck)}`);
+  }
+  if (proof.snapshot?.path) {
+    lines.push(`- snapshot: ${snapshotLabel(proof.snapshot)}`);
   }
   return lines.join('\n');
 }
@@ -1187,6 +1248,45 @@ async function runProofLiveCheck() {
     if (proofCheckStatusEl) proofCheckStatusEl.textContent = message;
   } finally {
     if (proofCheckEl) proofCheckEl.disabled = false;
+  }
+}
+
+function proofSnapshotCaptureSize() {
+  const rect = previewFrameEl.getBoundingClientRect();
+  return {
+    width: Math.round(rect.width || previewViewportEl?.clientWidth || 1280),
+    height: Math.round(rect.height || previewViewportEl?.clientHeight || 720),
+  };
+}
+
+async function runProofSnapshotCapture() {
+  const proof = proofForProject(selectedProjectPath);
+  if (!proof?.url) return;
+  if (proofSnapshotEl) proofSnapshotEl.disabled = true;
+  if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Capturing visual snapshot...';
+  try {
+    const result = await window.api.capturePreviewSnapshot(selectedProjectPath, proof.url, {
+      ...proofSnapshotCaptureSize(),
+      timeoutMs: 10000,
+      waitAfterLoadMs: 350,
+    });
+    const currentConfig = projectRuntimeConfig.get(selectedProjectPath) || defaultRuntimeConfig();
+    const nextConfig = {
+      ...currentConfig,
+      proofSnapshot: result,
+      proofUpdatedAt: Date.now(),
+    };
+    nextConfig.proofLedger = appendProofLedgerEntry(nextConfig, snapshotLedgerEntry(proof, result));
+    projectRuntimeConfig.set(selectedProjectPath, nextConfig);
+    await persistPreviewState(selectedProjectPath);
+    renderProofForProject(selectedProjectPath);
+    if (proofCopyStatusEl) proofCopyStatusEl.textContent = `Snapshot saved: ${result.path}`;
+    openProofSnapshotModal(result);
+  } catch (error) {
+    const message = error && error.message ? error.message : 'Snapshot failed';
+    if (proofCopyStatusEl) proofCopyStatusEl.textContent = message;
+  } finally {
+    if (proofSnapshotEl) proofSnapshotEl.disabled = false;
   }
 }
 
@@ -1326,6 +1426,33 @@ async function copyProofLedgerToClipboard() {
   if (proofLedgerStatusEl) proofLedgerStatusEl.textContent = 'Ledger copied';
 }
 
+function closeProofSnapshotModal() {
+  if (!proofSnapshotModalEl) return;
+  proofSnapshotModalEl.hidden = true;
+  activeProofSnapshot = null;
+  if (proofSnapshotImageEl) proofSnapshotImageEl.removeAttribute('src');
+  if (proofSnapshotStatusEl) proofSnapshotStatusEl.textContent = '';
+  window.__pwProofSnapshotModal = { open: false, path: '' };
+}
+
+function openProofSnapshotModal(snapshot) {
+  if (!proofSnapshotModalEl || !proofSnapshotImageEl || !snapshot?.path) return;
+  activeProofSnapshot = snapshot;
+  proofSnapshotModalEl.hidden = false;
+  const imageUrl = snapshot.previewUrl || workspaceFileUrl(snapshot.path);
+  proofSnapshotImageEl.src = imageUrl;
+  proofSnapshotImageEl.alt = `Captured preview snapshot ${snapshot.path}`;
+  if (proofSnapshotPathEl) proofSnapshotPathEl.textContent = snapshot.path;
+  if (proofSnapshotStatusEl) proofSnapshotStatusEl.textContent = snapshotLabel(snapshot);
+  window.__pwProofSnapshotModal = { open: true, path: snapshot.path, imageUrl };
+}
+
+async function copyActiveProofSnapshotPath() {
+  if (!activeProofSnapshot?.path) return;
+  await copyTextToClipboard(activeProofSnapshot.path);
+  if (proofSnapshotStatusEl) proofSnapshotStatusEl.textContent = 'Snapshot path copied';
+}
+
 function renderProofForProject(projectPath) {
   if (!proofDockEl) return;
   const proof = proofForProject(projectPath);
@@ -1334,6 +1461,7 @@ function renderProofForProject(projectPath) {
   if (!proof) {
     proofDockEl.hidden = true;
     if (proofLedgerToggleEl) proofLedgerToggleEl.hidden = true;
+    if (proofSnapshotOpenEl) proofSnapshotOpenEl.hidden = true;
     return;
   }
 
@@ -1358,6 +1486,9 @@ function renderProofForProject(projectPath) {
   if (proofCheckEl) {
     proofCheckEl.disabled = !proof.url;
   }
+  if (proofSnapshotEl) {
+    proofSnapshotEl.disabled = !proof.url;
+  }
   if (proofCheckStatusEl) {
     if (proof.liveCheck) {
       proofCheckStatusEl.textContent = `Live Check: ${liveCheckLabel(proof.liveCheck)}`;
@@ -1375,6 +1506,13 @@ function renderProofForProject(projectPath) {
   }
   if (proofLedgerModalEl && !proofLedgerModalEl.hidden) {
     renderProofLedgerModal(proof);
+  }
+  if (proofSnapshotOpenEl) {
+    proofSnapshotOpenEl.hidden = !proof.snapshot?.path;
+    proofSnapshotOpenEl.textContent = proof.snapshot?.path
+      ? `Snapshot: ${proof.snapshot.path.split('/').pop()}`
+      : 'View latest snapshot';
+    proofSnapshotOpenEl.onclick = () => openProofSnapshotModal(proof.snapshot);
   }
   if (proofFilesEl) {
     proofFilesEl.innerHTML = '';
@@ -2589,6 +2727,13 @@ if (proofFileCopyContentEl) {
     });
   });
 }
+if (proofSnapshotEl) {
+  proofSnapshotEl.addEventListener('click', () => {
+    runProofSnapshotCapture().catch(() => {
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Snapshot failed';
+    });
+  });
+}
 if (proofLedgerToggleEl) {
   proofLedgerToggleEl.addEventListener('click', openProofLedgerModal);
 }
@@ -2606,6 +2751,23 @@ if (proofLedgerCopyEl) {
   proofLedgerCopyEl.addEventListener('click', () => {
     copyProofLedgerToClipboard().catch(() => {
       if (proofLedgerStatusEl) proofLedgerStatusEl.textContent = 'Copy failed';
+    });
+  });
+}
+if (proofSnapshotCloseEl) {
+  proofSnapshotCloseEl.addEventListener('click', closeProofSnapshotModal);
+}
+if (proofSnapshotModalEl) {
+  proofSnapshotModalEl.addEventListener('click', (event) => {
+    if (event.target === proofSnapshotModalEl) {
+      closeProofSnapshotModal();
+    }
+  });
+}
+if (proofSnapshotCopyPathEl) {
+  proofSnapshotCopyPathEl.addEventListener('click', () => {
+    copyActiveProofSnapshotPath().catch(() => {
+      if (proofSnapshotStatusEl) proofSnapshotStatusEl.textContent = 'Copy failed';
     });
   });
 }
@@ -2936,6 +3098,12 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && proofLedgerModalEl && !proofLedgerModalEl.hidden) {
     event.preventDefault();
     closeProofLedgerModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && proofSnapshotModalEl && !proofSnapshotModalEl.hidden) {
+    event.preventDefault();
+    closeProofSnapshotModal();
     return;
   }
 

@@ -11,6 +11,7 @@ const { PreviewRuntimeManager } = require('../lib/previewRuntimeManager');
 const { TerminalManager } = require('../lib/terminalManager');
 const { TerminalSession, defaultShell } = require('../lib/terminalSession');
 const { probeUrl } = require('../lib/previewProbe');
+const { capturePreviewSnapshot, snapshotRelativePath } = require('../lib/previewSnapshot');
 const codexMonitor = require('../lib/codexMonitor');
 
 const host = '127.0.0.1';
@@ -343,6 +344,23 @@ async function handleApi(req, res, pathname) {
       attempts: body.attempts,
       retryDelayMs: body.retryDelayMs,
     }));
+  }
+  if (pathname === '/api/preview/captureSnapshot') {
+    const projectPath = body.projectPath || '.';
+    const relativePath = snapshotRelativePath(projectPath);
+    const outputPath = workspaceFs.resolveWorkspacePath(relativePath);
+    const result = await capturePreviewSnapshot(body.url, {
+      outputPath,
+      relativePath,
+      width: body.width,
+      height: body.height,
+      timeoutMs: body.timeoutMs,
+      waitAfterLoadMs: body.waitAfterLoadMs,
+    });
+    return sendJson(res, 200, {
+      ...result,
+      previewUrl: workspaceUrlForPath(result.path),
+    });
   }
   if (pathname === '/api/preview/execCommand') {
     const cwd = workspaceFs.resolveWorkspacePath(body.projectPath || '.');
