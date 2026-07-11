@@ -780,6 +780,11 @@ input {
   color: var(--muted);
 }
 
+.running-field[hidden],
+.running-checkbox[hidden] {
+  display: none !important;
+}
+
 .running-checkbox {
   grid-template-columns: auto 1fr;
   align-items: center;

@@ -397,6 +397,7 @@ async function handleApi(req, res, pathname) {
     const projectPath = body.projectPath || '.';
     const options = body.options || {};
     const cwd = workspaceFs.resolveWorkspacePath(projectPath);
+    await previewRuntimeManager.stopAndWait(projectPath);
     const resolvedOptions = await previewRuntimeManager.resolveLaunchOptions(projectPath, {
       cwd,
       sourceType: options.sourceType || 'server',

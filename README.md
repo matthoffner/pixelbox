@@ -41,6 +41,7 @@ Pixelbox should feel like an AI-native operating surface for software creation:
 - Floating native Ghostty terminal panel.
 - Project switcher and per-project runtime config.
 - Embedded live app view for local URLs/files.
+- Server preview Start/Restart controls that relaunch the managed process and reload the live preview after code edits.
 - Live run proof receipts with Live Check probes, Proof Snapshot PNGs, Snapshot Compare, project, command, URL, inspectable touched files, copyable verification text, and one-click Ship Brief handoffs.
 - Native app runtime support with capture-image previews.
 - AI Launch presets for Codex, Claude, Gemini, Hermes, OpenClaw TUI, or a plain terminal.
@@ -93,7 +94,7 @@ In **Running Page**:
 - `Source: Node/server command` for frameworks (Next.js/Vite/etc).
 - Set `Server command` (example: `npm run dev`).
 - Set `Server URL` (example: `http://localhost:3000`) if needed.
-- Click `Save`, then `Start`.
+- Click `Save`, then `Start`. When the server is live, the same control becomes `Restart` so code changes can relaunch and reload the preview without changing URLs.
 
 Or:
 

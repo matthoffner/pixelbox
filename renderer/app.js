@@ -2130,13 +2130,22 @@ function renderRunningPageFields(sourceType) {
   for (const row of previewFieldRows) {
     row.hidden = row.dataset.source !== sourceType;
   }
-  runningPageStartEl.disabled = sourceType !== 'server';
-  runningPageStopEl.disabled = sourceType !== 'server';
+  const status = projectRuntimeStatus.get(selectedProjectPath) || { running: false };
+  const canRunServer = sourceType === 'server';
+  runningPageStartEl.disabled = !canRunServer;
+  runningPageStartEl.textContent = canRunServer && status.running ? 'Restart' : 'Start';
+  runningPageStartEl.title = canRunServer && status.running
+    ? 'Restart the server command and reload the preview'
+    : 'Start the server command';
+  runningPageStopEl.disabled = !canRunServer || !status.running;
 }
 
 function renderRuntimeStatus(projectPath) {
   const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
   const status = projectRuntimeStatus.get(projectPath) || { running: false };
+  if (projectPath === selectedProjectPath) {
+    renderRunningPageFields(config.sourceType);
+  }
   if (config.sourceType === 'none') {
     runningPageStatusEl.textContent = 'Not configured';
     return;
@@ -2374,12 +2383,15 @@ async function applyRuntimeConfig(projectPath, config, options = {}) {
       url: config.serverUrl,
     });
     const shouldAutoStart = options.forceStart ? true : config.autoStart;
-    const syncResult = await window.api.syncPreviewRuntime(projectPath, {
+    const runtimeOptions = {
       sourceType: 'server',
       command: config.serverCommand,
       url: config.serverUrl,
       autoStart: shouldAutoStart,
-    });
+    };
+    const syncResult = options.forceStart
+      ? await window.api.startPreviewRuntime(projectPath, runtimeOptions)
+      : await window.api.syncPreviewRuntime(projectPath, runtimeOptions);
     if (!syncResult?.running) {
       replacePreviewHistory(projectPath, explicitUrls, explicitUrls.length > 0 ? 0 : -1);
     }
@@ -2400,6 +2412,10 @@ async function applyRuntimeConfig(projectPath, config, options = {}) {
   if (projectPath === selectedProjectPath) {
     renderRuntimeConfig(projectPath);
     renderPreviewForProject(projectPath);
+    if (options.forceStart && config.sourceType === 'server') {
+      await waitForSelectedPreviewUrlReachable(12000);
+      reloadActivePreview();
+    }
   }
 }
 
@@ -2416,11 +2432,15 @@ async function saveRunningPageConfig() {
 async function startConfiguredRuntime() {
   const config = collectRuntimeConfigFromForm();
   if (config.sourceType !== 'server') return;
+  const status = projectRuntimeStatus.get(selectedProjectPath) || { running: false };
   try {
+    runningPageStatusEl.textContent = status.running ? 'Restarting server...' : 'Starting server...';
+    runningPageStartEl.disabled = true;
     await applyRuntimeConfig(selectedProjectPath, config, { forceStart: true });
     focusPreviewOnNarrowScreen();
   } catch (error) {
     window.alert(error.message);
+    renderRuntimeConfig(selectedProjectPath);
   }
 }
 
@@ -3366,7 +3386,7 @@ function reloadActivePreview() {
     setPreviewMeta(url, 'Live preview');
     return;
   }
-  previewFrameEl.src = url;
+  previewFrameEl.src = cacheBustedUrl(url);
   setPreviewMeta(url, 'Live preview');
 }
 
