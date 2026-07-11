@@ -906,7 +906,7 @@ function proofFilesForProject(projectPath, config) {
 
 function normalizeProofLedgerEntry(entry) {
   if (!entry || typeof entry !== 'object') return null;
-  const type = ['live-check', 'ship-brief', 'snapshot'].includes(entry.type) ? entry.type : 'proof';
+  const type = ['live-check', 'ship-brief', 'snapshot', 'verification'].includes(entry.type) ? entry.type : 'proof';
   const at = typeof entry.at === 'string' && entry.at.trim()
     ? entry.at.trim()
     : new Date().toISOString();
@@ -973,6 +973,7 @@ function proofLedgerKindLabel(entry) {
   if (entry.type === 'live-check') return entry.liveCheck?.ok === false ? 'Live Check failed' : 'Live Check';
   if (entry.type === 'ship-brief') return 'Ship Brief';
   if (entry.type === 'snapshot') return 'Snapshot';
+  if (entry.type === 'verification') return entry.liveCheck?.ok === false ? 'Verification failed' : 'Verified Run';
   return 'Proof';
 }
 
@@ -990,6 +991,12 @@ function proofLedgerDetail(entry) {
       ? `${entry.snapshot.width}x${entry.snapshot.height}`
       : '';
     return [entry.snapshot?.path || entry.label || 'Visual proof captured', size].filter(Boolean).join(' · ');
+  }
+  if (entry.type === 'verification') {
+    return [
+      entry.liveCheck?.label || 'Live URL verified',
+      entry.snapshot?.path ? `Snapshot ${snapshotShortName(entry.snapshot)}` : '',
+    ].filter(Boolean).join(' · ');
   }
   return entry.label || entry.status || '';
 }
@@ -1052,6 +1059,24 @@ function snapshotLedgerEntry(proof, snapshot) {
     command: proof.command,
     url: snapshot.url || proof.url || '',
     files: proof.files,
+    snapshot,
+  };
+}
+
+function verificationLedgerEntry(proof, liveCheck, snapshot) {
+  return {
+    type: 'verification',
+    at: snapshot?.capturedAt || liveCheck?.checkedAt || new Date().toISOString(),
+    status: proof.status,
+    command: proof.command,
+    url: liveCheck?.url || snapshot?.url || proof.url || '',
+    files: proof.files,
+    liveCheck: liveCheck
+      ? {
+          ...liveCheck,
+          label: liveCheckLabel(liveCheck),
+        }
+      : null,
     snapshot,
   };
 }
@@ -1181,7 +1206,7 @@ function proofSnapshotHistory(proof) {
 
   addSnapshot(proof?.snapshot);
   for (const entry of proof?.ledger || []) {
-    if (entry.type !== 'snapshot') continue;
+    if (!entry.snapshot) continue;
     addSnapshot(entry.snapshot, entry.at);
   }
   return snapshots;
@@ -1321,6 +1346,7 @@ async function executeProofLiveCheck(projectPath, options = {}) {
     statusText = 'Checking live URL...',
     failureText = 'Live Check failed',
     manageButton = projectPath === selectedProjectPath,
+    recordLedger = true,
   } = options;
   const proof = proofForProject(projectPath);
   if (!proof?.url) return;
@@ -1338,7 +1364,9 @@ async function executeProofLiveCheck(projectPath, options = {}) {
       proofLiveCheck: result,
       proofUpdatedAt: Date.now(),
     };
-    config.proofLedger = appendProofLedgerEntry(config, liveCheckLedgerEntry(proof, result));
+    if (recordLedger) {
+      config.proofLedger = appendProofLedgerEntry(config, liveCheckLedgerEntry(proof, result));
+    }
     projectRuntimeConfig.set(projectPath, config);
     await persistPreviewState(projectPath);
     if (shouldUpdateUi) renderProofForProject(projectPath);
@@ -1409,30 +1437,34 @@ function proofSnapshotCaptureSize() {
 
 async function runProofSnapshotCapture(options = {}) {
   const {
+    projectPath = selectedProjectPath,
     statusText = 'Capturing visual snapshot...',
     openModal = true,
     manageButton = true,
+    recordLedger = true,
   } = options;
-  const proof = proofForProject(selectedProjectPath);
+  const proof = proofForProject(projectPath);
   if (!proof?.url) return;
   if (manageButton && proofSnapshotEl) proofSnapshotEl.disabled = true;
   if (proofCopyStatusEl) proofCopyStatusEl.textContent = statusText;
   try {
-    const result = await window.api.capturePreviewSnapshot(selectedProjectPath, proof.url, {
+    const result = await window.api.capturePreviewSnapshot(projectPath, proof.url, {
       ...proofSnapshotCaptureSize(),
       timeoutMs: 10000,
       waitAfterLoadMs: 350,
     });
-    const currentConfig = projectRuntimeConfig.get(selectedProjectPath) || defaultRuntimeConfig();
+    const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
     const nextConfig = {
       ...currentConfig,
       proofSnapshot: result,
       proofUpdatedAt: Date.now(),
     };
-    nextConfig.proofLedger = appendProofLedgerEntry(nextConfig, snapshotLedgerEntry(proof, result));
-    projectRuntimeConfig.set(selectedProjectPath, nextConfig);
-    await persistPreviewState(selectedProjectPath);
-    renderProofForProject(selectedProjectPath);
+    if (recordLedger) {
+      nextConfig.proofLedger = appendProofLedgerEntry(nextConfig, snapshotLedgerEntry(proof, result));
+    }
+    projectRuntimeConfig.set(projectPath, nextConfig);
+    await persistPreviewState(projectPath);
+    if (projectPath === selectedProjectPath) renderProofForProject(projectPath);
     if (proofCopyStatusEl) proofCopyStatusEl.textContent = `Snapshot saved: ${result.path}`;
     if (openModal) openProofSnapshotModal(result);
     return result;
@@ -1446,17 +1478,19 @@ async function runProofSnapshotCapture(options = {}) {
 }
 
 async function runProofVerify() {
-  const proof = proofForProject(selectedProjectPath);
+  const projectPath = selectedProjectPath;
+  const proof = proofForProject(projectPath);
   if (!proof?.url) return;
   if (proofVerifyEl) proofVerifyEl.disabled = true;
   if (proofCheckEl) proofCheckEl.disabled = true;
   if (proofSnapshotEl) proofSnapshotEl.disabled = true;
   if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Verifying live preview...';
   try {
-    const liveCheck = await executeProofLiveCheck(selectedProjectPath, {
+    const liveCheck = await executeProofLiveCheck(projectPath, {
       statusText: 'Verifying live URL...',
       failureText: 'Verify failed',
       manageButton: false,
+      recordLedger: false,
     });
     if (!liveCheck?.ok) {
       if (proofCopyStatusEl) {
@@ -1465,10 +1499,25 @@ async function runProofVerify() {
       return;
     }
     const snapshot = await runProofSnapshotCapture({
+      projectPath,
       statusText: 'Capturing verified snapshot...',
-      openModal: true,
+      openModal: false,
       manageButton: false,
+      recordLedger: false,
     });
+    if (snapshot?.path) {
+      const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+      projectRuntimeConfig.set(projectPath, {
+        ...currentConfig,
+        proofLedger: appendProofLedgerEntry(currentConfig, verificationLedgerEntry(proof, liveCheck, snapshot)),
+        proofUpdatedAt: Date.now(),
+      });
+      await persistPreviewState(projectPath);
+      if (projectPath === selectedProjectPath) {
+        renderProofForProject(projectPath);
+        openProofSnapshotModal(snapshot);
+      }
+    }
     if (snapshot?.path && proofCopyStatusEl) {
       proofCopyStatusEl.textContent = `Verified with snapshot: ${snapshot.path}`;
     }
@@ -1611,6 +1660,7 @@ function renderProofLedgerModal(proof) {
     const item = document.createElement('article');
     item.className = `proof-ledger-item proof-ledger-item-${entry.type}`;
     if (entry.liveCheck?.ok === false) item.dataset.tone = 'error';
+    if (entry.type === 'verification' && entry.liveCheck?.ok === true) item.dataset.tone = 'success';
 
     const meta = document.createElement('div');
     meta.className = 'proof-ledger-meta';

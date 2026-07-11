@@ -521,6 +521,11 @@ input {
   border-color: color-mix(in srgb, #ffb3aa, var(--border) 34%);
 }
 
+.proof-ledger-item[data-tone='success'] {
+  border-color: color-mix(in srgb, #9ce8cf, var(--border) 34%);
+  background: color-mix(in srgb, #9ce8cf 7%, transparent);
+}
+
 .proof-ledger-meta,
 .proof-ledger-context,
 .proof-ledger-files {
