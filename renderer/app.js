@@ -101,6 +101,8 @@ const runningPageSaveEl = document.getElementById('running-page-save');
 const runningPageStartEl = document.getElementById('running-page-start');
 const runningPageStopEl = document.getElementById('running-page-stop');
 const runningPageStatusEl = document.getElementById('running-page-status');
+const previewAgentDotEl = document.getElementById('preview-agent-dot');
+const previewAgentSummaryEl = document.getElementById('preview-agent-summary');
 const agentMonitorRefreshEl = document.getElementById('agent-monitor-refresh');
 const agentMonitorStatusEl = document.getElementById('agent-monitor-status');
 const agentMonitorListEl = document.getElementById('agent-monitor-list');
@@ -141,9 +143,17 @@ const projectRuntimeConfig = new Map();
 const projectRuntimeStatus = new Map();
 const projectRuntimeRunId = new Map();
 const projectRuntimeOutput = new Map();
+const projectPreviewRendered = new Set();
 const autoLiveCheckTimers = new Map();
 const autoLiveCheckInFlight = new Set();
 const autoLiveCheckCompleted = new Set();
+const previewAgentRecoveryTimers = new Map();
+const previewAgentHealthTimers = new Map();
+const previewAgentHealthFailures = new Map();
+const projectWorkspaceFingerprints = new Map();
+const workspaceFingerprintInFlight = new Map();
+const workspaceFingerprintRefreshTimers = new Map();
+const reentryVerificationInFlight = new Set();
 const projectTerminalOutput = new Map();
 const projectNativeStartupCommand = new Map();
 const projectSessionBootstrapped = new Set();
@@ -157,6 +167,7 @@ let terminalMouseDrag = null;
 let projectsDragPointer = null;
 let projectsMouseDrag = null;
 let agentMonitorPollTimer = null;
+let workspaceFingerprintPollTimer = null;
 let previewCaptureRegionRaf = 0;
 let activeProofFile = null;
 let activeProofSnapshot = null;
@@ -196,6 +207,8 @@ const terminalGridState = {
 const MAX_PROOF_LEDGER_ENTRIES = 12;
 const PREVIEW_FOCUS_MAX_WIDTH = 760;
 const quickStartTemplates = window.PixelboxQuickStartTemplates;
+const previewAgent = window.PixelboxPreviewAgent;
+const proofReentry = window.PixelboxProofReentry;
 const {
   QUICK_SERVER_STARTER_PORT,
   htmlStarterDocument,
@@ -212,6 +225,7 @@ const previewFrameEl = document.createElement('iframe');
 previewFrameEl.id = 'preview-frame';
 previewFrameEl.setAttribute('title', 'Preview');
 previewFrameEl.setAttribute('referrerpolicy', 'no-referrer');
+previewFrameEl.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads');
 previewFrameHostEl.appendChild(previewFrameEl);
 
 function loadHiddenProjects() {
@@ -481,13 +495,7 @@ function queueNativeTerminalPanelSync() {
 }
 
 function defaultRuntimeConfig() {
-  return {
-    sourceType: 'none',
-    htmlPath: '',
-    serverCommand: '',
-    serverUrl: '',
-    autoStart: true,
-  };
+  return previewAgent.defaultConfig();
 }
 
 function configPathForProject(projectPath) {
@@ -772,10 +780,23 @@ function previewDisplayUrl(rawUrl) {
   return url.replace(/^file:\/\/\/?/, '/');
 }
 
-function workspaceFileUrl(filePath) {
-  const cleaned = String(filePath || '').trim();
-  if (!cleaned) return '';
-  return `${window.location.origin}/__workspace__/${encodeURIComponent(cleaned)}`;
+function setEvidenceImageSource(imageEl, evidence) {
+  if (!imageEl || !evidence?.path) return;
+  const currentUrl = sanitizePreviewUrl(evidence.previewUrl || '');
+  if (currentUrl && !currentUrl.includes('/__workspace__/')) {
+    imageEl.src = currentUrl;
+    return;
+  }
+  imageEl.removeAttribute('src');
+  window.api.resolvePreviewFile(evidence.path)
+    .then((resolved) => {
+      if (!resolved?.url) return;
+      evidence.previewUrl = resolved.url;
+      imageEl.src = resolved.url;
+    })
+    .catch(() => {
+      if (proofSnapshotStatusEl) proofSnapshotStatusEl.textContent = 'Snapshot preview is unavailable';
+    });
 }
 
 function setPreviewMeta(rawUrl, subtitle = 'Preview') {
@@ -802,7 +823,7 @@ async function refreshSelectedHtmlPreview() {
     await persistPreviewState(selectedProjectPath);
   }
   previewFrameEl.src = cacheBustedUrl(cleanUrl);
-  setPreviewMeta(cleanUrl, 'HTML preview');
+  setPreviewMeta(cleanUrl, 'Static site');
   updatePreviewControls(state);
   return true;
 }
@@ -849,7 +870,7 @@ function renderPreviewForProject(projectPath) {
     previewFrameEl.src = url;
   }
   const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
-  const subtitle = config.sourceType === 'html' ? 'HTML preview' : 'Live preview';
+  const subtitle = config.sourceType === 'html' ? 'Static site' : 'Live preview';
   setPreviewMeta(url, subtitle);
   updatePreviewControls(state);
   schedulePreviewCaptureRegionPublish();
@@ -860,11 +881,109 @@ function projectDisplayLabel(projectPath) {
   return projectPath === '.' ? 'workspace root' : projectPath;
 }
 
-function proofUpdatedLabel(value) {
+function proofTimeLabel(value, prefix) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return `Verified ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+  return `${prefix} ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function proofActivityLabel(value) {
+  return proofTimeLabel(value, 'Updated');
+}
+
+function proofVerifiedLabel(value) {
+  return proofTimeLabel(value, 'Verified');
+}
+
+function proofContextForProject(projectPath, proof) {
+  const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+  return proofReentry.normalizeContext({
+    projectPath,
+    sourceType: config.sourceType,
+    command: proof?.command || config.serverCommand || '',
+    url: config.sourceType === 'html'
+      ? `static:${config.htmlPath || ''}`
+      : sanitizePreviewUrl(proof?.url || config.serverUrl || ''),
+  });
+}
+
+async function refreshWorkspaceFingerprint(projectPath, options = {}) {
+  const { render = true, fresh = false, evidence = null } = options;
+  const currentRequest = workspaceFingerprintInFlight.get(projectPath);
+  if (currentRequest) {
+    const current = await currentRequest;
+    if (fresh) {
+      if (workspaceFingerprintInFlight.get(projectPath) === currentRequest) {
+        workspaceFingerprintInFlight.delete(projectPath);
+      }
+      return refreshWorkspaceFingerprint(projectPath, { ...options, fresh: false });
+    }
+    if (render && projectPath === selectedProjectPath) renderProofForProject(projectPath);
+    return current;
+  }
+  const request = (async () => {
+    try {
+      const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+      const verification = proofReentry.normalizeVerification(config.proofVerification);
+      const evidenceToCheck = evidence || (verification ? {
+        path: verification.snapshot.path,
+        digest: verification.snapshot.digest,
+      } : null);
+      const includedPaths = config.sourceType === 'html' && config.htmlPath ? [config.htmlPath] : [];
+      const raw = await window.api.workspaceFingerprint(projectPath, {
+        includedPaths,
+        evidence: evidenceToCheck,
+      });
+      const fingerprint = proofReentry.normalizeWorkspace({
+        ...raw,
+        evidenceValid: evidenceToCheck ? raw.evidence?.match === true : false,
+      });
+      projectWorkspaceFingerprints.set(projectPath, fingerprint);
+      return fingerprint;
+    } catch (error) {
+      const unavailable = {
+        complete: false,
+        error: error && error.message ? error.message : 'Workspace fingerprint unavailable',
+      };
+      projectWorkspaceFingerprints.set(projectPath, unavailable);
+      return unavailable;
+    }
+  })();
+  workspaceFingerprintInFlight.set(projectPath, request);
+  try {
+    const fingerprint = await request;
+    if (render && projectPath === selectedProjectPath) renderProofForProject(projectPath);
+    return fingerprint;
+  } finally {
+    if (workspaceFingerprintInFlight.get(projectPath) === request) {
+      workspaceFingerprintInFlight.delete(projectPath);
+    }
+  }
+}
+
+function invalidateWorkspaceFingerprint(projectPath) {
+  const current = projectWorkspaceFingerprints.get(projectPath);
+  if (current?.complete) {
+    projectWorkspaceFingerprints.set(projectPath, {
+      ...current,
+      fingerprint: 'sha256:workspace-change-pending',
+      evidenceValid: false,
+    });
+  } else {
+    projectWorkspaceFingerprints.delete(projectPath);
+  }
+  if (projectPath === selectedProjectPath) renderProofForProject(projectPath);
+}
+
+function scheduleWorkspaceFingerprintRefresh(projectPath, delayMs = 220) {
+  const prior = workspaceFingerprintRefreshTimers.get(projectPath);
+  if (prior) clearTimeout(prior);
+  const timer = setTimeout(() => {
+    workspaceFingerprintRefreshTimers.delete(projectPath);
+    refreshWorkspaceFingerprint(projectPath).catch(() => {});
+  }, delayMs);
+  workspaceFingerprintRefreshTimers.set(projectPath, timer);
 }
 
 function uniqueList(values) {
@@ -881,7 +1000,14 @@ function uniqueList(values) {
 
 function proofFilesForProject(projectPath, config) {
   if (Array.isArray(config.proofFiles) && config.proofFiles.length > 0) {
-    return uniqueList(config.proofFiles);
+    const priorVerification = proofReentry.normalizeVerification(config.proofVerification);
+    const priorWorkspaceFiles = new Set(uniqueList([
+      ...(priorVerification?.workspace?.changedFiles || []),
+      ...(priorVerification?.workspace?.evidenceFiles || []),
+    ]).map((file) => projectRelativePath(projectPath, file)));
+    return uniqueList(config.proofFiles).filter((file) => (
+      !priorWorkspaceFiles.has(file) && !/(^|\/)\.pixelbox\/proof-packs\//.test(file)
+    ));
   }
 
   const files = [];
@@ -926,14 +1052,16 @@ function normalizeProofLedgerEntry(entry) {
       }
     : null;
   const snapshot = entry.snapshot && typeof entry.snapshot === 'object'
-    ? {
-        path: String(entry.snapshot.path || '').slice(0, 260),
-        previewUrl: String(entry.snapshot.previewUrl || '').slice(0, 320),
+      ? {
+          path: String(entry.snapshot.path || '').slice(0, 260),
+          digest: String(entry.snapshot.digest || '').slice(0, 120),
+          previewUrl: String(entry.snapshot.previewUrl || '').slice(0, 320),
         bytes: Number(entry.snapshot.bytes) || 0,
         width: Number(entry.snapshot.width) || 0,
         height: Number(entry.snapshot.height) || 0,
-      }
+    }
     : null;
+  const verification = proofReentry.normalizeVerification(entry.verification);
   return {
     type,
     at,
@@ -944,6 +1072,7 @@ function normalizeProofLedgerEntry(entry) {
     files,
     liveCheck,
     snapshot,
+    verification,
   };
 }
 
@@ -1017,9 +1146,13 @@ function proofLedgerDetail(entry) {
     return [entry.snapshot?.path || entry.label || 'Visual proof captured', size].filter(Boolean).join(' · ');
   }
   if (entry.type === 'verification') {
+    const fingerprint = entry.verification?.workspace?.fingerprint
+      ? entry.verification.workspace.fingerprint.slice(0, 20)
+      : '';
     return [
       entry.liveCheck?.label || 'Live URL verified',
       entry.snapshot?.path ? `Snapshot ${snapshotShortName(entry.snapshot)}` : '',
+      fingerprint ? `Workspace ${fingerprint}…` : '',
     ].filter(Boolean).join(' · ');
   }
   if (entry.type === 'proof-pack') {
@@ -1090,7 +1223,7 @@ function snapshotLedgerEntry(proof, snapshot) {
   };
 }
 
-function verificationLedgerEntry(proof, liveCheck, snapshot) {
+function verificationLedgerEntry(proof, liveCheck, snapshot, verification) {
   return {
     type: 'verification',
     at: snapshot?.capturedAt || liveCheck?.checkedAt || new Date().toISOString(),
@@ -1105,6 +1238,7 @@ function verificationLedgerEntry(proof, liveCheck, snapshot) {
         }
       : null,
     snapshot,
+    verification,
   };
 }
 
@@ -1139,11 +1273,7 @@ function stoppedServerLabel(status, fallback = 'Server stopped') {
 
 function proofTone(proof) {
   if (!proof) return 'idle';
-  if (proof.liveCheck?.ok === false) return 'error';
-  if (/stopped|exit|SIG/i.test(proof.status || '')) return 'error';
-  if (/configured|missing/i.test(proof.status || '')) return 'waiting';
-  if (/live|HTML:/i.test(proof.status || '')) return 'success';
-  return 'idle';
+  return proof.reentry?.tone || 'idle';
 }
 
 function runtimeOutputTail(projectPath, maxLength = 1200) {
@@ -1160,32 +1290,87 @@ function proofForProject(projectPath) {
   const url = currentPreviewUrl(state) || status.url || config.serverUrl || '';
   if (config.sourceType === 'none' && !url) return null;
 
-  const sourceLabel = config.sourceType === 'html'
-    ? 'HTML preview'
-    : config.sourceType === 'server'
-      ? 'Server runtime'
-      : 'Preview';
-  const statusLabel = config.sourceType === 'html'
-    ? (config.htmlPath ? `HTML: ${config.htmlPath}` : 'HTML file missing')
+  const runtimeLabel = config.sourceType === 'html'
+    ? (config.htmlPath ? `Rendering ${config.htmlPath}` : 'Entry file missing')
     : status.running
-      ? 'Server live'
+      ? 'Live'
       : config.sourceType === 'server'
-        ? stoppedServerLabel(status, 'Server configured')
+        ? (config.agentPaused ? 'Paused' : stoppedServerLabel(status, 'Recovering'))
         : 'Preview configured';
   const command = config.sourceType === 'html'
-    ? 'Static HTML preview'
+    ? 'Static site render'
     : config.serverCommand || 'n/a';
+  const context = proofReentry.normalizeContext({
+    projectPath,
+    sourceType: config.sourceType,
+    command,
+    url: config.sourceType === 'html'
+      ? `static:${config.htmlPath || ''}`
+      : sanitizePreviewUrl(url),
+  });
+  const verification = proofReentry.normalizeVerification(config.proofVerification);
+  const currentWorkspace = projectWorkspaceFingerprints.get(projectPath) || null;
+  const verificationFailure = config.proofVerificationFailure && typeof config.proofVerificationFailure === 'object'
+    ? config.proofVerificationFailure
+    : null;
+  const blocked = Boolean(
+    verificationFailure ||
+    config.proofLiveCheck?.ok === false ||
+    (config.sourceType === 'server' && !status.running && (Number.isInteger(status.exitCode) || status.signal))
+  );
+  const runtimeEligible = config.sourceType === 'server'
+    ? status.running === true
+    : config.sourceType === 'html'
+      ? projectPreviewRendered.has(projectPath)
+      : true;
+  const reentry = proofReentry.deriveState({
+    verification,
+    currentWorkspace,
+    currentContext: context,
+    verifying: reentryVerificationInFlight.has(projectPath),
+    blocked,
+    needsAttention: config.agentPaused === true,
+    readyEligible: runtimeEligible,
+  });
+  const detail = reentry.key === 'ready'
+    ? 'proof current'
+    : reentry.key === 'stale'
+      ? 'workspace, preview context, or evidence changed after Verify'
+      : reentry.key === 'proving'
+        ? 'binding runtime and visual evidence'
+        : reentry.key === 'unknown'
+          ? 'workspace state could not be confirmed'
+          : verificationFailure?.reason
+            ? proofReentry.reasonLabel(verificationFailure.reason)
+            : runtimeLabel;
+  const changedFiles = uniqueList([
+    ...(verification?.workspace?.changedFiles || []),
+    ...(verification?.workspace?.evidenceFiles || []),
+  ])
+    .map((file) => projectRelativePath(projectPath, file));
+  const boundSnapshot = verification?.snapshot
+    ? {
+        ...(config.proofSnapshot?.path === verification.snapshot.path ? config.proofSnapshot : {}),
+        ...verification.snapshot,
+      }
+    : config.proofSnapshot || null;
 
   return {
-    title: sourceLabel,
-    status: statusLabel,
+    title: 'Reentry',
+    status: `${reentry.label} · ${detail}`,
     project: projectDisplayLabel(projectPath),
     command,
     url,
-    files: proofFilesForProject(projectPath, config),
-    updated: proofUpdatedLabel(config.proofUpdatedAt || config.updatedAt),
-    liveCheck: config.proofLiveCheck || null,
-    snapshot: config.proofSnapshot || null,
+    files: uniqueList([...changedFiles, ...proofFilesForProject(projectPath, config)]),
+    updated: reentry.key === 'ready'
+      ? proofVerifiedLabel(verification?.verifiedAt)
+      : proofActivityLabel(config.proofUpdatedAt || config.updatedAt),
+    liveCheck: reentry.key === 'ready' ? verification?.liveCheck || null : config.proofLiveCheck || verification?.liveCheck || null,
+    snapshot: boundSnapshot,
+    verification,
+    currentWorkspace,
+    context,
+    reentry,
     runtimeOutput: config.sourceType === 'server' ? runtimeOutputTail(projectPath) : '',
     ledger: proofLedgerForConfig(config),
   };
@@ -1204,6 +1389,10 @@ function proofText(proof) {
     'Files:',
     ...(proof.files.length > 0 ? proof.files.map((file) => `- ${file}`) : ['- n/a']),
   ];
+  if (proof.verification?.workspace?.fingerprint) {
+    lines.push(`Workspace: ${proof.verification.workspace.fingerprint}`);
+    lines.push(`Evidence scope: ${proof.verification.workspace.scope}`);
+  }
   if (proof.liveCheck) {
     lines.push(`Live Check: ${proof.liveCheckLabel || liveCheckLabel(proof.liveCheck)}`);
   }
@@ -1252,6 +1441,10 @@ function proofPackText(proof, packPath, generatedAt) {
   }
   if (proof.snapshot?.path) {
     lines.push(`- Snapshot: ${snapshotLabel(proof.snapshot)}`);
+  }
+  if (proof.verification?.workspace?.fingerprint) {
+    lines.push(`- Workspace: ${proof.verification.workspace.fingerprint}`);
+    lines.push(`- Evidence scope: ${proof.verification.workspace.scope}`);
   }
 
   lines.push('', '## Files', '');
@@ -1444,7 +1637,6 @@ async function saveProofPack() {
     const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
     projectRuntimeConfig.set(projectPath, {
       ...currentConfig,
-      proofFiles: uniqueList([...proof.files, packPath]),
       proofLedger: appendProofLedgerEntry(currentConfig, proofPackLedgerEntry(proof, packPath, generatedAt)),
       proofUpdatedAt: Date.now(),
     });
@@ -1554,6 +1746,66 @@ async function runAutoLiveCheck(projectPath, runId) {
   }
 }
 
+function clearPreviewAgentRecovery(projectPath) {
+  const timer = previewAgentRecoveryTimers.get(projectPath);
+  if (timer) clearTimeout(timer);
+  previewAgentRecoveryTimers.delete(projectPath);
+}
+
+function schedulePreviewAgentRecovery(projectPath, delayMs = 1400) {
+  const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+  if (config.sourceType !== 'server' || config.autoStart === false || config.agentPaused) return;
+  if (previewAgentRecoveryTimers.has(projectPath)) return;
+  const timer = setTimeout(async () => {
+    previewAgentRecoveryTimers.delete(projectPath);
+    const latestConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+    const latestStatus = projectRuntimeStatus.get(projectPath) || { running: false };
+    if (latestStatus.running || latestConfig.agentPaused || latestConfig.autoStart === false) return;
+    try {
+      await applyRuntimeConfig(projectPath, latestConfig, { forceStart: true, agentRecovery: true });
+    } catch {
+      schedulePreviewAgentRecovery(projectPath, Math.min(delayMs * 2, 12000));
+    }
+  }, delayMs);
+  previewAgentRecoveryTimers.set(projectPath, timer);
+}
+
+function schedulePreviewAgentHealthCheck(projectPath, delayMs = 8000) {
+  const prior = previewAgentHealthTimers.get(projectPath);
+  if (prior) clearTimeout(prior);
+  const timer = setTimeout(async () => {
+    previewAgentHealthTimers.delete(projectPath);
+    const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+    const status = projectRuntimeStatus.get(projectPath) || { running: false };
+    if (config.sourceType !== 'server' || config.agentPaused || config.autoStart === false) return;
+    const url = currentPreviewUrl(ensurePreviewState(projectPath)) || status.url || config.serverUrl;
+    if (!status.running) {
+      schedulePreviewAgentRecovery(projectPath);
+      return;
+    }
+    if (!url) {
+      schedulePreviewAgentHealthCheck(projectPath, 3000);
+      return;
+    }
+    try {
+      await window.api.probePreviewUrl(url, { timeoutMs: 1800, attempts: 2, retryDelayMs: 200 });
+      previewAgentHealthFailures.set(projectPath, 0);
+      if (projectPath === selectedProjectPath) renderRuntimeStatus(projectPath);
+    } catch {
+      const failures = (previewAgentHealthFailures.get(projectPath) || 0) + 1;
+      previewAgentHealthFailures.set(projectPath, failures);
+      if (failures >= 2) {
+        projectRuntimeStatus.set(projectPath, { ...status, running: false });
+        await window.api.stopPreviewRuntime(projectPath);
+        schedulePreviewAgentRecovery(projectPath, 500);
+      }
+    } finally {
+      schedulePreviewAgentHealthCheck(projectPath);
+    }
+  }, delayMs);
+  previewAgentHealthTimers.set(projectPath, timer);
+}
+
 function proofSnapshotCaptureSize() {
   const rect = previewFrameEl.getBoundingClientRect();
   return {
@@ -1606,13 +1858,20 @@ async function runProofSnapshotCapture(options = {}) {
 
 async function runProofVerify() {
   const projectPath = selectedProjectPath;
+  if (reentryVerificationInFlight.has(projectPath)) return;
   const proof = proofForProject(projectPath);
   if (!proof?.url) return;
+  reentryVerificationInFlight.add(projectPath);
+  renderProofForProject(projectPath);
   if (proofVerifyEl) proofVerifyEl.disabled = true;
   if (proofCheckEl) proofCheckEl.disabled = true;
   if (proofSnapshotEl) proofSnapshotEl.disabled = true;
   if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Verifying live preview...';
   try {
+    const before = await refreshWorkspaceFingerprint(projectPath, { render: false, fresh: true });
+    if (!before?.complete) {
+      throw new Error('Workspace fingerprint unavailable before Verify');
+    }
     const liveCheck = await executeProofLiveCheck(projectPath, {
       statusText: 'Verifying live URL...',
       failureText: 'Verify failed',
@@ -1620,6 +1879,16 @@ async function runProofVerify() {
       recordLedger: false,
     });
     if (!liveCheck?.ok) {
+      const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+      projectRuntimeConfig.set(projectPath, {
+        ...currentConfig,
+        proofVerificationFailure: {
+          at: new Date().toISOString(),
+          reason: 'live_check_failed',
+        },
+        proofUpdatedAt: Date.now(),
+      });
+      await persistPreviewState(projectPath);
       if (proofCopyStatusEl) {
         proofCopyStatusEl.textContent = liveCheck ? `Verify failed: ${liveCheckLabel(liveCheck)}` : 'Verify failed';
       }
@@ -1632,23 +1901,90 @@ async function runProofVerify() {
       manageButton: false,
       recordLedger: false,
     });
-    if (snapshot?.path) {
+    if (!snapshot?.path || !snapshot?.digest) {
+      throw new Error('Verified snapshot missing');
+    }
+    const after = await refreshWorkspaceFingerprint(projectPath, {
+      render: false,
+      fresh: true,
+      evidence: { path: snapshot.path, digest: snapshot.digest },
+    });
+    const outcome = proofReentry.createVerification({
+      before,
+      after,
+      context: proofContextForProject(projectPath, proof),
+      liveCheck: {
+        ...liveCheck,
+        label: liveCheckLabel(liveCheck),
+      },
+      snapshot,
+      evidenceValid: after?.evidenceValid === true,
+    });
+    if (!outcome.ok) {
       const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
       projectRuntimeConfig.set(projectPath, {
         ...currentConfig,
-        proofLedger: appendProofLedgerEntry(currentConfig, verificationLedgerEntry(proof, liveCheck, snapshot)),
+        proofVerificationFailure: {
+          at: new Date().toISOString(),
+          reason: outcome.reason,
+        },
         proofUpdatedAt: Date.now(),
       });
       await persistPreviewState(projectPath);
-      if (projectPath === selectedProjectPath) {
-        renderProofForProject(projectPath);
-        openProofSnapshotModal(snapshot);
-      }
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = proofReentry.reasonLabel(outcome.reason);
+      return;
     }
-    if (snapshot?.path && proofCopyStatusEl) {
-      proofCopyStatusEl.textContent = `Verified with snapshot: ${snapshot.path}`;
+
+    const verification = outcome.verification;
+    const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+    const proofFiles = uniqueList([
+      ...uniqueList([
+        ...verification.workspace.changedFiles,
+        ...verification.workspace.evidenceFiles,
+      ]).map((file) => projectRelativePath(projectPath, file)),
+      ...proofFilesForProject(projectPath, currentConfig),
+    ]);
+    const verifiedProof = { ...proof, files: proofFiles };
+    projectWorkspaceFingerprints.set(projectPath, after);
+    projectRuntimeConfig.set(projectPath, {
+      ...currentConfig,
+      proofVerification: verification,
+      proofVerificationFailure: null,
+      proofLedger: appendProofLedgerEntry(
+        currentConfig,
+        verificationLedgerEntry(verifiedProof, liveCheck, snapshot, verification)
+      ),
+      proofUpdatedAt: Date.now(),
+    });
+    await persistPreviewState(projectPath);
+    if (projectPath === selectedProjectPath) {
+      renderProofForProject(projectPath);
+      openProofSnapshotModal(snapshot);
+    }
+    if (proofCopyStatusEl) proofCopyStatusEl.textContent = `Ready · proof bound to ${after.fingerprint.slice(0, 20)}…`;
+  } catch (error) {
+    const message = error && error.message ? error.message : 'Verify could not be bound';
+    const reason = /snapshot/i.test(message)
+      ? 'snapshot_missing'
+      : /fingerprint/i.test(message)
+        ? 'fingerprint_unavailable'
+        : 'verification_invalid';
+    const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+    projectRuntimeConfig.set(projectPath, {
+      ...currentConfig,
+      proofVerificationFailure: {
+        at: new Date().toISOString(),
+        reason,
+      },
+      proofUpdatedAt: Date.now(),
+    });
+    await persistPreviewState(projectPath).catch(() => {});
+    if (proofCopyStatusEl) {
+      proofCopyStatusEl.textContent = message;
     }
   } finally {
+    reentryVerificationInFlight.delete(projectPath);
+    if (projectPath === selectedProjectPath) renderProofForProject(projectPath);
     if (proofVerifyEl) proofVerifyEl.disabled = false;
     if (proofCheckEl) proofCheckEl.disabled = false;
     if (proofSnapshotEl) proofSnapshotEl.disabled = false;
@@ -1876,12 +2212,11 @@ function openProofSnapshotModal(snapshot) {
   if (!proofSnapshotModalEl || !proofSnapshotImageEl || !snapshot?.path) return;
   activeProofSnapshot = snapshot;
   proofSnapshotModalEl.hidden = false;
-  const imageUrl = snapshot.previewUrl || workspaceFileUrl(snapshot.path);
-  proofSnapshotImageEl.src = imageUrl;
+  setEvidenceImageSource(proofSnapshotImageEl, snapshot);
   proofSnapshotImageEl.alt = `Captured preview snapshot ${snapshot.path}`;
   if (proofSnapshotPathEl) proofSnapshotPathEl.textContent = snapshot.path;
   if (proofSnapshotStatusEl) proofSnapshotStatusEl.textContent = snapshotLabel(snapshot);
-  window.__pwProofSnapshotModal = { open: true, path: snapshot.path, imageUrl };
+  window.__pwProofSnapshotModal = { open: true, path: snapshot.path, imageUrl: snapshot.previewUrl || '' };
 }
 
 async function copyActiveProofSnapshotPath() {
@@ -1908,8 +2243,8 @@ function openProofCompareModal() {
 
   activeProofCompare = { latest, previous };
   proofCompareModalEl.hidden = false;
-  proofCompareBeforeEl.src = previous.previewUrl || workspaceFileUrl(previous.path);
-  proofCompareAfterEl.src = latest.previewUrl || workspaceFileUrl(latest.path);
+  setEvidenceImageSource(proofCompareBeforeEl, previous);
+  setEvidenceImageSource(proofCompareAfterEl, latest);
   proofCompareBeforeEl.alt = `Previous proof snapshot ${previous.path}`;
   proofCompareAfterEl.alt = `Latest proof snapshot ${latest.path}`;
   if (proofCompareBeforeLabelEl) proofCompareBeforeLabelEl.textContent = snapshotShortName(previous);
@@ -1943,6 +2278,7 @@ async function copyProofComparePaths() {
 function renderProofForProject(projectPath) {
   if (!proofDockEl) return;
   const proof = proofForProject(projectPath);
+  const proving = reentryVerificationInFlight.has(projectPath);
   window.__pwProofSnapshot = proof;
   window.__pwProofLedger = proof?.ledger || [];
   if (!proof) {
@@ -1977,24 +2313,24 @@ function renderProofForProject(projectPath) {
     }
   }
   if (proofCheckEl) {
-    proofCheckEl.disabled = !proof.url;
+    proofCheckEl.disabled = proving || !proof.url;
   }
   if (proofVerifyEl) {
-    proofVerifyEl.disabled = !proof.url;
+    proofVerifyEl.disabled = proving || !proof.url;
   }
   if (proofPackEl) {
     proofPackEl.disabled = !proof.url;
   }
   if (proofOutputEl) {
     const hasOutput = runtimeOutputForProject(projectPath).trim().length > 0;
-    proofOutputEl.hidden = proof.command === 'Static HTML preview';
+    proofOutputEl.hidden = proof.command === 'Static site render';
     proofOutputEl.disabled = !hasOutput;
     proofOutputEl.title = hasOutput
       ? 'Show managed runtime output'
       : 'No managed runtime output captured yet';
   }
   if (proofSnapshotEl) {
-    proofSnapshotEl.disabled = !proof.url;
+    proofSnapshotEl.disabled = proving || !proof.url;
   }
   if (proofCheckStatusEl) {
     if (proof.liveCheck) {
@@ -2552,13 +2888,13 @@ function renderRunningPageFields(sourceType) {
     row.hidden = row.dataset.source !== sourceType;
   }
   const status = projectRuntimeStatus.get(selectedProjectPath) || { running: false };
-  const canRunServer = sourceType === 'server';
-  runningPageStartEl.disabled = !canRunServer;
-  runningPageStartEl.textContent = canRunServer && status.running ? 'Restart' : 'Start';
-  runningPageStartEl.title = canRunServer && status.running
-    ? 'Restart the server command and reload the preview'
-    : 'Start the server command';
-  runningPageStopEl.disabled = !canRunServer || !status.running;
+  const canManage = sourceType === 'server';
+  runningPageStartEl.disabled = !canManage;
+  runningPageStartEl.textContent = canManage && status.running ? 'Restart' : 'Start';
+  runningPageStartEl.title = canManage && status.running
+    ? 'Restart the managed preview'
+    : 'Start preview management';
+  runningPageStopEl.disabled = !canManage || (!status.running && (projectRuntimeConfig.get(selectedProjectPath)?.agentPaused));
 }
 
 function renderRuntimeStatus(projectPath) {
@@ -2568,18 +2904,36 @@ function renderRuntimeStatus(projectPath) {
     renderRunningPageFields(config.sourceType);
   }
   if (config.sourceType === 'none') {
-    runningPageStatusEl.textContent = 'Not configured';
+    runningPageStatusEl.textContent = 'No preview detected';
+    if (previewAgentDotEl) previewAgentDotEl.dataset.tone = 'idle';
+    if (previewAgentSummaryEl) previewAgentSummaryEl.textContent = 'Add a dev script or an index.html, then reopen the project.';
     return;
   }
   if (config.sourceType === 'html') {
-    runningPageStatusEl.textContent = config.htmlPath ? `HTML: ${config.htmlPath}` : 'HTML file missing';
+    const rendered = projectPreviewRendered.has(projectPath);
+    runningPageStatusEl.textContent = config.htmlPath ? (rendered ? 'Rendered' : 'Rendering…') : 'Entry file missing';
+    if (previewAgentDotEl) previewAgentDotEl.dataset.tone = config.htmlPath ? (rendered ? 'live' : 'working') : 'error';
+    if (previewAgentSummaryEl) previewAgentSummaryEl.textContent = config.htmlPath || 'No static entry file found';
+    return;
+  }
+  if (config.agentPaused) {
+    runningPageStatusEl.textContent = 'Paused';
+    if (previewAgentDotEl) previewAgentDotEl.dataset.tone = 'idle';
+    if (previewAgentSummaryEl) previewAgentSummaryEl.textContent = `${config.serverCommand} · automatic recovery is paused`;
     return;
   }
   if (status.running) {
-    runningPageStatusEl.textContent = 'Server live';
+    const checked = config.proofLiveCheck?.ok;
+    runningPageStatusEl.textContent = checked ? 'Live' : 'Starting…';
+    if (previewAgentDotEl) previewAgentDotEl.dataset.tone = checked ? 'live' : 'working';
+    if (previewAgentSummaryEl) {
+      previewAgentSummaryEl.textContent = [config.serverCommand, status.url || config.serverUrl || 'finding local URL'].filter(Boolean).join(' · ');
+    }
     return;
   }
-  runningPageStatusEl.textContent = stoppedServerLabel(status);
+  runningPageStatusEl.textContent = 'Recovering…';
+  if (previewAgentDotEl) previewAgentDotEl.dataset.tone = 'working';
+  if (previewAgentSummaryEl) previewAgentSummaryEl.textContent = stoppedServerLabel(status, 'Restarting the preview server');
 }
 
 function renderRuntimeConfig(projectPath) {
@@ -2602,6 +2956,16 @@ async function loadRuntimeConfig(projectPath) {
       ...defaultRuntimeConfig(),
       ...parsed,
     };
+    if (config.sourceType === 'none' && !config.agentPaused) {
+      const detected = await detectPreviewAgentConfig(projectPath);
+      if (detected.sourceType !== 'none') {
+        Object.assign(config, detected, {
+          proofLedger: parsed.proofLedger,
+          proofSnapshot: parsed.proofSnapshot,
+          proofLiveCheck: parsed.proofLiveCheck,
+        });
+      }
+    }
     projectRuntimeConfig.set(projectPath, config);
     if (config.sourceType === 'none') {
       replacePreviewHistory(projectPath, [], -1);
@@ -2610,20 +2974,30 @@ async function loadRuntimeConfig(projectPath) {
     }
     return config;
   } catch {
-    const config = defaultRuntimeConfig();
+    const config = await detectPreviewAgentConfig(projectPath);
     projectRuntimeConfig.set(projectPath, config);
     replacePreviewHistory(projectPath, [], -1);
     return config;
   }
 }
 
+async function detectPreviewAgentConfig(projectPath) {
+  return previewAgent.detectConfig(async (relPath) => {
+    const result = await window.api.readFile(projectRelativePath(projectPath, relPath));
+    return result.content;
+  });
+}
+
 function collectRuntimeConfigFromForm() {
   return {
+    ...(projectRuntimeConfig.get(selectedProjectPath) || defaultRuntimeConfig()),
     sourceType: runningPageTypeEl.value,
     htmlPath: runningPageHtmlEl.value.trim(),
     serverCommand: runningPageCommandEl.value.trim(),
     serverUrl: runningPageUrlInputEl.value.trim(),
     autoStart: runningPageAutostartEl.checked,
+    agentManaged: runningPageAutostartEl.checked,
+    agentPaused: false,
   };
 }
 
@@ -2667,7 +3041,7 @@ async function quickCreateHtmlStarter() {
     if (!ok) return;
   }
 
-  setPreviewQuickStatus('Creating HTML starter...', 'pending');
+  setPreviewQuickStatus('Creating static site...', 'pending');
   await window.api.writeFile(targetPath, htmlStarterDocument(selectedProjectPath));
   await applyRuntimeConfig(selectedProjectPath, {
     ...defaultRuntimeConfig(),
@@ -2677,7 +3051,7 @@ async function quickCreateHtmlStarter() {
     proofFiles: [targetPath, configPathForProject(selectedProjectPath)],
     proofUpdatedAt: Date.now(),
   });
-  setPreviewQuickStatus('HTML starter is live in the preview.', 'success');
+  setPreviewQuickStatus('Static site is rendering.', 'success');
 }
 
 async function writeAndRunServerStarter({ variant = 'server', label = 'server starter' } = {}) {
@@ -2780,10 +3154,11 @@ async function applyRuntimeConfig(projectPath, config, options = {}) {
 
   if (config.sourceType === 'html') {
     if (!config.htmlPath) {
-      throw new Error('HTML file path is required');
+      throw new Error('A static entry file is required');
     }
     const basePath = projectPath === '.' ? config.htmlPath : `${projectPath}/${config.htmlPath}`;
     const resolved = await window.api.resolvePreviewHtmlFile(basePath);
+    projectPreviewRendered.delete(projectPath);
     replacePreviewHistory(projectPath, [resolved.url], 0);
     projectRuntimeStatus.set(projectPath, { running: false, sourceType: 'html', url: resolved.url });
     await window.api.stopPreviewRuntime(projectPath);
@@ -2855,6 +3230,9 @@ async function startConfiguredRuntime() {
   if (config.sourceType !== 'server') return;
   const status = projectRuntimeStatus.get(selectedProjectPath) || { running: false };
   try {
+    config.agentPaused = false;
+    config.autoStart = true;
+    config.agentManaged = true;
     runningPageStatusEl.textContent = status.running ? 'Restarting server...' : 'Starting server...';
     runningPageStartEl.disabled = true;
     await applyRuntimeConfig(selectedProjectPath, config, { forceStart: true });
@@ -2868,7 +3246,13 @@ async function startConfiguredRuntime() {
 async function stopConfiguredRuntime() {
   const config = {
     ...(projectRuntimeConfig.get(selectedProjectPath) || defaultRuntimeConfig()),
+    agentPaused: true,
   };
+  projectRuntimeConfig.set(selectedProjectPath, config);
+  clearPreviewAgentRecovery(selectedProjectPath);
+  const healthTimer = previewAgentHealthTimers.get(selectedProjectPath);
+  if (healthTimer) clearTimeout(healthTimer);
+  previewAgentHealthTimers.delete(selectedProjectPath);
   await window.api.stopPreviewRuntime(selectedProjectPath);
   projectRuntimeStatus.set(selectedProjectPath, {
     running: false,
@@ -2877,6 +3261,7 @@ async function stopConfiguredRuntime() {
   });
   renderRuntimeStatus(selectedProjectPath);
   renderProofForProject(selectedProjectPath);
+  await persistPreviewState(selectedProjectPath);
 }
 
 async function bootTerminalForPath(relPath, shouldRunStartup = false, forceStartup = false) {
@@ -3047,6 +3432,7 @@ async function selectProject(relPath, options = {}) {
     removeProjectFromSelectionHistory(relPath);
   }
   selectedProjectPath = projectPath;
+  invalidateWorkspaceFingerprint(projectPath);
   persistLastSelectedProject(projectPath);
   if (recordHistory) {
     recordProjectSelection(projectPath);
@@ -3077,6 +3463,10 @@ async function selectProject(relPath, options = {}) {
     renderPreviewForProject(projectPath);
   }
   await setupPromise;
+  if (selectedProjectPath === projectPath) {
+    await window.api.watchWorkspace(projectPath).catch(() => {});
+    await refreshWorkspaceFingerprint(projectPath);
+  }
 }
 
 async function createProject() {
@@ -3107,6 +3497,7 @@ async function createProject() {
 
 window.api.onTerminalData(({ key, data }) => {
   appendTerminalOutput(key, data);
+  scheduleWorkspaceFingerprintRefresh(key, 500);
 
   const runtimeConfig = projectRuntimeConfig.get(key) || defaultRuntimeConfig();
   const shouldDetectPreviewUrl =
@@ -3140,6 +3531,12 @@ window.api.onPreviewStatus(({ key, running, url, configuredUrl, sourceType, exit
     exitCode: Number.isInteger(exitCode) ? exitCode : null,
     signal: typeof signal === 'string' ? signal : '',
   });
+  if (running) {
+    clearPreviewAgentRecovery(key);
+    schedulePreviewAgentHealthCheck(key);
+  } else if (sourceType === 'server') {
+    schedulePreviewAgentRecovery(key);
+  }
 
   const handlePreviewStatusReady = () => {
     if (key === selectedProjectPath) {
@@ -3178,8 +3575,18 @@ window.api.onPreviewHtmlChanged(({ key }) => {
   if (key !== selectedProjectPath) return;
   const config = projectRuntimeConfig.get(key) || defaultRuntimeConfig();
   if (config.sourceType !== 'html') return;
+  invalidateWorkspaceFingerprint(key);
+  scheduleWorkspaceFingerprintRefresh(key, 120);
   refreshSelectedHtmlPreview().catch(() => {});
 });
+
+if (window.api.onWorkspaceChanged) {
+  window.api.onWorkspaceChanged(({ key }) => {
+    if (!key) return;
+    invalidateWorkspaceFingerprint(key);
+    scheduleWorkspaceFingerprintRefresh(key, 220);
+  });
+}
 
 window.api.onTerminalExit(({ key }) => {
   if (!key) return;
@@ -3886,6 +4293,12 @@ previewFrameEl.addEventListener('dom-ready', () => {
 
 previewFrameEl.addEventListener('load', () => {
   updateProjectNavigationControls();
+  const url = currentPreviewUrl(ensurePreviewState(selectedProjectPath));
+  const renderedUrl = sanitizePreviewUrl(previewFrameEl.src || '');
+  if (url && url !== 'about:blank' && renderedUrl === sanitizePreviewUrl(url)) {
+    projectPreviewRendered.add(selectedProjectPath);
+    renderRuntimeStatus(selectedProjectPath);
+  }
 });
 
 if (previewReloadEl) {
@@ -3934,6 +4347,13 @@ window.addEventListener('pointerdown', (event) => {
     if (document.hidden) return;
     refreshAgentMonitor().catch(() => {});
   }, 30000);
+  if (workspaceFingerprintPollTimer) {
+    clearInterval(workspaceFingerprintPollTimer);
+  }
+  workspaceFingerprintPollTimer = setInterval(() => {
+    if (document.hidden) return;
+    refreshWorkspaceFingerprint(selectedProjectPath).catch(() => {});
+  }, 15000);
   await window.api.startRendererWatch();
   selectedProjectPath = visibleProjectPath(loadLastSelectedProject());
   projectSelectionHistory[0] = selectedProjectPath;

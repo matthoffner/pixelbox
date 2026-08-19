@@ -1,4 +1,5 @@
 const http = require('node:http');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
@@ -13,11 +14,15 @@ const { TerminalSession, defaultShell } = require('../lib/terminalSession');
 const { probeUrl } = require('../lib/previewProbe');
 const { capturePreviewSnapshot, snapshotRelativePath } = require('../lib/previewSnapshot');
 const codexMonitor = require('../lib/codexMonitor');
+const { captureProjectFingerprint, shouldExcludeRelativePath } = require('../lib/projectFingerprint');
+const { createBridgeSecurity } = require('../lib/bridgeSecurity');
+const { createPreviewAccess } = require('../lib/previewAccess');
 
 const host = '127.0.0.1';
 const port = Number(process.env.PIXELBOX_BACKEND_PORT || 3210);
 const appRoot = process.cwd();
 const events = new EventEmitter();
+const bridgeSecurity = createBridgeSecurity({ host, port });
 
 function resolveWorkspaceRoot() {
   const fromEnv = process.env.PIXELBOX_WORKSPACE_ROOT || process.env.PXCODE_WORKSPACE_ROOT;
@@ -30,6 +35,13 @@ function resolveWorkspaceRoot() {
 const workspaceRoot = resolveWorkspaceRoot();
 fs.mkdirSync(workspaceRoot, { recursive: true });
 const workspaceFs = createWorkspaceFs(workspaceRoot);
+const previewAccess = createPreviewAccess({ workspaceRoot, port, prefix: '/__preview__' });
+const evidenceAccess = createPreviewAccess({
+  workspaceRoot,
+  port,
+  prefix: '/__evidence__',
+  allowControlPaths: true,
+});
 
 let rendererWatcher;
 let rendererChangeDebounce;
@@ -38,6 +50,10 @@ let previewHtmlWatcherKey = '';
 let previewHtmlWatcherPath = '';
 let previewHtmlChangeDebounce;
 let previewCaptureRegion = null;
+let workspaceWatcher;
+let workspaceWatcherKey = '';
+let workspaceChangeDebounce;
+let workspaceWatcherRevision = 0;
 
 const sseClients = new Set();
 
@@ -160,6 +176,51 @@ function clearPreviewHtmlWatcher() {
   clearTimeout(previewHtmlChangeDebounce);
 }
 
+function clearWorkspaceWatcher() {
+  if (workspaceWatcher) {
+    workspaceWatcher.close();
+    workspaceWatcher = null;
+  }
+  workspaceWatcherKey = '';
+  workspaceWatcherRevision = 0;
+  clearTimeout(workspaceChangeDebounce);
+}
+
+async function watchWorkspaceProject(projectPath = '.') {
+  const key = projectPath || '.';
+  if (workspaceWatcher && workspaceWatcherKey === key) {
+    return { ok: true, watching: true, key };
+  }
+  clearWorkspaceWatcher();
+  const absolutePath = workspaceFs.resolveWorkspacePath(key);
+  const [realWorkspaceRoot, realProjectRoot] = await Promise.all([
+    fsp.realpath(workspaceRoot),
+    fsp.realpath(absolutePath),
+  ]);
+  const relative = path.relative(realWorkspaceRoot, realProjectRoot);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Workspace watch target is outside workspace');
+  }
+
+  workspaceWatcherKey = key;
+  const onChange = (_eventType, filename) => {
+    const changedPath = filename ? String(filename) : '';
+    if (changedPath && shouldExcludeRelativePath(changedPath, { excludeProjects: key === '.' })) return;
+    workspaceWatcherRevision += 1;
+    clearTimeout(workspaceChangeDebounce);
+    workspaceChangeDebounce = setTimeout(() => {
+      emit('workspace:changed', { key, path: changedPath });
+    }, 180);
+  };
+  try {
+    workspaceWatcher = fs.watch(realProjectRoot, { recursive: true }, onChange);
+  } catch {
+    workspaceWatcher = fs.watch(realProjectRoot, onChange);
+  }
+  workspaceWatcher.on('error', () => clearWorkspaceWatcher());
+  return { ok: true, watching: true, key };
+}
+
 function watchPreviewHtmlFile(key, absolutePath) {
   const nextPath = path.resolve(absolutePath);
   const watchRoot = path.dirname(nextPath);
@@ -170,10 +231,12 @@ function watchPreviewHtmlFile(key, absolutePath) {
   clearPreviewHtmlWatcher();
   previewHtmlWatcherKey = key;
   previewHtmlWatcherPath = nextPath;
-  previewHtmlWatcher = fs.watch(watchRoot, { recursive: true }, () => {
+  previewHtmlWatcher = fs.watch(watchRoot, { recursive: true }, (_eventType, filename) => {
+    const changedPath = filename ? String(filename) : '';
+    if (changedPath && shouldExcludeRelativePath(changedPath, { excludeProjects: key === '.' })) return;
     clearTimeout(previewHtmlChangeDebounce);
     previewHtmlChangeDebounce = setTimeout(() => {
-      emit('preview:htmlChanged', { key, path: nextPath });
+      emit('preview:htmlChanged', { key, path: changedPath || nextPath });
     }, 100);
   });
   previewHtmlWatcher.on('error', () => {
@@ -182,49 +245,79 @@ function watchPreviewHtmlFile(key, absolutePath) {
   return { ok: true, watching: true };
 }
 
-function workspaceUrlForPath(relPath) {
-  const cleaned = String(relPath || '.')
-    .split(path.sep)
-    .join('/');
-  const encoded = cleaned
-    .split('/')
-    .filter(Boolean)
-    .map((part) => encodeURIComponent(part))
-    .join('/');
-  return `http://${host}:${port}/__workspace__/${encoded}`;
-}
-
-function resolveWorkspaceFile(relPath) {
+async function resolveWorkspaceFile(relPath, access = evidenceAccess) {
   const absolutePath = workspaceFs.resolveWorkspacePath(relPath);
+  const capability = await access.issue(absolutePath);
   return {
     path: absolutePath,
-    url: workspaceUrlForPath(relPath),
+    url: capability.url,
   };
 }
 
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
     'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
   });
   res.end(`${JSON.stringify(payload)}\n`);
 }
 
+function sendMethodNotAllowed(res, allow) {
+  res.writeHead(405, {
+    Allow: allow,
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.end(`${JSON.stringify({ error: 'Method not allowed' })}\n`);
+}
+
 function sendError(res, error) {
-  sendJson(res, 500, {
+  sendJson(res, Number(error?.statusCode) || 500, {
     error: error && error.message ? error.message : String(error),
   });
 }
 
 async function readJsonBody(req) {
   const chunks = [];
+  let bytes = 0;
   for await (const chunk of req) {
+    bytes += chunk.length;
+    if (bytes > 1024 * 1024) {
+      const error = new Error('Request body exceeds 1 MiB limit');
+      error.statusCode = 413;
+      throw error;
+    }
     chunks.push(chunk);
   }
   if (chunks.length === 0) return {};
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+async function verifyWorkspaceEvidence(evidence) {
+  if (!evidence || typeof evidence !== 'object') return null;
+  const expected = String(evidence.digest || '');
+  const relativePath = String(evidence.path || '');
+  if (!relativePath || !expected.startsWith('sha256:')) {
+    return { path: relativePath, match: false, digest: '' };
+  }
+  try {
+    const absolutePath = workspaceFs.resolveWorkspacePath(relativePath);
+    const [realRoot, realTarget] = await Promise.all([
+      fsp.realpath(workspaceRoot),
+      fsp.realpath(absolutePath),
+    ]);
+    const relative = path.relative(realRoot, realTarget);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      return { path: relativePath, match: false, digest: '' };
+    }
+    const bytes = await fsp.readFile(realTarget);
+    const digest = `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}`;
+    return { path: relativePath, match: digest === expected, digest };
+  } catch {
+    return { path: relativePath, match: false, digest: '' };
+  }
 }
 
 function contentTypeFor(filePath) {
@@ -257,13 +350,13 @@ async function sendFile(res, absolutePath) {
   const data = await fsp.readFile(absolutePath);
   res.writeHead(200, {
     'Content-Type': contentTypeFor(absolutePath),
-    'Access-Control-Allow-Origin': '*',
     'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
   });
   res.end(data);
 }
 
-function resolveStaticPath(urlPath) {
+async function resolveStaticPath(urlPath, requestHost) {
   if (urlPath === '/') {
     return path.join(appRoot, 'renderer', 'index.html');
   }
@@ -277,9 +370,22 @@ function resolveStaticPath(urlPath) {
     return absolutePath;
   }
 
-  if (urlPath.startsWith('/__workspace__/')) {
-    const relPath = decodeURIComponent(urlPath.slice('/__workspace__/'.length));
-    return workspaceFs.resolveWorkspacePath(relPath);
+  if (urlPath.startsWith(`${previewAccess.prefix}/`)) {
+    if (String(requestHost || '').toLowerCase() !== `localhost:${port}`) {
+      const error = new Error('Preview capabilities require the isolated localhost origin');
+      error.statusCode = 403;
+      throw error;
+    }
+    return (await previewAccess.resolve(urlPath)).filePath;
+  }
+
+  if (urlPath.startsWith(`${evidenceAccess.prefix}/`)) {
+    if (String(requestHost || '').toLowerCase() !== `localhost:${port}`) {
+      const error = new Error('Evidence capabilities require the isolated localhost origin');
+      error.statusCode = 403;
+      throw error;
+    }
+    return (await evidenceAccess.resolve(urlPath)).filePath;
   }
 
   return null;
@@ -293,7 +399,7 @@ async function handleApi(req, res, pathname) {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-store',
       Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
+      'X-Content-Type-Options': 'nosniff',
     });
     res.write('event: ready\ndata: {}\n\n');
     sseClients.add(res);
@@ -309,6 +415,28 @@ async function handleApi(req, res, pathname) {
 
   if (pathname === '/api/workspace/getRoot') {
     return sendJson(res, 200, workspaceRoot);
+  }
+  if (pathname === '/api/workspace/fingerprint') {
+    const projectPath = body.projectPath || '.';
+    const projectRoot = workspaceFs.resolveWorkspacePath(projectPath);
+    const revisionBefore = workspaceWatcherKey === projectPath ? workspaceWatcherRevision : null;
+    const fingerprint = await captureProjectFingerprint(projectRoot, {
+      workspaceRoot,
+      includedPaths: body.includedPaths,
+    });
+    const revisionAfter = workspaceWatcherKey === projectPath ? workspaceWatcherRevision : null;
+    const evidence = await verifyWorkspaceEvidence(body.evidence);
+    return sendJson(res, 200, {
+      ...fingerprint,
+      complete: fingerprint.complete === true && (
+        revisionBefore === null || revisionAfter === null || revisionBefore === revisionAfter
+      ),
+      watchRevision: revisionAfter,
+      evidence,
+    });
+  }
+  if (pathname === '/api/workspace/watch') {
+    return sendJson(res, 200, await watchWorkspaceProject(body.projectPath || '.'));
   }
   if (pathname === '/api/workspace/resolvePath') {
     return sendJson(res, 200, workspaceFs.resolveWorkspacePath(body.path || '.'));
@@ -336,10 +464,10 @@ async function handleApi(req, res, pathname) {
     return sendJson(res, 200, await workspaceFs.removeDir(body.path));
   }
   if (pathname === '/api/preview/resolveHtmlFile') {
-    return sendJson(res, 200, resolveWorkspaceFile(body.path));
+    return sendJson(res, 200, await resolveWorkspaceFile(body.path, previewAccess));
   }
   if (pathname === '/api/preview/resolveFile') {
-    return sendJson(res, 200, resolveWorkspaceFile(body.path));
+    return sendJson(res, 200, await resolveWorkspaceFile(body.path, evidenceAccess));
   }
   if (pathname === '/api/preview/probeUrl') {
     return sendJson(res, 200, await probeUrl(body.url, {
@@ -360,9 +488,10 @@ async function handleApi(req, res, pathname) {
       timeoutMs: body.timeoutMs,
       waitAfterLoadMs: body.waitAfterLoadMs,
     });
+    const evidencePreview = await resolveWorkspaceFile(result.path, evidenceAccess);
     return sendJson(res, 200, {
       ...result,
-      previewUrl: workspaceUrlForPath(result.path),
+      previewUrl: evidencePreview.url,
     });
   }
   if (pathname === '/api/preview/execCommand') {
@@ -491,23 +620,33 @@ async function handleApi(req, res, pathname) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    const url = new URL(req.url, `http://${host}:${port}`);
+    const privilegedRoute = url.pathname.startsWith('/api/') || url.pathname === '/health';
+    const requestTrust = bridgeSecurity.validateRequest(req, {
+      requireTrustedOrigin: privilegedRoute,
+    });
+    if (!requestTrust.ok) {
+      return sendJson(res, 403, { error: 'Forbidden' });
+    }
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+        ...bridgeSecurity.corsHeaders(req.headers.origin),
+        'Cache-Control': 'no-store',
       });
       res.end();
       return;
     }
 
-    const url = new URL(req.url, `http://${host}:${port}`);
+    const methodTrust = bridgeSecurity.validateMethod(req.method, url.pathname);
+    if (!methodTrust.ok) {
+      return sendMethodNotAllowed(res, methodTrust.allow);
+    }
     if (url.pathname.startsWith('/api/') || url.pathname === '/health') {
       await handleApi(req, res, url.pathname);
       return;
     }
 
-    const filePath = resolveStaticPath(url.pathname);
+    const filePath = await resolveStaticPath(url.pathname, req.headers.host);
     if (!filePath) {
       res.writeHead(404);
       res.end('Not found');
@@ -527,6 +666,9 @@ function shutdown() {
     previewRuntimeManager.stopAll();
   } catch {}
   clearPreviewHtmlWatcher();
+  clearWorkspaceWatcher();
+  previewAccess.clear();
+  evidenceAccess.clear();
   if (rendererWatcher) {
     rendererWatcher.close();
     rendererWatcher = null;

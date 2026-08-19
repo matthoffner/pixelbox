@@ -7,6 +7,7 @@
     'preview:status': [],
     'preview:log': [],
     'preview:htmlChanged': [],
+    'workspace:changed': [],
     'app:refreshShortcut': [],
     'app:projectSwitchShortcut': [],
   };
@@ -45,6 +46,8 @@
 
   window.api = {
     getWorkspaceRoot: () => request('/api/workspace/getRoot'),
+    workspaceFingerprint: (projectPath, options = {}) => request('/api/workspace/fingerprint', { projectPath, ...options }),
+    watchWorkspace: (projectPath) => request('/api/workspace/watch', { projectPath }),
     getPathForDroppedFile: () => '',
     resolveWorkspacePath: (targetPath) => request('/api/workspace/resolvePath', { path: targetPath }),
     listDir: (targetPath) => request('/api/fs/listDir', { path: targetPath }),
@@ -83,6 +86,7 @@
     onPreviewStatus: (callback) => on('preview:status', callback),
     onPreviewLog: (callback) => on('preview:log', callback),
     onPreviewHtmlChanged: (callback) => on('preview:htmlChanged', callback),
+    onWorkspaceChanged: (callback) => on('workspace:changed', callback),
     onAppRefreshShortcut: (callback) => on('app:refreshShortcut', callback),
     onProjectSwitchShortcut: (callback) => on('app:projectSwitchShortcut', callback),
   };

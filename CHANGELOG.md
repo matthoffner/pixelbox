@@ -2,6 +2,12 @@
 
 ## Unreleased - 2026-07-11
 
+- Replaced the configuration-heavy Running Page concept with a compact Preview Agent that detects npm/static projects, starts and health-checks dev servers, recovers failed previews, and keeps manual settings under Advanced.
+- Moved proof controls into the Projects panel so the rendered app remains unobstructed during normal preview work.
+- Added Pixelbox Reentry with honest Building, Needs you, Blocked, Proving, Ready, and Proof stale states; Ready now requires a matching project-scoped workspace fingerprint, runtime context, Live Check, and SHA-256-bound snapshot.
+- Added immediate stale-proof invalidation, fresh before/after Verify scans, active static-artifact hashing, scoped changed/evidence file receipts, and runtime-failure precedence so legacy timestamps or stopped previews cannot produce Ready.
+- Isolated untrusted static previews and proof artifacts behind expiring `localhost` capability URLs, removed wildcard CORS, and added strict bridge Host/Origin/method checks, request-size limits, root-deletion guards, and symlink-aware workspace containment.
+- Added unit, bridge-integration, composition, and real-browser Reentry acceptance coverage; the browser smoke proves preview isolation, Ready, proof-write stability, and Proof stale after a real file edit.
 - Added a live run proof receipt over the preview with project, command, URL, touched files, copy-to-clipboard, and persisted proof metadata for quick-start generated runtimes.
 - Added a Live Check action that probes the preview URL, captures HTTP status, latency, and page title/heading, and carries that evidence into Ship Briefs.
 - Added an in-app Proof Ledger that records recent Live Checks and Ship Briefs, persists them in preview config, and copies a shareable evidence trail.

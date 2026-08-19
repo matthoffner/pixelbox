@@ -42,7 +42,9 @@ Pixelbox should feel like an AI-native operating surface for software creation:
 - Project switcher and per-project runtime config.
 - Embedded live app view for local URLs/files.
 - Server preview Start/Restart controls that relaunch the managed process and reload the live preview after code edits.
+- Pixelbox Reentry states (`Building`, `Needs you`, `Blocked`, `Proving`, `Ready`, and `Proof stale`) backed by project-scoped workspace fingerprints, current runtime context, Live Check evidence, and SHA-256-checked snapshots.
 - Live run proof receipts with one-click Verify, Markdown Proof Packs, Verified Run ledger events, automatic Live Check probes, Runtime Output tails in Ship Briefs, Proof Snapshot PNGs, Snapshot Compare, project, command, URL, inspectable touched files, copyable verification text, and one-click Ship Brief handoffs.
+- Isolated capability URLs for static previews and evidence, plus strict loopback Host/Origin/method checks, bounded bridge requests, and symlink-aware workspace containment.
 - Native app runtime support with capture-image previews.
 - AI Launch presets for Codex, Claude, Gemini, Hermes, OpenClaw TUI, or a plain terminal.
 - In-app agent monitor for active Codex processes.
@@ -87,24 +89,16 @@ npm run dev
 - Use the overlay menu to select an existing project.
 - Or click `New Project` to create one.
 
-### 3. Configure how the project should render
+### 3. Let Preview Agent run the project
 
-In **Running Page**:
+Preview Agent detects an npm `dev`/`start` script or a static entry such as `index.html`, starts it, health-checks it, and recovers managed servers. Use **Advanced settings** when detection needs help:
 
-- `Source: Node/server command` for frameworks (Next.js/Vite/etc).
-- Set `Server command` (example: `npm run dev`).
-- Set `Server URL` (example: `http://localhost:3000`) if needed.
-- Click `Save`, then `Start`. When the server is live, the same control becomes `Restart` so code changes can relaunch and reload the preview without changing URLs.
+- Choose `Dev server` for frameworks such as Next.js or Vite, then set the start command and optional expected URL.
+- Choose `Static site` and point to the entry HTML file.
+- Choose `Native app` and provide its run, capture, and image settings.
+- Use **Start/Restart** to resume automatic management or **Pause** to stop recovery.
 
-Or:
-
-- `Source: HTML file` and point to a static file.
-
-Or:
-
-- `Source: Native app command` for desktop/native flows.
-- Set `Run command`, optional `Capture command`, and `Image file`.
-- Click `Save`, then `Start`.
+Use **Verify** in Reentry to bind the current Live Check and snapshot to the selected project's workspace fingerprint. Any later relevant file or preview-context change becomes **Proof stale**; Pixelbox's own `.pixelbox` and `.pxcode` proof writes do not invalidate the receipt.
 
 ### 4. Work with agents in terminal
 
@@ -164,6 +158,12 @@ When done, print:
 # Core test suite
 npm test
 
+# Reentry browser acceptance: isolated preview -> Ready -> real edit -> Proof stale
+node test/pw_reentry_smoke.js
+
+# Native shell build, including custom-port health probing
+zig build
+
 # Playwright desktop tests
 npm run test:pw
 npm run test:pw:run
@@ -187,3 +187,8 @@ npm run test:pw:next
 - `lib/terminalSession.js`: PTY/stdin shell session wrapper.
 - `lib/terminalManager.js`: multi-session terminal lifecycle by project.
 - `lib/previewRuntimeManager.js`: project runtime process supervision + URL detection.
+- `lib/projectFingerprint.js`: scoped Git/filesystem fingerprints and actual changed/evidence file sets.
+- `lib/previewAccess.js`: expiring localhost capability URLs that isolate static previews and proof artifacts from bridge authority.
+- `renderer/proof-reentry.js`: fail-closed Reentry verification schema and state derivation.
+
+The loopback bridge is protected from hostile browser origins and untrusted static previews, but it is not an authentication boundary against another process running as the same OS user. Agent hooks, approval controls, or remote intervention need a per-launch secret and narrower endpoint capabilities before they are added.

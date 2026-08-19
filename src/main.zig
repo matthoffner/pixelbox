@@ -121,10 +121,7 @@ pub fn main(init: std.process.Init) !void {
         .bridge = bridge_dispatcher,
         .security = .{
             .navigation = .{
-                .allowed_origins = &.{
-                    "http://127.0.0.1:3210",
-                    "http://127.0.0.1:3210/",
-                },
+                .allowed_origins = &.{backend_origin},
             },
         },
     }, init);
@@ -175,7 +172,7 @@ fn waitUntilReady(io: std.Io, host: []const u8, port_text: []const u8, ready_pat
             continue;
         };
         if (std.Io.net.IpAddress.connect(&address, io, .{ .mode = .stream, .protocol = .tcp })) |stream| {
-            if (httpReady(io, stream, host, ready_path)) {
+            if (httpReady(io, stream, host, port, ready_path)) {
                 stream.close(io);
                 return;
             }
@@ -187,9 +184,9 @@ fn waitUntilReady(io: std.Io, host: []const u8, port_text: []const u8, ready_pat
     return error.Timeout;
 }
 
-fn httpReady(io: std.Io, stream: std.Io.net.Stream, host: []const u8, path: []const u8) bool {
+fn httpReady(io: std.Io, stream: std.Io.net.Stream, host: []const u8, port: u16, path: []const u8) bool {
     var request_buffer: [512]u8 = undefined;
-    const request = std.fmt.bufPrint(&request_buffer, "GET {s} HTTP/1.1\r\nHost: {s}\r\nConnection: close\r\n\r\n", .{ path, host }) catch return false;
+    const request = std.fmt.bufPrint(&request_buffer, "GET {s} HTTP/1.1\r\nHost: {s}:{d}\r\nConnection: close\r\n\r\n", .{ path, host, port }) catch return false;
     var write_buffer: [512]u8 = undefined;
     var stream_writer = std.Io.net.Stream.writer(stream, io, &write_buffer);
     stream_writer.interface.writeAll(request) catch return false;
