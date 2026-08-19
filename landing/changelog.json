@@ -1,6 +1,17 @@
 {
   "entries": [
     {
+      "date": "2026-08-19",
+      "type": "Release 0.5.0",
+      "title": "Added automatic previews and proof-bound reentry",
+      "summary": "Pixelbox now keeps the running product moving while an agent works, then gives the builder an honest return state backed by current runtime and visual evidence instead of terminal activity alone.",
+      "points": [
+        "Added Preview Agent to detect, launch, health-check, and recover npm or static projects while keeping manual controls available under Advanced settings",
+        "Added Reentry states for Building, Needs you, Blocked, Proving, Ready, and Proof stale, with Ready bound to the selected project fingerprint, live preview context, Live Check, and SHA-256-verified snapshot",
+        "Isolated untrusted previews behind expiring capabilities and hardened the local bridge, request limits, and filesystem boundary so proof collection does not grant preview content workspace authority"
+      ]
+    },
+    {
       "date": "2026-07-11",
       "type": "Release 0.4.6",
       "title": "Added proof receipts, verified snapshots, and exportable proof packs",
