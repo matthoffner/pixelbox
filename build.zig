@@ -138,6 +138,10 @@ pub fn build(b: *std.Build) void {
     const run_supervisor = b.addRunArtifact(supervisor_exe);
     const run_supervisor_step = b.step("run-supervisor", "Run the supervisor skeleton");
     run_supervisor_step.dependOn(&run_supervisor.step);
+
+    const supervisor_tests = b.addTest(.{ .root_module = supervisor_mod });
+    const supervisor_test_step = b.step("test-supervisor", "Run supervisor unit tests");
+    supervisor_test_step.dependOn(&b.addRunArtifact(supervisor_tests).step);
 }
 
 fn localModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, path: []const u8) *std.Build.Module {
