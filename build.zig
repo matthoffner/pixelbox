@@ -135,6 +135,10 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(supervisor_exe);
 
+    if (selected_platform == .macos) {
+        linkSupervisorMacos(b, supervisor_mod, zero_native_path);
+    }
+
     const run_supervisor = b.addRunArtifact(supervisor_exe);
     const run_supervisor_step = b.step("run-supervisor", "Run the supervisor skeleton");
     run_supervisor_step.dependOn(&run_supervisor.step);
@@ -187,6 +191,15 @@ fn externalModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std
         .target = target,
         .optimize = optimize,
     });
+}
+
+fn linkSupervisorMacos(b: *std.Build, supervisor_mod: *std.Build.Module, zero_native_path: []const u8) void {
+    supervisor_mod.addCSourceFile(.{
+        .file = zeroNativePath(b, zero_native_path, "src/platform/macos/supervisor_host.m"),
+        .flags = &.{"-fobjc-arc"},
+    });
+    supervisor_mod.linkFramework("Cocoa", .{});
+    supervisor_mod.linkSystemLibrary("c", .{});
 }
 
 fn linkPlatform(b: *std.Build, target: std.Build.ResolvedTarget, app_mod: *std.Build.Module, exe: *std.Build.Step.Compile, platform: PlatformOption, web_engine: WebEngineOption, zero_native_path: []const u8, cef_dir: []const u8, cef_auto_install: bool, ghostty_path: []const u8, ghostty_zig_path: []const u8) void {
