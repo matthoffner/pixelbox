@@ -3,6 +3,7 @@ npm-debug.log*
 .DS_Store
 
 # Local runtime/session artifacts
+.superpowers/
 logs/
 screenshots/
 dist/
