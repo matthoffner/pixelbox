@@ -410,6 +410,15 @@ function configPathForProject(projectPath) {
   return projectPath === '.' ? '.pxcode/workspace-preview.json' : `${projectPath}/.pxcode/preview.json`;
 }
 
+// Mirrors WATCHDOG_KEY_PREFIX in lib/devServerWatchdog.js. Defined once here
+// because the renderer cannot require() Node modules; every watchdog-key check
+// in this file must go through this constant / isWatchdogTerminalKey().
+const WATCHDOG_TERMINAL_KEY_PREFIX = 'watchdog:';
+
+function isWatchdogTerminalKey(key) {
+  return typeof key === 'string' && key.startsWith(WATCHDOG_TERMINAL_KEY_PREFIX);
+}
+
 function stripAnsi(input) {
   if (!input) return '';
   return input
@@ -1272,11 +1281,13 @@ function renderRuntimeStatus(projectPath) {
     runningPageStatusEl.textContent = config.htmlPath ? `HTML: ${config.htmlPath}` : 'HTML file missing';
     return;
   }
+  // Server mode is supervised by an AI CLI agent running with permission
+  // checks bypassed — say so instead of implying a plain child process.
   if (status.running) {
-    runningPageStatusEl.textContent = 'Server live';
+    runningPageStatusEl.textContent = 'Server live (AI agent — autonomous mode)';
     return;
   }
-  runningPageStatusEl.textContent = 'Server stopped';
+  runningPageStatusEl.textContent = 'Server stopped (AI agent — autonomous mode)';
 }
 
 let runningPageLogProjectPath = null;
@@ -1307,7 +1318,7 @@ async function loadRunningPageLog(projectPath) {
 }
 
 function watchdogTerminalKeyFor(projectPath) {
-  return `watchdog:${projectPath}`;
+  return `${WATCHDOG_TERMINAL_KEY_PREFIX}${projectPath}`;
 }
 
 function sendRunningPageLogInput() {
@@ -1519,6 +1530,12 @@ async function applyRuntimeConfig(projectPath, config, options = {}) {
       await window.api.watchPreviewHtml(projectPath, basePath);
     }
   } else if (config.sourceType === 'server') {
+    // Single choke point: selectProject/autoStart, quick actions, Save and
+    // Start all reach server mode through here, so the CLI gate lives here
+    // rather than in individual button handlers.
+    if (!aiCliSupportsDangerousBypass(selectedAiCli)) {
+      throw new Error('Server command mode requires Codex or Claude selected in the AI Launch panel.');
+    }
     if (!config.serverCommand) {
       throw new Error('Server command is required');
     }
@@ -1564,10 +1581,8 @@ async function applyRuntimeConfig(projectPath, config, options = {}) {
 
 async function saveRunningPageConfig() {
   const config = collectRuntimeConfigFromForm();
-  if (config.sourceType === 'server' && !aiCliSupportsDangerousBypass(selectedAiCli)) {
-    window.alert('Server command mode requires Codex or Claude selected in the AI Launch panel.');
-    return;
-  }
+  // The Codex/Claude gate lives inside applyRuntimeConfig so every caller
+  // fails the same way; its message surfaces through the catch below.
   try {
     await applyRuntimeConfig(selectedProjectPath, config);
   } catch (error) {
@@ -1578,10 +1593,6 @@ async function saveRunningPageConfig() {
 async function startConfiguredRuntime() {
   const config = collectRuntimeConfigFromForm();
   if (config.sourceType !== 'server') return;
-  if (!aiCliSupportsDangerousBypass(selectedAiCli)) {
-    window.alert('Server command mode requires Codex or Claude selected in the AI Launch panel.');
-    return;
-  }
   try {
     await applyRuntimeConfig(selectedProjectPath, config, { forceStart: true });
   } catch (error) {
@@ -1829,6 +1840,11 @@ async function createProject() {
 }
 
 window.api.onTerminalData(({ key, data }) => {
+  // Watchdog sessions are keyed `watchdog:<projectPath>`, which is NOT a
+  // project path. Letting it through here would scrape URLs, mutate runtime
+  // config and persist a literal `watchdog:<path>/.pxcode/preview.json`.
+  // The mini terminal has its own handler further down.
+  if (isWatchdogTerminalKey(key)) return;
   appendTerminalOutput(key, data);
 
   const runtimeConfig = projectRuntimeConfig.get(key) || defaultRuntimeConfig();
@@ -1886,13 +1902,16 @@ window.api.onPreviewHtmlChanged(({ key }) => {
 
 window.api.onTerminalExit(({ key }) => {
   if (!key) return;
+  // See the terminal:data guard above — never treat a watchdog key as a project.
+  if (isWatchdogTerminalKey(key)) return;
   projectSessionExited.add(key);
   appendTerminalOutput(key, '\r\n[terminal exited]');
 });
 
 window.api.onTerminalData(({ key, data }) => {
   if (key === watchdogTerminalKeyFor(selectedProjectPath)) {
-    appendRunningPageLog(data);
+    // The agent is a full-screen TUI; the mini terminal is a plain <pre>.
+    appendRunningPageLog(stripAnsi(data));
   }
 });
 

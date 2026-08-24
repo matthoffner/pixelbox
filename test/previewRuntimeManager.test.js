@@ -37,11 +37,13 @@ test('PreviewRuntimeManager starts a server command and emits running/stopped st
       'utf8'
     );
 
+    // `native` mode reports the configured URL. stdout URL scraping was a
+    // "server" mode behavior and server mode is now DevServerWatchdog's.
     manager.start('project-a', {
       cwd: tmpDir,
       sourceType: 'native',
       command: `node ${JSON.stringify(scriptPath)}`,
-      url: '',
+      url: `http://127.0.0.1:${port}`,
     });
 
     await new Promise((resolve, reject) => {

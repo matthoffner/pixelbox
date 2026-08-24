@@ -440,6 +440,11 @@ input {
   gap: 8px;
 }
 
+/* The ID rule above outranks the UA `[hidden]` default, so restore it. */
+#running-page-log-panel[hidden] {
+  display: none;
+}
+
 #running-page-log {
   min-height: 120px;
   max-height: 220px;
