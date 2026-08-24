@@ -39,7 +39,7 @@ test('PreviewRuntimeManager starts a server command and emits running/stopped st
 
     manager.start('project-a', {
       cwd: tmpDir,
-      sourceType: 'server',
+      sourceType: 'native',
       command: `node ${JSON.stringify(scriptPath)}`,
       url: '',
     });

@@ -12,6 +12,7 @@ const { TerminalManager } = require('../lib/terminalManager');
 const { TerminalSession, defaultShell } = require('../lib/terminalSession');
 const codexMonitor = require('../lib/codexMonitor');
 const { buildAiCliDefinitions } = require('../lib/aiCliDefinitions');
+const { DevServerWatchdog } = require('../lib/devServerWatchdog');
 
 const host = '127.0.0.1';
 const port = Number(process.env.PIXELBOX_BACKEND_PORT || 3210);
@@ -101,6 +102,14 @@ const terminalManager = new TerminalManager({
 
 const previewRuntimeManager = new PreviewRuntimeManager({
   shell: defaultShell(),
+  sendStatus(payload) {
+    emit('preview:status', payload);
+  },
+});
+
+const devServerWatchdog = new DevServerWatchdog({
+  terminalManager,
+  events,
   sendStatus(payload) {
     emit('preview:status', payload);
   },
@@ -330,6 +339,17 @@ async function handleApi(req, res, pathname) {
     const projectPath = body.projectPath || '.';
     const options = body.options || {};
     const cwd = workspaceFs.resolveWorkspacePath(projectPath);
+    if (options.sourceType === 'server') {
+      if (options.autoStart === false) {
+        devServerWatchdog.stop(projectPath);
+        return sendJson(res, 200, { ok: true, running: false });
+      }
+      return sendJson(res, 200, devServerWatchdog.start(projectPath, {
+        cwd,
+        aiCli: options.aiCli,
+        serverCommand: options.command,
+      }));
+    }
     const resolvedOptions = await previewRuntimeManager.resolveLaunchOptions(projectPath, {
       cwd,
       sourceType: options.sourceType,
@@ -343,6 +363,13 @@ async function handleApi(req, res, pathname) {
     const projectPath = body.projectPath || '.';
     const options = body.options || {};
     const cwd = workspaceFs.resolveWorkspacePath(projectPath);
+    if ((options.sourceType || 'server') === 'server') {
+      return sendJson(res, 200, devServerWatchdog.start(projectPath, {
+        cwd,
+        aiCli: options.aiCli,
+        serverCommand: options.command,
+      }));
+    }
     const resolvedOptions = await previewRuntimeManager.resolveLaunchOptions(projectPath, {
       cwd,
       sourceType: options.sourceType || 'server',
@@ -352,8 +379,12 @@ async function handleApi(req, res, pathname) {
     return sendJson(res, 200, await previewRuntimeManager.start(projectPath, resolvedOptions));
   }
   if (pathname === '/api/preview/stopRuntime') {
+    devServerWatchdog.stop(body.projectPath || '.');
     previewRuntimeManager.stop(body.projectPath || '.', { keepStoppedState: true });
     return sendJson(res, 200, { ok: true });
+  }
+  if (pathname === '/api/preview/getLog') {
+    return sendJson(res, 200, { log: devServerWatchdog.getLog(body.projectPath || '.') });
   }
   if (pathname === '/api/preview/watchHtml') {
     return sendJson(res, 200, watchPreviewHtmlFile(body.projectPath || '.', workspaceFs.resolveWorkspacePath(body.path)));
