@@ -441,6 +441,25 @@ async function handleApi(req, res, pathname) {
     watchRendererFiles();
     return sendJson(res, 200, { ok: true });
   }
+  if (pathname === '/api/supervisor/setPreferredCli') {
+    const cli = body.cli;
+    if (cli !== 'codex' && cli !== 'claude') {
+      return sendJson(res, 400, { error: 'cli must be "codex" or "claude"' });
+    }
+    const prefsDir = path.join(os.homedir(), 'Library', 'Application Support', 'Pixelbox');
+    await fsp.mkdir(prefsDir, { recursive: true });
+    await fsp.writeFile(path.join(prefsDir, 'supervisor.json'), JSON.stringify({ cli }), 'utf8');
+    return sendJson(res, 200, { ok: true });
+  }
+  if (pathname === '/api/supervisor/getPreferredCli') {
+    const prefsPath = path.join(os.homedir(), 'Library', 'Application Support', 'Pixelbox', 'supervisor.json');
+    try {
+      const raw = await fsp.readFile(prefsPath, 'utf8');
+      return sendJson(res, 200, JSON.parse(raw));
+    } catch {
+      return sendJson(res, 200, { cli: null });
+    }
+  }
   if (pathname === '/api/codexMonitor/list') {
     return sendJson(res, 200, codexMonitor.getProcesses(body.filters || {}));
   }

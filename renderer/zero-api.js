@@ -71,6 +71,8 @@
     resizeTerminal: (cols, rows, key) => request('/api/terminal/resize', { cols, rows, key }),
     killTerminal: (key) => request('/api/terminal/kill', { key }),
     startRendererWatch: () => request('/api/renderer/watchStart'),
+    setSupervisorPreferredCli: (cli) => request('/api/supervisor/setPreferredCli', { cli }),
+    getSupervisorPreferredCli: () => request('/api/supervisor/getPreferredCli'),
     codexMonitorList: (filters = {}) => request('/api/codexMonitor/list', { filters }),
     codexMonitorDetails: (pid) => request('/api/codexMonitor/details', { pid }),
     codexMonitorStop: (pid, signal = 'SIGTERM') => request('/api/codexMonitor/stop', { pid, signal }),

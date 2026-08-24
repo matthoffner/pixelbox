@@ -2488,6 +2488,23 @@ window.addEventListener('pointerdown', (event) => {
   renderProjects().catch(() => {});
 });
 
+async function maybeShowSupervisorOnboarding() {
+  const modal = document.getElementById('supervisor-onboarding-modal');
+  if (!modal) return;
+  const { cli } = await window.api.getSupervisorPreferredCli();
+  if (cli) return;
+  modal.hidden = false;
+
+  const choose = async (chosenCli) => {
+    await window.api.setSupervisorPreferredCli(chosenCli);
+    modal.hidden = true;
+  };
+  document.getElementById('supervisor-onboarding-codex').addEventListener('click', () => choose('codex'));
+  document.getElementById('supervisor-onboarding-claude').addEventListener('click', () => choose('claude'));
+}
+
+maybeShowSupervisorOnboarding();
+
 (async () => {
   loadHiddenProjects();
   projectsPanelHidden = loadProjectsPanelHidden();

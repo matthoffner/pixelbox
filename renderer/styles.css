@@ -1449,3 +1449,43 @@ body.terminal-active.terminal-dock-bottom #preview-viewport {
     height: 14px;
   }
 }
+
+#supervisor-onboarding-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+#supervisor-onboarding-modal[hidden] {
+  display: none;
+}
+
+#supervisor-onboarding-card {
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 360px;
+  display: grid;
+  gap: 12px;
+  color: var(--text);
+}
+
+#supervisor-onboarding-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+#supervisor-onboarding-actions button {
+  border: 1px solid var(--border);
+  background: var(--cta);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
