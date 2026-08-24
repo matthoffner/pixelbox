@@ -1,6 +1,13 @@
-# Dev Server Watchdog — Design
+# Dev Server Watchdog & Pixelbox Self-Supervision — Design
 
-## Problem
+Two related pieces, both applying the same pattern — an AI CLI agent
+diagnoses and fixes persistent-process failures instead of the app doing it
+with hardcoded logic — at two different layers: a project's dev server
+(Part 1), and Pixelbox itself (Part 2).
+
+## Part 1: Dev Server Watchdog
+
+### Problem
 
 Running Page's "Server command" mode (`lib/previewRuntimeManager.js`) spawns
 the configured command as a raw `child_process`, scans its stdout/stderr for
@@ -9,7 +16,7 @@ fails (e.g. dependencies were never installed), the user gets a static
 "Server stopped" label in Settings with no indication of why. There is also
 no way to intervene — the process is a black box.
 
-## Goal
+### Goal
 
 Turn "Server command" mode into an AI-agent-managed process: instead of
 Node spawning the command directly, a dedicated terminal session runs the
@@ -22,7 +29,7 @@ needed.
 This fully replaces direct-spawn for `sourceType: 'server'`. `native` and
 `html` modes are unaffected.
 
-## Non-goals (v1)
+### Non-goals (v1)
 
 - Auto-restarting the watchdog agent itself if the agent process exits/
   crashes. If the agent quits, Running Page shows "stopped" same as today;
@@ -35,7 +42,7 @@ This fully replaces direct-spawn for `sourceType: 'server'`. `native` and
 - Changing how the main AI Launch terminal / native Ghostty terminal work.
   This is a second, independent, small terminal session.
 
-## Architecture
+### Architecture
 
 ```
 Running Page (Settings)
@@ -75,9 +82,9 @@ rendering (`renderRuntimeStatus`) needs no changes — from its perspective,
 nothing about how it's told "server is up" is different, only what's
 actually running underneath changed.
 
-## Components
+### Components
 
-### 1. `buildWatchdogStartupCommand(options)` — pure function
+#### 1. `buildWatchdogStartupCommand(options)` — pure function
 
 New, in `lib/devServerWatchdog.js`. Takes:
 ```js
@@ -99,7 +106,7 @@ configured in the "Server command" field today).
 
 Pure and unit-testable in isolation — no process spawning, no I/O.
 
-### 2. `DevServerWatchdog` class — in `lib/devServerWatchdog.js`
+#### 2. `DevServerWatchdog` class — in `lib/devServerWatchdog.js`
 
 Constructor takes `{ terminalManager, sendStatus }` (the same
 `terminalManager` instance `bridge/server.js` already owns).
@@ -116,7 +123,7 @@ Constructor takes `{ terminalManager, sendStatus }` (the same
 - `watchdogKey(key)` → `` `watchdog:${key}` `` — namespacing so it can't
   collide with the main per-project terminal key.
 
-### 3. `bridge/server.js` wiring
+#### 3. `bridge/server.js` wiring
 
 `/api/preview/syncRuntime` and `/api/preview/startRuntime`: when
 `options.sourceType === 'server'`, delegate to `devServerWatchdog.start(...)`
@@ -133,7 +140,7 @@ the mini terminal's initial backlog fetch, backed by
 Input to the watchdog terminal is just `terminalManager.write(text, key)` —
 already exists, already generic.
 
-### 4. Renderer — Running Page panel
+#### 4. Renderer — Running Page panel
 
 `renderer/index.html`: inside `#running-page-panel`, when source type is
 `server`, render a mini terminal block below the existing fields — a
@@ -154,7 +161,7 @@ monospace font stack, dark background) plus a single-line
   (`syncPreviewRuntime`/`startPreviewRuntime`/`stopPreviewRuntime`) — only
   the backend behind those calls changes.
 
-## Data flow (happy path)
+### Data flow (happy path)
 
 1. User sets Server command to `npm run dev`, AI CLI already set to Claude
    in the AI Launch panel, clicks Start.
@@ -176,7 +183,7 @@ monospace font stack, dark background) plus a single-line
    they type into the mini terminal's input box — goes straight to the
    agent's stdin via `writeTerminal`.
 
-## Error handling
+### Error handling
 
 - Selected AI CLI binary not installed: `buildWatchdogStartupCommand`
   reuses the same `missing` messaging already defined per-CLI; the shell
@@ -191,7 +198,7 @@ monospace font stack, dark background) plus a single-line
   all in this design — that's the agent's job per its brief. This is the
   entire point of the feature.
 
-## Testing
+### Testing
 
 - Unit test `buildWatchdogStartupCommand` for each CLI in the definitions
   map: asserts exact shell string, correct quoting/escaping when
@@ -206,9 +213,169 @@ monospace font stack, dark background) plus a single-line
   coming up — gated the same way the existing e2e is (env-var-gated, not
   run by default in `npm test`).
 
-## Migration
+### Migration
 
 No persisted config schema change is required — `sourceType: 'server'`
 already exists in the Running Page config; only what happens *behind* that
 mode changes. Existing saved "Server command" values keep working as the
 prompt's embedded command.
+
+## Part 2: Pixelbox Self-Supervision
+
+### Problem
+
+Pixelbox itself has no recovery story. If the native app crashes (we hit
+exactly this earlier — a null-deref from an unsafe `unsetenv()` call), it's
+just gone: no diagnosis, no relaunch, nothing to look at.
+
+### Goal
+
+Restructure the `.app` bundle so a lightweight supervisor binary is what
+Finder actually launches. It runs the real app as a child and, on crash,
+opens an embedded terminal running an AI CLI (Codex or Claude — chosen once
+on first run) briefed to diagnose the crash from the Zig/Objective-C source,
+fix it, and exit — at which point the supervisor relaunches the real app.
+This is default behavior for every install, not opt-in.
+
+### Non-goals (v1)
+
+- Diagnosing/fixing anything beyond "here's the crash output and exit code,
+  fix the source" — no special-casing of crash categories (native vs. Node
+  bridge vs. anything else). One generic brief covers all of it.
+- Auto-updating or re-signing/notarizing a rebuilt binary. This assumes the
+  machine running the agent has a writable source checkout to rebuild from
+  (see Rollout below for what happens when it doesn't).
+- A settings UI for changing the CLI choice later. v1 is "asked once at
+  first run"; changing it afterward means editing the prefs file by hand.
+  Add a settings control later if it's actually wanted (YAGNI now).
+
+### Architecture
+
+```
+Finder double-click
+        ▼
+PixelboxSupervisor  (new, small Zig binary — becomes CFBundleExecutable)
+        │ reads ~/Library/Application Support/Pixelbox/supervisor.json
+        │ for { cli: "codex" | "claude" } (absent on first run — fine,
+        │ PixelboxCore's own webview handles first-run onboarding)
+        │
+        │ spawn, wait
+        ▼
+PixelboxCore  (today's "Pixelbox" binary, renamed — unchanged behavior:
+        │      bridge/server.js, native window, everything as today)
+        │
+        ├─ exits 0 (user quit) ──────────────► supervisor exits too
+        │
+        └─ exits nonzero / crash
+                   ▼
+           Supervisor opens its own small NSWindow, embedding the
+           SAME Ghostty terminal view already built for PixelboxCore
+           (ZeroNativeGhosttyTerminalView, extracted into a piece both
+           binaries link — not reimplemented), and runs:
+
+             claude "PixelboxCore just crashed. Exit code: <n>.
+                     Recent output: <captured tail>. Diagnose the
+                     Zig/Objective-C source and fix it, then exit."
+
+           User can watch, or type into it directly. When that CLI
+           process exits, supervisor closes the window and relaunches
+           PixelboxCore.
+```
+
+### Components
+
+#### 1. Build target split (`build.zig`)
+
+Add `PixelboxSupervisor` as a second executable target. Packaging
+(`zig build package -Dpackage-target=macos`) places it at
+`Contents/MacOS/Pixelbox` (so it's what `Info.plist`'s `CFBundleExecutable`
+points at) and moves today's main binary to `Contents/MacOS/PixelboxCore`
+alongside it.
+
+#### 2. Shared terminal-view extraction
+
+`ZeroNativeGhosttyTerminalView` and its supporting mouse/keyboard/tracking-
+area code currently lives inline in `appkit_host.m`, built only into
+PixelboxCore. Extract it (and the minimal Ghostty app/surface setup it
+needs — `ensureGhosttyRuntime`, `ensureGhosttySurfaceForProjectPath`, the
+`env_vars` override from the transcript-persistence fix) into a small piece
+both `PixelboxCore` and `PixelboxSupervisor` link, so the supervisor's crash
+window is a real reuse, not a second implementation.
+
+#### 3. Supervisor main loop (new `src/supervisor_main.zig`)
+
+Reads the prefs file for `cli`. Spawns `PixelboxCore` (`std.process.spawn`,
+same pattern `main.zig` already uses for the bridge child), piping its
+stdout/stderr so a tail can be captured for the crash prompt if needed.
+Waits for exit:
+- Exit code `0` → supervisor exits. No relaunch.
+- Anything else → build the crash window (component 2) + diagnostic prompt,
+  run the configured CLI in it, wait for that process to exit, close the
+  window, loop back to spawning `PixelboxCore` again.
+
+If no `cli` preference exists yet, this loop still runs — it just spawns
+`PixelboxCore` as normal; there's nothing to brief an agent with if nothing
+has crashed yet, so onboarding lives entirely in step 4, not here.
+
+#### 4. First-run CLI picker
+
+A one-time modal in `PixelboxCore`'s existing webview UI (`renderer/`),
+following the same modal patterns already in `renderer/app.js` — "Codex or
+Claude?" — saved via a new endpoint (`/api/supervisor/setPreferredCli`) to
+`~/Library/Application Support/Pixelbox/supervisor.json`, which the
+supervisor reads on its *next* launch (this run's supervisor already
+started without a preference; that's fine, nothing needed it yet).
+
+### Data flow (crash & recovery)
+
+1. User double-clicks Pixelbox.app. Finder launches `PixelboxSupervisor`.
+2. Supervisor reads `supervisor.json` (`{ "cli": "claude" }` from a prior
+   first run), spawns `PixelboxCore`.
+3. `PixelboxCore` runs normally — bridge server, native window, everything
+   unchanged from today.
+4. A native crash occurs; `PixelboxCore` exits nonzero.
+5. Supervisor opens its crash window (shared Ghostty terminal view) and
+   launches `claude "PixelboxCore just crashed. Exit code: ...
+   Recent output: ... Diagnose the Zig/Objective-C source and fix it,
+   then exit."`
+6. User watches, or types into it directly to redirect the agent.
+7. Claude fixes the issue, runs `zig build` to confirm it compiles, exits.
+8. Supervisor closes the crash window, relaunches `PixelboxCore`.
+
+### Error handling
+
+- Configured CLI isn't installed at crash time: crash window still opens
+  (so the user isn't left with total silence) showing the same "missing"
+  message convention as Part 1's launcher, plus a way to just relaunch
+  `PixelboxCore` directly without a fix attempt (a button, or auto-relaunch
+  after a short delay).
+- Crash-loop (fix attempt doesn't actually fix it, crashes again
+  immediately): no special breaker in v1 — YAGNI until observed as a real
+  problem. The crash window reopening each time is itself visible feedback.
+- Clean quit (Cmd+Q) must exit `0` for the supervisor to treat it as
+  intentional. `main.zig`'s existing shutdown path should already do this;
+  confirm during implementation rather than assuming.
+
+### Testing
+
+- Unit test (Zig) the supervisor's exit-code branching in isolation: given
+  a fake exit code/signal, asserts relaunch-with-agent vs. clean-exit.
+- Manual test: deliberately reintroduce a crash in `PixelboxCore` under the
+  supervisor, confirm the crash window opens, the agent runs, and relaunch
+  happens after it exits. No automated e2e proposed for v1 — this session's
+  own native-crash debugging showed how fragile automating around real
+  crashes/window creation is; rely on manual verification here.
+
+### Rollout
+
+- This changes what ships in `Contents/MacOS/` and `Info.plist`'s
+  `CFBundleExecutable` — `scripts/make-mac-icon.sh` and the
+  `zig build package -Dpackage-target=macos` step need updating to place
+  both binaries and point the bundle at the supervisor. Explicit packaging
+  change, not just new source files.
+- The agent's fix-and-rebuild step assumes a writable source checkout on
+  the machine — true for the developer's own machine, not guaranteed for
+  an arbitrary end user who only downloaded a `.dmg`. When no source tree
+  is found, the crash prompt should tell the agent to just report the
+  diagnosis instead of attempting a fix, so it degrades gracefully instead
+  of confusingly failing to rebuild.
