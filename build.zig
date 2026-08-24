@@ -127,6 +127,17 @@ pub fn build(b: *std.Build) void {
     const tests = b.addTest(.{ .root_module = app_mod });
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&b.addRunArtifact(tests).step);
+
+    const supervisor_mod = localModule(b, target, optimize, "src/supervisor_main.zig");
+    const supervisor_exe = b.addExecutable(.{
+        .name = "PixelboxSupervisor",
+        .root_module = supervisor_mod,
+    });
+    b.installArtifact(supervisor_exe);
+
+    const run_supervisor = b.addRunArtifact(supervisor_exe);
+    const run_supervisor_step = b.step("run-supervisor", "Run the supervisor skeleton");
+    run_supervisor_step.dependOn(&run_supervisor.step);
 }
 
 fn localModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, path: []const u8) *std.Build.Module {
