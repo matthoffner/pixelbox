@@ -57,6 +57,7 @@
     syncPreviewRuntime: (projectPath, options = {}) => request('/api/preview/syncRuntime', { projectPath, options }),
     startPreviewRuntime: (projectPath, options = {}) => request('/api/preview/startRuntime', { projectPath, options }),
     stopPreviewRuntime: (projectPath) => request('/api/preview/stopRuntime', { projectPath }),
+    getPreviewLog: (projectPath) => request('/api/preview/getLog', { projectPath }),
     watchPreviewHtml: (projectPath, targetPath) => request('/api/preview/watchHtml', { projectPath, path: targetPath }),
     clearPreviewHtmlWatch: () => request('/api/preview/clearHtmlWatch'),
     setPreviewCaptureRegion: (region) => request('/api/preview/setCaptureRegion', region || {}),

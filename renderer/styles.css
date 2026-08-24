@@ -435,6 +435,35 @@ input {
   gap: 10px;
 }
 
+#running-page-log-panel {
+  display: grid;
+  gap: 8px;
+}
+
+#running-page-log {
+  min-height: 120px;
+  max-height: 220px;
+  margin: 0;
+  padding: 10px;
+  background: rgba(8, 14, 24, 0.55);
+  color: rgba(245, 250, 255, 0.92);
+  font: 12px/1.45 "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border), white 8%);
+}
+
+#running-page-log-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+#running-page-log-input-row input {
+  flex: 1;
+}
+
 #running-page-status,
 #codex-launch-status,
 #agent-monitor-note,

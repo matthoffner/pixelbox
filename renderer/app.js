@@ -47,6 +47,9 @@ const runningPageSaveEl = document.getElementById('running-page-save');
 const runningPageStartEl = document.getElementById('running-page-start');
 const runningPageStopEl = document.getElementById('running-page-stop');
 const runningPageStatusEl = document.getElementById('running-page-status');
+const runningPageLogEl = document.getElementById('running-page-log');
+const runningPageLogInputEl = document.getElementById('running-page-log-input');
+const runningPageLogSendEl = document.getElementById('running-page-log-send');
 const agentMonitorRefreshEl = document.getElementById('agent-monitor-refresh');
 const agentMonitorStatusEl = document.getElementById('agent-monitor-status');
 const agentMonitorListEl = document.getElementById('agent-monitor-list');
@@ -1276,6 +1279,44 @@ function renderRuntimeStatus(projectPath) {
   runningPageStatusEl.textContent = 'Server stopped';
 }
 
+let runningPageLogProjectPath = null;
+
+function appendRunningPageLog(text) {
+  if (!runningPageLogEl) return;
+  runningPageLogEl.textContent += text;
+  const lines = runningPageLogEl.textContent.split('\n');
+  if (lines.length > 300) {
+    runningPageLogEl.textContent = lines.slice(lines.length - 300).join('\n');
+  }
+  runningPageLogEl.scrollTop = runningPageLogEl.scrollHeight;
+}
+
+async function loadRunningPageLog(projectPath) {
+  runningPageLogProjectPath = projectPath;
+  if (!runningPageLogEl) return;
+  runningPageLogEl.textContent = '';
+  try {
+    const { log } = await window.api.getPreviewLog(projectPath);
+    if (runningPageLogProjectPath === projectPath) {
+      runningPageLogEl.textContent = log || '';
+      runningPageLogEl.scrollTop = runningPageLogEl.scrollHeight;
+    }
+  } catch {
+    // Backlog fetch is best-effort — live updates via terminal:data still work.
+  }
+}
+
+function watchdogTerminalKeyFor(projectPath) {
+  return `watchdog:${projectPath}`;
+}
+
+function sendRunningPageLogInput() {
+  const text = runningPageLogInputEl.value;
+  if (!text) return;
+  window.api.writeTerminal(`${text}\n`, watchdogTerminalKeyFor(selectedProjectPath));
+  runningPageLogInputEl.value = '';
+}
+
 function renderRuntimeConfig(projectPath) {
   const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
   runningPageTypeEl.value = config.sourceType;
@@ -1285,6 +1326,9 @@ function renderRuntimeConfig(projectPath) {
   runningPageAutostartEl.checked = config.autoStart !== false;
   renderRunningPageFields(config.sourceType);
   renderRuntimeStatus(projectPath);
+  if (config.sourceType === 'server') {
+    loadRunningPageLog(projectPath);
+  }
 }
 
 async function loadRuntimeConfig(projectPath) {
@@ -1493,6 +1537,7 @@ async function applyRuntimeConfig(projectPath, config, options = {}) {
       command: config.serverCommand,
       url: config.serverUrl,
       autoStart: shouldAutoStart,
+      aiCli: selectedAiCli,
     });
     if (!syncResult?.running) {
       replacePreviewHistory(projectPath, explicitUrls, explicitUrls.length > 0 ? 0 : -1);
@@ -1519,6 +1564,10 @@ async function applyRuntimeConfig(projectPath, config, options = {}) {
 
 async function saveRunningPageConfig() {
   const config = collectRuntimeConfigFromForm();
+  if (config.sourceType === 'server' && !aiCliSupportsDangerousBypass(selectedAiCli)) {
+    window.alert('Server command mode requires Codex or Claude selected in the AI Launch panel.');
+    return;
+  }
   try {
     await applyRuntimeConfig(selectedProjectPath, config);
   } catch (error) {
@@ -1529,6 +1578,10 @@ async function saveRunningPageConfig() {
 async function startConfiguredRuntime() {
   const config = collectRuntimeConfigFromForm();
   if (config.sourceType !== 'server') return;
+  if (!aiCliSupportsDangerousBypass(selectedAiCli)) {
+    window.alert('Server command mode requires Codex or Claude selected in the AI Launch panel.');
+    return;
+  }
   try {
     await applyRuntimeConfig(selectedProjectPath, config, { forceStart: true });
   } catch (error) {
@@ -1835,6 +1888,18 @@ window.api.onTerminalExit(({ key }) => {
   if (!key) return;
   projectSessionExited.add(key);
   appendTerminalOutput(key, '\r\n[terminal exited]');
+});
+
+window.api.onTerminalData(({ key, data }) => {
+  if (key === watchdogTerminalKeyFor(selectedProjectPath)) {
+    appendRunningPageLog(data);
+  }
+});
+
+window.api.onTerminalExit(({ key }) => {
+  if (key === watchdogTerminalKeyFor(selectedProjectPath)) {
+    appendRunningPageLog('\n[agent process exited]\n');
+  }
 });
 
 window.api.onRendererChanged(() => {
@@ -2262,6 +2327,13 @@ runningPageStartEl.addEventListener('click', () => {
 });
 runningPageStopEl.addEventListener('click', () => {
   stopConfiguredRuntime().catch(() => {});
+});
+runningPageLogSendEl.addEventListener('click', sendRunningPageLogInput);
+runningPageLogInputEl.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    sendRunningPageLogInput();
+  }
 });
 if (quickStartServerEl) {
   quickStartServerEl.addEventListener('click', () => {
