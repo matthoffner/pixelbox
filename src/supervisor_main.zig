@@ -1,6 +1,6 @@
 const std = @import("std");
 
-extern fn zero_native_supervisor_show_crash_window(message: [*]const u8, message_len: c_ulong) c_int;
+extern fn zero_native_supervisor_run_crash_terminal(command: [*]const u8, command_len: c_ulong, working_directory: [*]const u8, working_directory_len: c_ulong) c_int;
 
 pub const SupervisorPrefs = struct {
     cli: []const u8,
@@ -117,8 +117,8 @@ pub fn main(init: std.process.Init) !void {
             },
             .relaunch => {
                 std.debug.print("PixelboxCore exited unexpectedly ({any}). Relaunching.\n", .{term});
-                const msg = "Smoke test: crash window from Task 4.";
-                _ = zero_native_supervisor_show_crash_window(msg.ptr, msg.len);
+                const cmd = "echo 'smoke test: task 5 terminal'; exec /bin/zsh -il";
+                _ = zero_native_supervisor_run_crash_terminal(cmd.ptr, cmd.len, ".".ptr, 1);
                 // Task 6 inserts the crash-diagnosis window call here, between
                 // detecting the crash and looping back to relaunch.
             },

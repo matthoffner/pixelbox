@@ -136,7 +136,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(supervisor_exe);
 
     if (selected_platform == .macos) {
-        linkSupervisorMacos(b, supervisor_mod, zero_native_path);
+        linkSupervisorMacos(b, supervisor_exe, supervisor_mod, zero_native_path, ghostty_path, ghostty_zig_path);
     }
 
     const run_supervisor = b.addRunArtifact(supervisor_exe);
@@ -193,13 +193,30 @@ fn externalModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std
     });
 }
 
-fn linkSupervisorMacos(b: *std.Build, supervisor_mod: *std.Build.Module, zero_native_path: []const u8) void {
+fn linkSupervisorMacos(b: *std.Build, supervisor_exe: *std.Build.Step.Compile, supervisor_mod: *std.Build.Module, zero_native_path: []const u8, ghostty_path: []const u8, ghostty_zig_path: []const u8) void {
+    const ghostty_build = addGhosttyBuild(b, ghostty_path, ghostty_zig_path);
+    supervisor_exe.step.dependOn(&ghostty_build.step);
+    const ghostty_include = b.pathJoin(&.{ ghostty_path, "zig-out", "include" });
+    const ghostty_lib = b.pathJoin(&.{ ghostty_path, "zig-out", "lib", "ghostty-internal.a" });
+    const ghostty_include_flag = b.fmt("-I{s}", .{ghostty_include});
+
     supervisor_mod.addCSourceFile(.{
         .file = zeroNativePath(b, zero_native_path, "src/platform/macos/supervisor_host.m"),
-        .flags = &.{"-fobjc-arc"},
+        .flags = &.{ "-fobjc-arc", "-ObjC", ghostty_include_flag },
     });
     supervisor_mod.linkFramework("Cocoa", .{});
+    supervisor_mod.linkFramework("Metal", .{});
+    supervisor_mod.linkFramework("CoreGraphics", .{});
+    supervisor_mod.linkFramework("CoreText", .{});
+    supervisor_mod.linkFramework("CoreVideo", .{});
+    supervisor_mod.linkFramework("QuartzCore", .{});
+    supervisor_mod.linkFramework("IOSurface", .{});
+    supervisor_mod.linkFramework("Carbon", .{});
+    supervisor_mod.linkFramework("Foundation", .{});
+    supervisor_mod.linkFramework("UniformTypeIdentifiers", .{});
+    supervisor_mod.addObjectFile(.{ .cwd_relative = ghostty_lib });
     supervisor_mod.linkSystemLibrary("c", .{});
+    supervisor_mod.linkSystemLibrary("c++", .{});
 }
 
 fn linkPlatform(b: *std.Build, target: std.Build.ResolvedTarget, app_mod: *std.Build.Module, exe: *std.Build.Step.Compile, platform: PlatformOption, web_engine: WebEngineOption, zero_native_path: []const u8, cef_dir: []const u8, cef_auto_install: bool, ghostty_path: []const u8, ghostty_zig_path: []const u8) void {
