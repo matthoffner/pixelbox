@@ -73,13 +73,32 @@
 
 @end
 
+// `[NSApp stop:nil]` only sets a flag that AppKit consumes after the *current*
+// event finishes processing. Called from a dispatch_async block there may be no
+// event in flight at all, in which case `[NSApp run]` sits waiting for the next
+// one and never notices the flag. Post a dummy event so the run loop wakes up
+// and re-checks. Harmless when there already is an event in flight.
+static void ZeroNativeSupervisorStopApp(void) {
+    [NSApp stop:nil];
+    NSEvent *wakeupEvent = [NSEvent otherEventWithType:NSEventTypeApplicationDefined
+                                              location:NSZeroPoint
+                                         modifierFlags:0
+                                             timestamp:0
+                                          windowNumber:0
+                                               context:nil
+                                               subtype:0
+                                                 data1:0
+                                                 data2:0];
+    [NSApp postEvent:wakeupEvent atStart:YES];
+}
+
 @interface ZeroNativeSupervisorWindowDelegate : NSObject <NSWindowDelegate>
 @end
 
 @implementation ZeroNativeSupervisorWindowDelegate
 - (void)windowWillClose:(NSNotification *)notification {
     (void)notification;
-    [NSApp stop:nil];
+    ZeroNativeSupervisorStopApp();
 }
 @end
 
@@ -134,11 +153,12 @@ static void ZeroNativeSupervisorCloseSurface(void *userdata, bool process_alive)
     dispatch_async(dispatch_get_main_queue(), ^{
       ctx->processExited = YES;
       NSWindow *window = (__bridge NSWindow *)ctx->window;
-      if (window) {
-          [window close];
-      } else {
-          [NSApp stop:nil];
-      }
+      if (window) [window close];
+      // Not just for the window == NULL case: `[window close]` reaches
+      // `windowWillClose:` synchronously, but we're running inside a
+      // dispatch_async block with no event in flight, so the run loop still
+      // needs an explicit nudge to notice the stop flag.
+      ZeroNativeSupervisorStopApp();
     });
 }
 
@@ -219,10 +239,23 @@ int zero_native_supervisor_run_crash_terminal(const char *command, unsigned long
         ghostty_config_load_default_files(config);
         ghostty_config_finalize(config);
 
-        ZeroNativeSupervisorContext ctx = {0};
+        // Heap-allocated, and deliberately never freed. Ghostty's runtime
+        // callbacks hand this pointer to `dispatch_async` blocks that run on the
+        // main queue, and a block can still be queued when `[NSApp run]` returns
+        // and this frame unwinds. The supervisor calls this function once per
+        // crash cycle, so a stack local would leave a queued block dereferencing
+        // a dead frame that the *next* invocation has already reused. Before
+        // returning we null out every pointer inside it, which turns any
+        // still-in-flight block into a safe no-op; leaking one small struct per
+        // crash is much cheaper than the use-after-free.
+        ZeroNativeSupervisorContext *ctx = calloc(1, sizeof(ZeroNativeSupervisorContext));
+        if (!ctx) {
+            ghostty_config_free(config);
+            return 1;
+        }
 
         ghostty_runtime_config_s runtimeConfig = {0};
-        runtimeConfig.userdata = &ctx;
+        runtimeConfig.userdata = ctx;
         runtimeConfig.supports_selection_clipboard = false;
         runtimeConfig.wakeup_cb = ZeroNativeSupervisorWakeup;
         runtimeConfig.action_cb = ZeroNativeSupervisorAction;
@@ -236,7 +269,7 @@ int zero_native_supervisor_run_crash_terminal(const char *command, unsigned long
             ghostty_config_free(config);
             return 1;
         }
-        ctx.app = app;
+        ctx->app = app;
         ghostty_app_set_focus(app, true);
 
         NSRect frame = NSMakeRect(0, 0, 900, 500);
@@ -249,7 +282,7 @@ int zero_native_supervisor_run_crash_terminal(const char *command, unsigned long
         window.title = @"Pixelbox crashed — diagnosing";
         window.releasedWhenClosed = NO;
         [window center];
-        ctx.window = (__bridge void *)window;
+        ctx->window = (__bridge void *)window;
 
         ZeroNativeSupervisorWindowDelegate *windowDelegate = [[ZeroNativeSupervisorWindowDelegate alloc] init];
         window.delegate = windowDelegate;
@@ -262,6 +295,11 @@ int zero_native_supervisor_run_crash_terminal(const char *command, unsigned long
         ghostty_surface_config_s surfaceConfig = ghostty_surface_config_new();
         surfaceConfig.platform_tag = GHOSTTY_PLATFORM_MACOS;
         surfaceConfig.platform.macos.nsview = (__bridge void *)view;
+        // `close_surface_cb` (and the clipboard callbacks) are invoked with the
+        // *surface* userdata, not the app userdata from ghostty_runtime_config_s
+        // — see apprt/embedded.zig:470 and :646. Without this the callback gets
+        // NULL and the terminal can never signal that it's done.
+        surfaceConfig.userdata = ctx;
         surfaceConfig.scale_factor = window.backingScaleFactor > 0 ? window.backingScaleFactor : 1.0;
         surfaceConfig.font_size = 13.0f;
         surfaceConfig.working_directory = workingDirectoryString.UTF8String;
@@ -273,11 +311,13 @@ int zero_native_supervisor_run_crash_terminal(const char *command, unsigned long
 
         ghostty_surface_t surface = ghostty_surface_new(app, &surfaceConfig);
         if (!surface) {
+            ctx->app = NULL;
+            ctx->window = NULL;
             ghostty_app_free(app);
             ghostty_config_free(config);
             return 1;
         }
-        ctx.surface = surface;
+        ctx->surface = surface;
         view.surface = surface;
 
         [window makeKeyAndOrderFront:nil];
@@ -297,7 +337,13 @@ int zero_native_supervisor_run_crash_terminal(const char *command, unsigned long
 
         window.delegate = nil;
         view.surface = NULL;
-        ctx.window = NULL;
+        // Disarm `ctx` before tearing down the native objects it points at. Any
+        // block still queued against it from this cycle now sees NULLs and does
+        // nothing, instead of touching pointers we are about to free. `ctx`
+        // itself is intentionally not freed — see the allocation comment above.
+        ctx->app = NULL;
+        ctx->surface = NULL;
+        ctx->window = NULL;
         ghostty_surface_free(surface);
         ghostty_app_free(app);
         ghostty_config_free(config);
