@@ -128,32 +128,36 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&b.addRunArtifact(tests).step);
 
-    const supervisor_mod = localModule(b, target, optimize, "src/supervisor_main.zig");
-    const supervisor_exe = b.addExecutable(.{
-        .name = "PixelboxSupervisor",
-        .root_module = supervisor_mod,
-    });
-    b.installArtifact(supervisor_exe);
-
+    // The supervisor is a macOS-only concept: it links the Darwin-only
+    // crash-terminal host (linkSupervisorMacos) and src/supervisor_main.zig
+    // calls Darwin externs like _NSGetExecutablePath. Declaring the steps on
+    // other platforms just trades a clear "no such step" for a linker error.
     if (selected_platform == .macos) {
+        const supervisor_mod = localModule(b, target, optimize, "src/supervisor_main.zig");
+        const supervisor_exe = b.addExecutable(.{
+            .name = "PixelboxSupervisor",
+            .root_module = supervisor_mod,
+        });
+        b.installArtifact(supervisor_exe);
+
         linkSupervisorMacos(b, supervisor_exe, supervisor_mod, zero_native_path, ghostty_path, ghostty_zig_path);
+
+        const finalize_supervisor = b.addSystemCommand(&.{"scripts/finalize-supervisor-bundle.sh"});
+        finalize_supervisor.addArg(b.fmt("zig-out/package/Pixelbox-0.3.0-{s}-{s}{s}", .{ @tagName(package_target), optimize_name, packageSuffix(package_target) }));
+        finalize_supervisor.addFileArg(supervisor_exe.getEmittedBin());
+        finalize_supervisor.step.dependOn(&package.step);
+        finalize_supervisor.step.dependOn(&supervisor_exe.step);
+        const finalize_package_step = b.step("finalize-package", "Package the app, then swap in the supervisor as the launched binary");
+        finalize_package_step.dependOn(&finalize_supervisor.step);
+
+        const run_supervisor = b.addRunArtifact(supervisor_exe);
+        const run_supervisor_step = b.step("run-supervisor", "Run the supervisor skeleton");
+        run_supervisor_step.dependOn(&run_supervisor.step);
+
+        const supervisor_tests = b.addTest(.{ .root_module = supervisor_mod });
+        const supervisor_test_step = b.step("test-supervisor", "Run supervisor unit tests");
+        supervisor_test_step.dependOn(&b.addRunArtifact(supervisor_tests).step);
     }
-
-    const finalize_supervisor = b.addSystemCommand(&.{"scripts/finalize-supervisor-bundle.sh"});
-    finalize_supervisor.addArg(b.fmt("zig-out/package/Pixelbox-0.3.0-{s}-{s}{s}", .{ @tagName(package_target), optimize_name, packageSuffix(package_target) }));
-    finalize_supervisor.addFileArg(supervisor_exe.getEmittedBin());
-    finalize_supervisor.step.dependOn(&package.step);
-    finalize_supervisor.step.dependOn(&supervisor_exe.step);
-    const finalize_package_step = b.step("finalize-package", "Package the app, then swap in the supervisor as the launched binary");
-    finalize_package_step.dependOn(&finalize_supervisor.step);
-
-    const run_supervisor = b.addRunArtifact(supervisor_exe);
-    const run_supervisor_step = b.step("run-supervisor", "Run the supervisor skeleton");
-    run_supervisor_step.dependOn(&run_supervisor.step);
-
-    const supervisor_tests = b.addTest(.{ .root_module = supervisor_mod });
-    const supervisor_test_step = b.step("test-supervisor", "Run supervisor unit tests");
-    supervisor_test_step.dependOn(&b.addRunArtifact(supervisor_tests).step);
 }
 
 fn localModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, path: []const u8) *std.Build.Module {

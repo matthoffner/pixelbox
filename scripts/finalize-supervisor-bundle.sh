@@ -15,41 +15,48 @@ if [[ ! -d "${MACOS_DIR}" ]]; then
   exit 1
 fi
 
-if [[ -f "${MACOS_DIR}/PixelboxCore" ]]; then
-  # Already finalized: PixelboxCore is the real app and must never be touched by
-  # mv/cp here. Refresh whichever other file holds the supervisor — but only if
-  # there's exactly one candidate. .DS_Store is Finder cruft (dropped by "Show
-  # Package Contents"), never a binary, so it's excluded rather than being
-  # allowed to masquerade as the supervisor.
-  SUPERVISOR_CANDIDATES=$(find "${MACOS_DIR}" -maxdepth 1 -type f -not -name "PixelboxCore" -not -name ".DS_Store")
-  SUPERVISOR_COUNT=$(printf '%s\n' "${SUPERVISOR_CANDIDATES}" | grep -c . || true)
+# The candidate is whatever `zero-native package` installs as the bundle's
+# CFBundleExecutable. Anything named PixelboxCore is our own previous
+# promotion; .DS_Store is Finder cruft (dropped by "Show Package Contents"),
+# never a binary, so it's excluded rather than being allowed to masquerade as
+# the candidate. Requiring exactly one candidate keeps an unexpected extra file
+# from being silently overwritten.
+CANDIDATES=$(find "${MACOS_DIR}" -maxdepth 1 -type f -not -name "PixelboxCore" -not -name ".DS_Store")
+CANDIDATE_COUNT=$(printf '%s\n' "${CANDIDATES}" | grep -c . || true)
 
-  if [[ "${SUPERVISOR_COUNT}" -ne 1 ]]; then
-    echo "Expected exactly one non-PixelboxCore executable in ${MACOS_DIR} to refresh, found ${SUPERVISOR_COUNT}:" >&2
-    printf '%s\n' "${SUPERVISOR_CANDIDATES}" >&2
-    exit 1
-  fi
-
-  SUPERVISOR_NAME=$(basename "${SUPERVISOR_CANDIDATES}")
-  cp "${SUPERVISOR_BINARY}" "${MACOS_DIR}/${SUPERVISOR_NAME}"
-  chmod +x "${MACOS_DIR}/${SUPERVISOR_NAME}"
-  echo "Already finalized: Contents/MacOS/PixelboxCore is untouched; refreshed the supervisor at Contents/MacOS/${SUPERVISOR_NAME}"
-  exit 0
-fi
-
-FOUND_FILES=$(find "${MACOS_DIR}" -maxdepth 1 -type f -not -name ".DS_Store")
-FOUND_COUNT=$(printf '%s\n' "${FOUND_FILES}" | grep -c . || true)
-
-if [[ "${FOUND_COUNT}" -ne 1 ]]; then
-  echo "Expected exactly one executable in ${MACOS_DIR} before finalizing, found ${FOUND_COUNT}:" >&2
-  printf '%s\n' "${FOUND_FILES}" >&2
+if [[ "${CANDIDATE_COUNT}" -ne 1 ]]; then
+  echo "Expected exactly one non-PixelboxCore executable in ${MACOS_DIR}, found ${CANDIDATE_COUNT}:" >&2
+  printf '%s\n' "${CANDIDATES}" >&2
   exit 1
 fi
 
-CORE_BINARY="${FOUND_FILES}"
-CORE_NAME=$(basename "${CORE_BINARY}")
-mv "${CORE_BINARY}" "${MACOS_DIR}/PixelboxCore"
-cp "${SUPERVISOR_BINARY}" "${MACOS_DIR}/${CORE_NAME}"
-chmod +x "${MACOS_DIR}/${CORE_NAME}" "${MACOS_DIR}/PixelboxCore"
+CANDIDATE="${CANDIDATES}"
+CANDIDATE_NAME=$(basename "${CANDIDATE}")
 
-echo "Finalized: Contents/MacOS/${CORE_NAME} is now the supervisor; the real app is Contents/MacOS/PixelboxCore"
+# Discriminate on *what the candidate is*, not on whether PixelboxCore already
+# exists. `zero-native package` never cleans the bundle — it just overwrites
+# the CFBundleExecutable with a freshly built core — so on a re-run the
+# candidate is a brand new core sitting next to a stale PixelboxCore from the
+# previous run. Keying off "PixelboxCore exists" there would cp the supervisor
+# straight over that fresh core and pin PixelboxCore to the stale binary
+# forever, silently.
+if cmp -s "${CANDIDATE}" "${SUPERVISOR_BINARY}"; then
+  # The candidate is already the supervisor (finalize re-run with no
+  # intervening package): PixelboxCore is the real app and must not be touched.
+  if [[ ! -f "${MACOS_DIR}/PixelboxCore" ]]; then
+    echo "Contents/MacOS/${CANDIDATE_NAME} is the supervisor but Contents/MacOS/PixelboxCore is missing — the bundle has no app to launch." >&2
+    exit 1
+  fi
+  ACTION="refreshed the supervisor at Contents/MacOS/${CANDIDATE_NAME} (PixelboxCore untouched)"
+else
+  # The candidate is a freshly packaged core: promote it to PixelboxCore,
+  # replacing any stale core from a previous run.
+  mv "${CANDIDATE}" "${MACOS_DIR}/PixelboxCore"
+  chmod +x "${MACOS_DIR}/PixelboxCore"
+  ACTION="promoted the packaged app to Contents/MacOS/PixelboxCore"
+fi
+
+cp "${SUPERVISOR_BINARY}" "${CANDIDATE}"
+chmod +x "${CANDIDATE}"
+
+echo "Finalized: ${ACTION}; Contents/MacOS/${CANDIDATE_NAME} is now the supervisor"

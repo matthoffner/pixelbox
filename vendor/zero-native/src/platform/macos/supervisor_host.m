@@ -306,6 +306,9 @@ int zero_native_supervisor_run_crash_terminal(const char *command, unsigned long
         NSString *startupScript = ZeroNativeSupervisorStartupScript(commandString, workingDirectoryString);
         surfaceConfig.command = startupScript.UTF8String;
         surfaceConfig.initial_input = NULL;
+        // Dead as written: Ghostty force-enables wait_after_command whenever
+        // `command` is set (apprt/embedded.zig:529-534), so the terminal always
+        // waits for a keypress after the command exits regardless of this value.
         surfaceConfig.wait_after_command = false;
         surfaceConfig.context = GHOSTTY_SURFACE_CONTEXT_WINDOW;
 

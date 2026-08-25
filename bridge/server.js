@@ -455,7 +455,15 @@ async function handleApi(req, res, pathname) {
     const prefsPath = path.join(os.homedir(), 'Library', 'Application Support', 'Pixelbox', 'supervisor.json');
     try {
       const raw = await fsp.readFile(prefsPath, 'utf8');
-      return sendJson(res, 200, JSON.parse(raw));
+      const cli = JSON.parse(raw)?.cli;
+      // Mirror the supervisor's own validation (src/supervisor_main.zig
+      // readSupervisorPrefs). Returning an unsupported value verbatim would
+      // suppress the onboarding modal forever while the Zig side keeps
+      // rejecting the file — an unrecoverable state.
+      if (cli !== 'codex' && cli !== 'claude') {
+        return sendJson(res, 200, { cli: null });
+      }
+      return sendJson(res, 200, { cli });
     } catch {
       return sendJson(res, 200, { cli: null });
     }

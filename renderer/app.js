@@ -2496,14 +2496,21 @@ async function maybeShowSupervisorOnboarding() {
   modal.hidden = false;
 
   const choose = async (chosenCli) => {
-    await window.api.setSupervisorPreferredCli(chosenCli);
+    try {
+      await window.api.setSupervisorPreferredCli(chosenCli);
+    } catch (error) {
+      // Leave the modal open: dismissing it here would strand the supervisor
+      // without a CLI preference and give no way back to this prompt.
+      window.alert(`Could not save the crash-diagnosis CLI preference: ${error?.message || error}`);
+      return;
+    }
     modal.hidden = true;
   };
-  document.getElementById('supervisor-onboarding-codex').addEventListener('click', () => choose('codex'));
-  document.getElementById('supervisor-onboarding-claude').addEventListener('click', () => choose('claude'));
+  document.getElementById('supervisor-onboarding-codex').addEventListener('click', () => { choose('codex').catch(() => {}); });
+  document.getElementById('supervisor-onboarding-claude').addEventListener('click', () => { choose('claude').catch(() => {}); });
 }
 
-maybeShowSupervisorOnboarding();
+maybeShowSupervisorOnboarding().catch(() => {});
 
 (async () => {
   loadHiddenProjects();
