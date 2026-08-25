@@ -15,30 +15,29 @@ if [[ ! -d "${MACOS_DIR}" ]]; then
   exit 1
 fi
 
-if [[ -e "${MACOS_DIR}/PixelboxCore" ]]; then
+if [[ -f "${MACOS_DIR}/PixelboxCore" ]]; then
   # Already finalized: PixelboxCore is the real app and must never be touched by
-  # mv/cp here. Just refresh whichever other file holds the supervisor.
-  SUPERVISOR_NAME=""
-  while IFS= read -r -d '' f; do
-    name=$(basename "${f}")
-    if [[ "${name}" != "PixelboxCore" ]]; then
-      SUPERVISOR_NAME="${name}"
-      break
-    fi
-  done < <(find "${MACOS_DIR}" -maxdepth 1 -type f -print0)
+  # mv/cp here. Refresh whichever other file holds the supervisor — but only if
+  # there's exactly one candidate. .DS_Store is Finder cruft (dropped by "Show
+  # Package Contents"), never a binary, so it's excluded rather than being
+  # allowed to masquerade as the supervisor.
+  SUPERVISOR_CANDIDATES=$(find "${MACOS_DIR}" -maxdepth 1 -type f -not -name "PixelboxCore" -not -name ".DS_Store")
+  SUPERVISOR_COUNT=$(printf '%s\n' "${SUPERVISOR_CANDIDATES}" | grep -c . || true)
 
-  if [[ -z "${SUPERVISOR_NAME}" ]]; then
-    echo "Bundle already has Contents/MacOS/PixelboxCore but no launched-executable file to refresh in ${MACOS_DIR}" >&2
+  if [[ "${SUPERVISOR_COUNT}" -ne 1 ]]; then
+    echo "Expected exactly one non-PixelboxCore executable in ${MACOS_DIR} to refresh, found ${SUPERVISOR_COUNT}:" >&2
+    printf '%s\n' "${SUPERVISOR_CANDIDATES}" >&2
     exit 1
   fi
 
+  SUPERVISOR_NAME=$(basename "${SUPERVISOR_CANDIDATES}")
   cp "${SUPERVISOR_BINARY}" "${MACOS_DIR}/${SUPERVISOR_NAME}"
   chmod +x "${MACOS_DIR}/${SUPERVISOR_NAME}"
   echo "Already finalized: Contents/MacOS/PixelboxCore is untouched; refreshed the supervisor at Contents/MacOS/${SUPERVISOR_NAME}"
   exit 0
 fi
 
-FOUND_FILES=$(find "${MACOS_DIR}" -maxdepth 1 -type f)
+FOUND_FILES=$(find "${MACOS_DIR}" -maxdepth 1 -type f -not -name ".DS_Store")
 FOUND_COUNT=$(printf '%s\n' "${FOUND_FILES}" | grep -c . || true)
 
 if [[ "${FOUND_COUNT}" -ne 1 ]]; then
