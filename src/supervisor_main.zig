@@ -105,6 +105,9 @@ pub fn main(init: std.process.Init) !void {
     const core_path = try coreExecutablePath(allocator);
     defer allocator.free(core_path);
 
+    const prefs_path = try prefsFilePath(allocator, init.environ_map);
+    defer allocator.free(prefs_path);
+
     while (true) {
         var argv = [_][]const u8{core_path};
         var child = try std.process.spawn(init.io, .{ .argv = &argv });
@@ -116,11 +119,36 @@ pub fn main(init: std.process.Init) !void {
                 return;
             },
             .relaunch => {
-                std.debug.print("PixelboxCore exited unexpectedly ({any}). Relaunching.\n", .{term});
-                const cmd = "echo 'smoke test: task 5 terminal'; exec /bin/zsh -il";
-                _ = zero_native_supervisor_run_crash_terminal(cmd.ptr, cmd.len, ".".ptr, 1);
-                // Task 6 inserts the crash-diagnosis window call here, between
-                // detecting the crash and looping back to relaunch.
+                std.debug.print("PixelboxCore exited unexpectedly ({any}). Diagnosing.\n", .{term});
+
+                const prefs = readSupervisorPrefs(init.io, allocator, prefs_path) catch null;
+                if (prefs) |p| {
+                    defer allocator.free(p.cli);
+                    const binary = if (std.mem.eql(u8, p.cli, "codex")) "codex" else "claude";
+                    const flag = if (std.mem.eql(u8, p.cli, "codex")) "--dangerously-bypass-approvals-and-sandbox" else "--dangerously-skip-permissions";
+                    const term_description = switch (term) {
+                        .exited => |code| try std.fmt.allocPrint(allocator, "exit code {d}", .{code}),
+                        .signal => |sig| try std.fmt.allocPrint(allocator, "signal {d}", .{@intFromEnum(sig)}),
+                        else => try allocator.dupe(u8, "an unknown termination"),
+                    };
+                    defer allocator.free(term_description);
+
+                    const prompt = try std.fmt.allocPrint(
+                        allocator,
+                        "PixelboxCore just crashed ({s}). Diagnose the Zig/Objective-C source in this repository and fix it, then run 'zig build' to confirm it compiles, then exit.",
+                        .{term_description},
+                    );
+                    defer allocator.free(prompt);
+
+                    const command = try std.fmt.allocPrint(allocator, "{s} {s} '{s}'", .{ binary, flag, prompt });
+                    defer allocator.free(command);
+
+                    const cwd = try std.process.currentPathAlloc(init.io, allocator);
+                    defer allocator.free(cwd);
+                    _ = zero_native_supervisor_run_crash_terminal(command.ptr, command.len, cwd.ptr, cwd.len);
+                } else {
+                    std.debug.print("No AI CLI preference found (or it's invalid) — relaunching without diagnosis.\n", .{});
+                }
             },
         }
     }
