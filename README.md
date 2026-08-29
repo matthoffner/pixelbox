@@ -27,7 +27,7 @@ Pixelbox should feel like an AI-native operating surface for software creation:
 3. **Agent Coordination**
    - Built-in two-lane workflow (editor/runtime) with shared handoff state.
    - Better project-scoped prompts/skills.
-   - Parked follow-on: [Working Agreements](docs/working-agreements.md), an evidence-bound and reversible way to trial a repeated project correction before a person promotes it into project guidance. This is a product contract, not a released feature.
+   - Approved for independent implementation: [Working Agreements](docs/working-agreements.md), an evidence-bound and reversible way to trial a repeated project correction before a person promotes it into project guidance. This remains a product contract, not a released feature or public capability; its proof and release gates still apply.
 4. **Runtime Controls**
    - Cleaner server lifecycle controls and health status.
    - Better log surfaces and failure diagnostics.

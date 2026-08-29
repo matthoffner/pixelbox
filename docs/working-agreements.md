@@ -1,6 +1,6 @@
 # Pixelbox Working Agreements
 
-> Status: parked product contract. No implementation, release, or public availability is claimed. Pixelbox Reentry remains in validation, and this follow-on cannot enter BUILD until the portfolio WIP gate opens.
+> Status: approved for independent implementation, but not released or publicly available. Work may proceed alongside Pixelbox Reentry validation; the human-evidence, privacy, retention, Reentry non-contamination, and release gates below remain mandatory.
 
 ## Product outcome
 
