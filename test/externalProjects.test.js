@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { createExternalProjectStore } = require('../lib/externalProjects');
-const { createWorkspaceFs } = require('../lib/workspaceFs');
+const { createScopedWorkspaceFs } = require('../lib/workspaceFs');
 const { pickerCommand } = require('../lib/folderPicker');
 
 function makeSandbox() {
@@ -33,8 +33,8 @@ test('external folders are only reachable after they are registered', async (t) 
     storePath: sandbox.storePath,
     workspaceRoot: sandbox.workspaceRoot,
   });
-  const workspaceFs = createWorkspaceFs(sandbox.workspaceRoot, {
-    isAllowedExternalPath: (absolutePath) => store.isAllowedPath(absolutePath),
+  const workspaceFs = createScopedWorkspaceFs(sandbox.workspaceRoot, {
+    externalRootFor: (absolutePath) => store.rootFor(absolutePath),
   });
 
   assert.throws(() => workspaceFs.resolveWorkspacePath(sandbox.outside), /outside workspace/);

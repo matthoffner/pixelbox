@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased - 2026-07-11
+
+- Replaced the configuration-heavy Running Page concept with a compact Preview Agent that detects npm/static projects, starts and health-checks dev servers, recovers failed previews, and keeps manual settings under Advanced.
+- Moved proof controls into the Projects panel so the rendered app remains unobstructed during normal preview work.
+- Added Pixelbox Reentry with honest Building, Needs you, Blocked, Proving, Ready, and Proof stale states; Ready now requires a matching project-scoped workspace fingerprint, runtime context, Live Check, and SHA-256-bound snapshot.
+- Added immediate stale-proof invalidation, fresh before/after Verify scans, active static-artifact hashing, scoped changed/evidence file receipts, and runtime-failure precedence so legacy timestamps or stopped previews cannot produce Ready.
+- Isolated untrusted static previews and proof artifacts behind expiring `localhost` capability URLs, removed wildcard CORS, and added strict bridge Host/Origin/method checks, request-size limits, root-deletion guards, and symlink-aware workspace containment.
+- Added unit, bridge-integration, composition, and real-browser Reentry acceptance coverage; the browser smoke proves preview isolation, Ready, proof-write stability, and Proof stale after a real file edit.
+- Added a live run proof receipt over the preview with project, command, URL, touched files, copy-to-clipboard, and persisted proof metadata for quick-start generated runtimes.
+- Added a Live Check action that probes the preview URL, captures HTTP status, latency, and page title/heading, and carries that evidence into Ship Briefs.
+- Added an in-app Proof Ledger that records recent Live Checks and Ship Briefs, persists them in preview config, and copies a shareable evidence trail.
+- Added Proof Snapshot capture so the proof receipt can save a live preview PNG into `.pixelbox/proof-snapshots/`, view it in-app, and record it in the ledger.
+- Added Snapshot Compare for reviewing the latest proof snapshot beside the previous snapshot directly inside Pixelbox.
+- Added a one-click Ship Brief action that copies an agent-ready continuation prompt and writes the current live proof into `.pixelbox/handoff.md`.
+- Added File Peek for proof receipt files so generated/touched files can be inspected and copied without leaving Pixelbox.
+- Added Runtime Output for proof receipts so managed server stdout/stderr can be inspected and copied from inside Pixelbox.
+- Added Runtime Output tails to copied proof text, Ship Briefs, and handoff updates so failed runs carry their diagnostic text to the next agent.
+- Added automatic Live Checks after managed server previews start so proof receipts gain HTTP/title evidence without a manual click.
+- Added a Verify proof action that runs a Live Check and captures a proof snapshot in one click.
+- Added Verified Run proof ledger events that bundle successful Verify HTTP evidence with the captured snapshot.
+- Added Markdown Proof Packs that save the current proof, files, runtime tail, snapshot, and ledger into `.pixelbox/proof-packs/`.
+- Added and deployed the landing page `0.4.6` release entry for proof receipts, Verified Runs, and Markdown Proof Packs.
+- Improved Proof Ledger file chips so evidence files can be opened directly in File Peek from ledger rows.
+- Improved automatic Live Check ledger behavior by deduping recent identical background checks.
+- Fixed Proof Pack export paths so nested projects save packs inside their own `.pixelbox/proof-packs/` directory.
+- Improved server runtime restarts so live projects show a Restart action, relaunch on the same managed port, reload the preview after code edits, and hide irrelevant source fields.
+- Improved runtime failure visibility by showing managed server exit codes in the Running Page and proof receipt.
+- Improved proof receipt status tones so healthy, waiting, and failed runtimes no longer share the same green indicator.
+- Fixed hidden-state styling so first-load panels do not show dormant forms or controls before the user opens them.
+- Improved narrow-screen preview flow so fresh mobile sessions and successful preview launches keep quick actions and proof controls reachable.
+- Scoped `npm test` to Pixelbox-owned test files so ignored local `projects/` workspaces no longer break the product test suite.
+
 ## 0.3.0 - 2026-04-26
 
 - Added an in-app agent monitor panel for active Codex sessions plus backend process/transcript inspection hooks.

@@ -50,6 +50,60 @@ const quickCreateServerEl = document.getElementById('quick-create-server');
 const quickSurpriseEl = document.getElementById('quick-surprise');
 const quickOpenTerminalEl = document.getElementById('quick-open-terminal');
 const previewQuickStatusEl = document.getElementById('preview-quick-status');
+const proofDockEl = document.getElementById('proof-dock');
+const proofStatusDotEl = document.querySelector('.proof-status-dot');
+const proofTitleEl = document.getElementById('proof-title');
+const proofStatusEl = document.getElementById('proof-status');
+const proofProjectEl = document.getElementById('proof-project');
+const proofCommandEl = document.getElementById('proof-command');
+const proofUrlEl = document.getElementById('proof-url');
+const proofFilesEl = document.getElementById('proof-files');
+const proofCheckEl = document.getElementById('proof-check');
+const proofOutputEl = document.getElementById('proof-output');
+const proofCheckStatusEl = document.getElementById('proof-check-status');
+const proofVerifyEl = document.getElementById('proof-verify');
+const proofPackEl = document.getElementById('proof-pack');
+const proofSnapshotEl = document.getElementById('proof-snapshot');
+const proofSnapshotOpenEl = document.getElementById('proof-snapshot-open');
+const proofCompareEl = document.getElementById('proof-compare');
+const proofLedgerToggleEl = document.getElementById('proof-ledger-toggle');
+const proofBriefEl = document.getElementById('proof-brief');
+const proofCopyEl = document.getElementById('proof-copy');
+const proofCopyStatusEl = document.getElementById('proof-copy-status');
+const proofFileModalEl = document.getElementById('proof-file-modal');
+const proofFileCloseEl = document.getElementById('proof-file-close');
+const proofFileTitleEl = document.getElementById('proof-file-title');
+const proofFilePathEl = document.getElementById('proof-file-path');
+const proofFileContentEl = document.getElementById('proof-file-content');
+const proofFileStatusEl = document.getElementById('proof-file-status');
+const proofFileCopyPathEl = document.getElementById('proof-file-copy-path');
+const proofFileCopyContentEl = document.getElementById('proof-file-copy-content');
+const proofOutputModalEl = document.getElementById('proof-output-modal');
+const proofOutputCloseEl = document.getElementById('proof-output-close');
+const proofOutputCopyEl = document.getElementById('proof-output-copy');
+const proofOutputSubtitleEl = document.getElementById('proof-output-subtitle');
+const proofOutputContentEl = document.getElementById('proof-output-content');
+const proofOutputStatusEl = document.getElementById('proof-output-status');
+const proofLedgerModalEl = document.getElementById('proof-ledger-modal');
+const proofLedgerCloseEl = document.getElementById('proof-ledger-close');
+const proofLedgerCopyEl = document.getElementById('proof-ledger-copy');
+const proofLedgerListEl = document.getElementById('proof-ledger-list');
+const proofLedgerStatusEl = document.getElementById('proof-ledger-status');
+const proofSnapshotModalEl = document.getElementById('proof-snapshot-modal');
+const proofSnapshotCloseEl = document.getElementById('proof-snapshot-close');
+const proofSnapshotPathEl = document.getElementById('proof-snapshot-path');
+const proofSnapshotImageEl = document.getElementById('proof-snapshot-image');
+const proofSnapshotStatusEl = document.getElementById('proof-snapshot-status');
+const proofSnapshotCopyPathEl = document.getElementById('proof-snapshot-copy-path');
+const proofCompareModalEl = document.getElementById('proof-compare-modal');
+const proofCompareCloseEl = document.getElementById('proof-compare-close');
+const proofCompareCopyEl = document.getElementById('proof-compare-copy');
+const proofCompareSummaryEl = document.getElementById('proof-compare-summary');
+const proofCompareBeforeEl = document.getElementById('proof-compare-before');
+const proofCompareAfterEl = document.getElementById('proof-compare-after');
+const proofCompareBeforeLabelEl = document.getElementById('proof-compare-before-label');
+const proofCompareAfterLabelEl = document.getElementById('proof-compare-after-label');
+const proofCompareStatusEl = document.getElementById('proof-compare-status');
 const runningPageTypeEl = document.getElementById('running-page-type');
 const runningPageHtmlEl = document.getElementById('running-page-html');
 const runningPageCommandEl = document.getElementById('running-page-command');
@@ -62,6 +116,8 @@ const runningPageStatusEl = document.getElementById('running-page-status');
 const runningPageLogEl = document.getElementById('running-page-log');
 const runningPageLogInputEl = document.getElementById('running-page-log-input');
 const runningPageLogSendEl = document.getElementById('running-page-log-send');
+const previewAgentDotEl = document.getElementById('preview-agent-dot');
+const previewAgentSummaryEl = document.getElementById('preview-agent-summary');
 const agentMonitorRefreshEl = document.getElementById('agent-monitor-refresh');
 const agentMonitorStatusEl = document.getElementById('agent-monitor-status');
 const agentMonitorListEl = document.getElementById('agent-monitor-list');
@@ -105,6 +161,19 @@ let externalProjects = [];
 const projectPreviewState = new Map();
 const projectRuntimeConfig = new Map();
 const projectRuntimeStatus = new Map();
+const projectRuntimeRunId = new Map();
+const projectRuntimeOutput = new Map();
+const projectPreviewRendered = new Set();
+const autoLiveCheckTimers = new Map();
+const autoLiveCheckInFlight = new Set();
+const autoLiveCheckCompleted = new Set();
+const previewAgentRecoveryTimers = new Map();
+const previewAgentHealthTimers = new Map();
+const previewAgentHealthFailures = new Map();
+const projectWorkspaceFingerprints = new Map();
+const workspaceFingerprintInFlight = new Map();
+const workspaceFingerprintRefreshTimers = new Map();
+const reentryVerificationInFlight = new Set();
 const projectTerminalOutput = new Map();
 const projectNativeStartupCommand = new Map();
 const projectSessionBootstrapped = new Set();
@@ -119,7 +188,11 @@ let projectsDragPointer = null;
 let projectsMouseDrag = null;
 let agentMonitorPollTimer = null;
 let munderOfficePollTimer = null;
+let workspaceFingerprintPollTimer = null;
 let previewCaptureRegionRaf = 0;
+let activeProofFile = null;
+let activeProofSnapshot = null;
+let activeProofCompare = null;
 const agentMonitorStoppingPids = new Set();
 let selectedAiCli = 'codex';
 let codexDangerouslyBypassPermissions = false;
@@ -141,6 +214,7 @@ const TERMINAL_MIN_ROWS = 24;
 const TERMINAL_CELL_WIDTH = 8.4;
 const TERMINAL_CELL_HEIGHT = 18;
 const MAX_PROJECT_TERMINAL_OUTPUT = 200000;
+const MAX_PROJECT_RUNTIME_OUTPUT = 60000;
 const LAST_SELECTED_PROJECT_KEY = 'pixelbox.lastSelectedProject';
 const PROJECTS_PANEL_HIDDEN_KEY = 'pixelbox.projectsPanelHidden';
 const PROJECTS_PANEL_POSITION_KEY = 'pixelbox.projectsPanelPosition';
@@ -152,7 +226,11 @@ const terminalGridState = {
   cols: 120,
   rows: 30,
 };
+const MAX_PROOF_LEDGER_ENTRIES = 12;
+const PREVIEW_FOCUS_MAX_WIDTH = 760;
 const quickStartTemplates = window.PixelboxQuickStartTemplates;
+const previewAgent = window.PixelboxPreviewAgent;
+const proofReentry = window.PixelboxProofReentry;
 const {
   QUICK_SERVER_STARTER_PORT,
   htmlStarterDocument,
@@ -160,10 +238,16 @@ const {
   starterPackageJson,
 } = quickStartTemplates;
 
+if (loadProjectsPanelHidden()) {
+  projectsPanelHidden = true;
+  document.body.classList.add('projects-panel-hidden');
+}
+
 const previewFrameEl = document.createElement('iframe');
 previewFrameEl.id = 'preview-frame';
 previewFrameEl.setAttribute('title', 'Preview');
 previewFrameEl.setAttribute('referrerpolicy', 'no-referrer');
+previewFrameEl.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads');
 previewFrameHostEl.appendChild(previewFrameEl);
 
 // Folders opened from anywhere on disk are addressed by absolute path; the
@@ -238,9 +322,12 @@ function visibleProjectPath(relPath) {
 
 function loadProjectsPanelHidden() {
   try {
-    return window.localStorage.getItem(PROJECTS_PANEL_HIDDEN_KEY) === '1';
+    const stored = window.localStorage.getItem(PROJECTS_PANEL_HIDDEN_KEY);
+    if (stored === '1') return true;
+    if (stored === '0') return false;
+    return window.innerWidth <= PREVIEW_FOCUS_MAX_WIDTH;
   } catch {
-    return false;
+    return window.innerWidth <= PREVIEW_FOCUS_MAX_WIDTH;
   }
 }
 
@@ -248,6 +335,20 @@ function persistProjectsPanelHidden() {
   try {
     window.localStorage.setItem(PROJECTS_PANEL_HIDDEN_KEY, projectsPanelHidden ? '1' : '0');
   } catch {}
+}
+
+function setProjectsPanelHidden(hidden) {
+  const nextHidden = Boolean(hidden);
+  const changed = projectsPanelHidden !== nextHidden;
+  projectsPanelHidden = nextHidden;
+  persistProjectsPanelHidden();
+  renderProjectsPanelVisibility();
+  return changed;
+}
+
+function focusPreviewOnNarrowScreen() {
+  if (window.innerWidth > PREVIEW_FOCUS_MAX_WIDTH) return false;
+  return setProjectsPanelHidden(true);
 }
 
 function loadProjectsPanelPosition() {
@@ -483,13 +584,7 @@ function queueNativeTerminalPanelSync() {
 }
 
 function defaultRuntimeConfig() {
-  return {
-    sourceType: 'none',
-    htmlPath: '',
-    serverCommand: '',
-    serverUrl: '',
-    autoStart: true,
-  };
+  return previewAgent.defaultConfig();
 }
 
 function configPathForProject(projectPath) {
@@ -656,10 +751,14 @@ function pixelboxContextBlock() {
   ].join('\n');
 }
 
-async function ensureAgentHandoffFile(projectPath) {
-  const handoffPath = projectPath === '.'
+function handoffPathForProject(projectPath) {
+  return projectPath === '.'
     ? '.pixelbox/handoff.md'
     : `${projectPath}/.pixelbox/handoff.md`;
+}
+
+async function ensureAgentHandoffFile(projectPath) {
+  const handoffPath = handoffPathForProject(projectPath);
   const { content } = await window.api.readFile(handoffPath);
   if ((content || '').trim()) return;
   const seed = [
@@ -820,6 +919,25 @@ function previewDisplayUrl(rawUrl) {
   return url.replace(/^file:\/\/\/?/, '/');
 }
 
+function setEvidenceImageSource(imageEl, evidence) {
+  if (!imageEl || !evidence?.path) return;
+  const currentUrl = sanitizePreviewUrl(evidence.previewUrl || '');
+  if (currentUrl && !currentUrl.includes('/__workspace__/')) {
+    imageEl.src = currentUrl;
+    return;
+  }
+  imageEl.removeAttribute('src');
+  window.api.resolvePreviewFile(evidence.path)
+    .then((resolved) => {
+      if (!resolved?.url) return;
+      evidence.previewUrl = resolved.url;
+      imageEl.src = resolved.url;
+    })
+    .catch(() => {
+      if (proofSnapshotStatusEl) proofSnapshotStatusEl.textContent = 'Snapshot preview is unavailable';
+    });
+}
+
 function setPreviewMeta(rawUrl, subtitle = 'Preview') {
   if (previewSubtitleEl) previewSubtitleEl.textContent = subtitle;
   if (previewUrlEl) previewUrlEl.textContent = previewDisplayUrl(rawUrl);
@@ -844,7 +962,7 @@ async function refreshSelectedHtmlPreview() {
     await persistPreviewState(selectedProjectPath);
   }
   previewFrameEl.src = cacheBustedUrl(cleanUrl);
-  setPreviewMeta(cleanUrl, 'HTML preview');
+  setPreviewMeta(cleanUrl, 'Static site');
   updatePreviewControls(state);
   return true;
 }
@@ -882,6 +1000,7 @@ function renderPreviewForProject(projectPath) {
     previewEmptyStateEl.style.display = 'grid';
     setPreviewMeta('', 'Preview');
     updatePreviewControls(state);
+    renderProofForProject(projectPath);
     return;
   }
 
@@ -890,10 +1009,1518 @@ function renderPreviewForProject(projectPath) {
     previewFrameEl.src = url;
   }
   const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
-  const subtitle = config.sourceType === 'html' ? 'HTML preview' : 'Live preview';
+  const subtitle = config.sourceType === 'html' ? 'Static site' : 'Live preview';
   setPreviewMeta(url, subtitle);
   updatePreviewControls(state);
   schedulePreviewCaptureRegionPublish();
+  renderProofForProject(projectPath);
+}
+
+function projectDisplayLabel(projectPath) {
+  return projectPath === '.' ? 'workspace root' : projectPath;
+}
+
+function proofTimeLabel(value, prefix) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${prefix} ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function proofActivityLabel(value) {
+  return proofTimeLabel(value, 'Updated');
+}
+
+function proofVerifiedLabel(value) {
+  return proofTimeLabel(value, 'Verified');
+}
+
+function proofContextForProject(projectPath, proof) {
+  const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+  return proofReentry.normalizeContext({
+    projectPath,
+    sourceType: config.sourceType,
+    command: proof?.command || config.serverCommand || '',
+    url: config.sourceType === 'html'
+      ? `static:${config.htmlPath || ''}`
+      : sanitizePreviewUrl(proof?.url || config.serverUrl || ''),
+  });
+}
+
+async function refreshWorkspaceFingerprint(projectPath, options = {}) {
+  const { render = true, fresh = false, evidence = null } = options;
+  const currentRequest = workspaceFingerprintInFlight.get(projectPath);
+  if (currentRequest) {
+    const current = await currentRequest;
+    if (fresh) {
+      if (workspaceFingerprintInFlight.get(projectPath) === currentRequest) {
+        workspaceFingerprintInFlight.delete(projectPath);
+      }
+      return refreshWorkspaceFingerprint(projectPath, { ...options, fresh: false });
+    }
+    if (render && projectPath === selectedProjectPath) renderProofForProject(projectPath);
+    return current;
+  }
+  const request = (async () => {
+    try {
+      const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+      const verification = proofReentry.normalizeVerification(config.proofVerification);
+      const evidenceToCheck = evidence || (verification ? {
+        path: verification.snapshot.path,
+        digest: verification.snapshot.digest,
+      } : null);
+      const includedPaths = config.sourceType === 'html' && config.htmlPath ? [config.htmlPath] : [];
+      const raw = await window.api.workspaceFingerprint(projectPath, {
+        includedPaths,
+        evidence: evidenceToCheck,
+      });
+      const fingerprint = proofReentry.normalizeWorkspace({
+        ...raw,
+        evidenceValid: evidenceToCheck ? raw.evidence?.match === true : false,
+      });
+      projectWorkspaceFingerprints.set(projectPath, fingerprint);
+      return fingerprint;
+    } catch (error) {
+      const unavailable = {
+        complete: false,
+        error: error && error.message ? error.message : 'Workspace fingerprint unavailable',
+      };
+      projectWorkspaceFingerprints.set(projectPath, unavailable);
+      return unavailable;
+    }
+  })();
+  workspaceFingerprintInFlight.set(projectPath, request);
+  try {
+    const fingerprint = await request;
+    if (render && projectPath === selectedProjectPath) renderProofForProject(projectPath);
+    return fingerprint;
+  } finally {
+    if (workspaceFingerprintInFlight.get(projectPath) === request) {
+      workspaceFingerprintInFlight.delete(projectPath);
+    }
+  }
+}
+
+function invalidateWorkspaceFingerprint(projectPath) {
+  const current = projectWorkspaceFingerprints.get(projectPath);
+  if (current?.complete) {
+    projectWorkspaceFingerprints.set(projectPath, {
+      ...current,
+      fingerprint: 'sha256:workspace-change-pending',
+      evidenceValid: false,
+    });
+  } else {
+    projectWorkspaceFingerprints.delete(projectPath);
+  }
+  if (projectPath === selectedProjectPath) renderProofForProject(projectPath);
+}
+
+function scheduleWorkspaceFingerprintRefresh(projectPath, delayMs = 220) {
+  const prior = workspaceFingerprintRefreshTimers.get(projectPath);
+  if (prior) clearTimeout(prior);
+  const timer = setTimeout(() => {
+    workspaceFingerprintRefreshTimers.delete(projectPath);
+    refreshWorkspaceFingerprint(projectPath).catch(() => {});
+  }, delayMs);
+  workspaceFingerprintRefreshTimers.set(projectPath, timer);
+}
+
+function uniqueList(values) {
+  const seen = new Set();
+  const next = [];
+  for (const value of values) {
+    const normalized = String(value || '').trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    next.push(normalized);
+  }
+  return next;
+}
+
+function proofFilesForProject(projectPath, config) {
+  if (Array.isArray(config.proofFiles) && config.proofFiles.length > 0) {
+    const priorVerification = proofReentry.normalizeVerification(config.proofVerification);
+    const priorWorkspaceFiles = new Set(uniqueList([
+      ...(priorVerification?.workspace?.changedFiles || []),
+      ...(priorVerification?.workspace?.evidenceFiles || []),
+    ]).map((file) => projectRelativePath(projectPath, file)));
+    return uniqueList(config.proofFiles).filter((file) => (
+      !priorWorkspaceFiles.has(file) && !/(^|\/)\.pixelbox\/proof-packs\//.test(file)
+    ));
+  }
+
+  const files = [];
+  if (config.sourceType === 'html' && config.htmlPath) {
+    files.push(projectRelativePath(projectPath, config.htmlPath));
+  }
+  if (config.sourceType === 'server') {
+    if (/\bnpm\s+run\b/.test(config.serverCommand || '')) {
+      files.push(projectRelativePath(projectPath, 'package.json'));
+    }
+    if (
+      (config.serverCommand || '').trim() === 'npm run dev' &&
+      sanitizePreviewUrl(config.serverUrl) === `http://127.0.0.1:${QUICK_SERVER_STARTER_PORT}`
+    ) {
+      files.push(projectRelativePath(projectPath, 'server.js'));
+    }
+  }
+  if (config.sourceType !== 'none') {
+    files.push(configPathForProject(projectPath));
+  }
+  return uniqueList(files);
+}
+
+function normalizeProofLedgerEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const type = ['live-check', 'ship-brief', 'snapshot', 'verification', 'proof-pack'].includes(entry.type)
+    ? entry.type
+    : 'proof';
+  const at = typeof entry.at === 'string' && entry.at.trim()
+    ? entry.at.trim()
+    : new Date().toISOString();
+  const files = Array.isArray(entry.files)
+    ? uniqueList(entry.files.map((file) => String(file || '').trim()).filter(Boolean)).slice(0, 8)
+    : [];
+  const liveCheck = entry.liveCheck && typeof entry.liveCheck === 'object'
+    ? {
+        ok: typeof entry.liveCheck.ok === 'boolean' ? entry.liveCheck.ok : null,
+        status: entry.liveCheck.status,
+        statusText: String(entry.liveCheck.statusText || ''),
+        label: String(entry.liveCheck.label || liveCheckLabel(entry.liveCheck) || '').slice(0, 180),
+        checkedAt: String(entry.liveCheck.checkedAt || ''),
+      }
+    : null;
+  const snapshot = entry.snapshot && typeof entry.snapshot === 'object'
+      ? {
+          path: String(entry.snapshot.path || '').slice(0, 260),
+          digest: String(entry.snapshot.digest || '').slice(0, 120),
+          previewUrl: String(entry.snapshot.previewUrl || '').slice(0, 320),
+        bytes: Number(entry.snapshot.bytes) || 0,
+        width: Number(entry.snapshot.width) || 0,
+        height: Number(entry.snapshot.height) || 0,
+    }
+    : null;
+  const verification = proofReentry.normalizeVerification(entry.verification);
+  return {
+    type,
+    at,
+    label: String(entry.label || '').slice(0, 180),
+    status: String(entry.status || '').slice(0, 140),
+    command: String(entry.command || '').slice(0, 180),
+    url: String(entry.url || '').slice(0, 260),
+    files,
+    liveCheck,
+    snapshot,
+    verification,
+  };
+}
+
+function proofLedgerForConfig(config) {
+  const entries = Array.isArray(config.proofLedger) ? config.proofLedger : [];
+  return entries
+    .map(normalizeProofLedgerEntry)
+    .filter(Boolean)
+    .slice(0, MAX_PROOF_LEDGER_ENTRIES);
+}
+
+function appendProofLedgerEntry(config, entry) {
+  const normalized = normalizeProofLedgerEntry(entry);
+  if (!normalized) return proofLedgerForConfig(config);
+  return [normalized, ...proofLedgerForConfig(config)].slice(0, MAX_PROOF_LEDGER_ENTRIES);
+}
+
+function appendProofLedgerEntryIfNew(config, entry, options = {}) {
+  const { dedupeRecentMs = 0 } = options;
+  const normalized = normalizeProofLedgerEntry(entry);
+  const ledger = proofLedgerForConfig(config);
+  if (!normalized) return ledger;
+  if (dedupeRecentMs > 0 && normalized.type === 'live-check') {
+    const normalizedTime = Date.parse(normalized.at);
+    const hasRecentDuplicate = ledger.some((existing) => {
+      if (existing.type !== 'live-check') return false;
+      if (existing.url !== normalized.url) return false;
+      if (existing.liveCheck?.status !== normalized.liveCheck?.status) return false;
+      const existingTime = Date.parse(existing.at);
+      if (!Number.isFinite(existingTime) || !Number.isFinite(normalizedTime)) return false;
+      return Math.abs(normalizedTime - existingTime) <= dedupeRecentMs;
+    });
+    if (hasRecentDuplicate) return ledger;
+  }
+  return [normalized, ...ledger].slice(0, MAX_PROOF_LEDGER_ENTRIES);
+}
+
+function proofLedgerTimeLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown time';
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function proofLedgerKindLabel(entry) {
+  if (entry.type === 'live-check') return entry.liveCheck?.ok === false ? 'Live Check failed' : 'Live Check';
+  if (entry.type === 'ship-brief') return 'Ship Brief';
+  if (entry.type === 'snapshot') return 'Snapshot';
+  if (entry.type === 'verification') return entry.liveCheck?.ok === false ? 'Verification failed' : 'Verified Run';
+  if (entry.type === 'proof-pack') return 'Proof Pack';
+  return 'Proof';
+}
+
+function proofLedgerDetail(entry) {
+  if (entry.type === 'live-check') {
+    return entry.liveCheck?.label || entry.label || entry.status || 'Preview probed';
+  }
+  if (entry.type === 'ship-brief') {
+    return entry.liveCheck?.label
+      ? `Brief copied with ${entry.liveCheck.label}`
+      : 'Brief copied';
+  }
+  if (entry.type === 'snapshot') {
+    const size = entry.snapshot?.width && entry.snapshot?.height
+      ? `${entry.snapshot.width}x${entry.snapshot.height}`
+      : '';
+    return [entry.snapshot?.path || entry.label || 'Visual proof captured', size].filter(Boolean).join(' · ');
+  }
+  if (entry.type === 'verification') {
+    const fingerprint = entry.verification?.workspace?.fingerprint
+      ? entry.verification.workspace.fingerprint.slice(0, 20)
+      : '';
+    return [
+      entry.liveCheck?.label || 'Live URL verified',
+      entry.snapshot?.path ? `Snapshot ${snapshotShortName(entry.snapshot)}` : '',
+      fingerprint ? `Workspace ${fingerprint}…` : '',
+    ].filter(Boolean).join(' · ');
+  }
+  if (entry.type === 'proof-pack') {
+    return entry.label || 'Markdown proof pack saved';
+  }
+  return entry.label || entry.status || '';
+}
+
+function proofLedgerEntryLine(entry) {
+  const parts = [
+    proofLedgerTimeLabel(entry.at),
+    proofLedgerKindLabel(entry),
+    proofLedgerDetail(entry),
+    entry.url ? previewDisplayUrl(entry.url) : '',
+  ].filter(Boolean);
+  return parts.join(' - ');
+}
+
+function proofLedgerText(entries) {
+  const ledger = Array.isArray(entries) ? entries : [];
+  return [
+    'Proof Ledger',
+    ...(ledger.length > 0 ? ledger.map((entry) => `- ${proofLedgerEntryLine(entry)}`) : ['- n/a']),
+  ].join('\n');
+}
+
+function liveCheckLedgerEntry(proof, result) {
+  return {
+    type: 'live-check',
+    at: result.checkedAt || new Date().toISOString(),
+    status: proof.status,
+    command: proof.command,
+    url: result.url || proof.url || '',
+    files: proof.files,
+    liveCheck: {
+      ...result,
+      label: liveCheckLabel(result),
+    },
+  };
+}
+
+function shipBriefLedgerEntry(proof) {
+  return {
+    type: 'ship-brief',
+    at: new Date().toISOString(),
+    status: proof.status,
+    command: proof.command,
+    url: proof.url || '',
+    files: proof.files,
+    liveCheck: proof.liveCheck
+      ? {
+          ...proof.liveCheck,
+          label: liveCheckLabel(proof.liveCheck),
+        }
+      : null,
+  };
+}
+
+function snapshotLedgerEntry(proof, snapshot) {
+  return {
+    type: 'snapshot',
+    at: snapshot.capturedAt || new Date().toISOString(),
+    status: proof.status,
+    command: proof.command,
+    url: snapshot.url || proof.url || '',
+    files: proof.files,
+    snapshot,
+  };
+}
+
+function verificationLedgerEntry(proof, liveCheck, snapshot, verification) {
+  return {
+    type: 'verification',
+    at: snapshot?.capturedAt || liveCheck?.checkedAt || new Date().toISOString(),
+    status: proof.status,
+    command: proof.command,
+    url: liveCheck?.url || snapshot?.url || proof.url || '',
+    files: proof.files,
+    liveCheck: liveCheck
+      ? {
+          ...liveCheck,
+          label: liveCheckLabel(liveCheck),
+        }
+      : null,
+    snapshot,
+    verification,
+  };
+}
+
+function proofPackLedgerEntry(proof, packPath, generatedAt) {
+  return {
+    type: 'proof-pack',
+    at: generatedAt.toISOString(),
+    label: packPath,
+    status: proof.status,
+    command: proof.command,
+    url: proof.url || '',
+    files: uniqueList([packPath, ...proof.files]),
+    liveCheck: proof.liveCheck
+      ? {
+          ...proof.liveCheck,
+          label: liveCheckLabel(proof.liveCheck),
+        }
+      : null,
+    snapshot: proof.snapshot || null,
+  };
+}
+
+function stoppedServerLabel(status, fallback = 'Server stopped') {
+  if (Number.isInteger(status?.exitCode)) {
+    return `Server stopped (exit ${status.exitCode})`;
+  }
+  if (typeof status?.signal === 'string' && status.signal) {
+    return `Server stopped (${status.signal})`;
+  }
+  return fallback;
+}
+
+function proofTone(proof) {
+  if (!proof) return 'idle';
+  return proof.reentry?.tone || 'idle';
+}
+
+function runtimeOutputTail(projectPath, maxLength = 1200) {
+  const output = runtimeOutputForProject(projectPath).trim();
+  if (!output) return '';
+  if (output.length <= maxLength) return output;
+  return `...${output.slice(-maxLength)}`;
+}
+
+function proofForProject(projectPath) {
+  const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+  const status = projectRuntimeStatus.get(projectPath) || { running: false };
+  const state = ensurePreviewState(projectPath);
+  const url = currentPreviewUrl(state) || status.url || config.serverUrl || '';
+  if (config.sourceType === 'none' && !url) return null;
+
+  const runtimeLabel = config.sourceType === 'html'
+    ? (config.htmlPath ? `Rendering ${config.htmlPath}` : 'Entry file missing')
+    : status.running
+      ? 'Live'
+      : config.sourceType === 'server'
+        ? (config.agentPaused ? 'Paused' : stoppedServerLabel(status, 'Recovering'))
+        : 'Preview configured';
+  const command = config.sourceType === 'html'
+    ? 'Static site render'
+    : config.serverCommand || 'n/a';
+  const context = proofReentry.normalizeContext({
+    projectPath,
+    sourceType: config.sourceType,
+    command,
+    url: config.sourceType === 'html'
+      ? `static:${config.htmlPath || ''}`
+      : sanitizePreviewUrl(url),
+  });
+  const verification = proofReentry.normalizeVerification(config.proofVerification);
+  const currentWorkspace = projectWorkspaceFingerprints.get(projectPath) || null;
+  const verificationFailure = config.proofVerificationFailure && typeof config.proofVerificationFailure === 'object'
+    ? config.proofVerificationFailure
+    : null;
+  const blocked = Boolean(
+    verificationFailure ||
+    config.proofLiveCheck?.ok === false ||
+    (config.sourceType === 'server' && !status.running && (Number.isInteger(status.exitCode) || status.signal))
+  );
+  const runtimeEligible = config.sourceType === 'server'
+    ? status.running === true
+    : config.sourceType === 'html'
+      ? projectPreviewRendered.has(projectPath)
+      : true;
+  const reentry = proofReentry.deriveState({
+    verification,
+    currentWorkspace,
+    currentContext: context,
+    verifying: reentryVerificationInFlight.has(projectPath),
+    blocked,
+    needsAttention: config.agentPaused === true,
+    readyEligible: runtimeEligible,
+  });
+  const detail = reentry.key === 'ready'
+    ? 'proof current'
+    : reentry.key === 'stale'
+      ? 'workspace, preview context, or evidence changed after Verify'
+      : reentry.key === 'proving'
+        ? 'binding runtime and visual evidence'
+        : reentry.key === 'unknown'
+          ? 'workspace state could not be confirmed'
+          : verificationFailure?.reason
+            ? proofReentry.reasonLabel(verificationFailure.reason)
+            : runtimeLabel;
+  const changedFiles = uniqueList([
+    ...(verification?.workspace?.changedFiles || []),
+    ...(verification?.workspace?.evidenceFiles || []),
+  ])
+    .map((file) => projectRelativePath(projectPath, file));
+  const boundSnapshot = verification?.snapshot
+    ? {
+        ...(config.proofSnapshot?.path === verification.snapshot.path ? config.proofSnapshot : {}),
+        ...verification.snapshot,
+      }
+    : config.proofSnapshot || null;
+
+  return {
+    title: 'Reentry',
+    status: `${reentry.label} · ${detail}`,
+    project: projectDisplayLabel(projectPath),
+    command,
+    url,
+    files: uniqueList([...changedFiles, ...proofFilesForProject(projectPath, config)]),
+    updated: reentry.key === 'ready'
+      ? proofVerifiedLabel(verification?.verifiedAt)
+      : proofActivityLabel(config.proofUpdatedAt || config.updatedAt),
+    liveCheck: reentry.key === 'ready' ? verification?.liveCheck || null : config.proofLiveCheck || verification?.liveCheck || null,
+    snapshot: boundSnapshot,
+    verification,
+    currentWorkspace,
+    context,
+    reentry,
+    runtimeOutput: config.sourceType === 'server' ? runtimeOutputTail(projectPath) : '',
+    ledger: proofLedgerForConfig(config),
+  };
+}
+
+function fencedProofText(value) {
+  return String(value || '').replace(/```/g, '` ` `');
+}
+
+function proofText(proof) {
+  const lines = [
+    `Project: ${proof.project}`,
+    `Status: ${proof.status}`,
+    `Command: ${proof.command}`,
+    `URL: ${proof.url || 'about:blank'}`,
+    'Files:',
+    ...(proof.files.length > 0 ? proof.files.map((file) => `- ${file}`) : ['- n/a']),
+  ];
+  if (proof.verification?.workspace?.fingerprint) {
+    lines.push(`Workspace: ${proof.verification.workspace.fingerprint}`);
+    lines.push(`Evidence scope: ${proof.verification.workspace.scope}`);
+  }
+  if (proof.liveCheck) {
+    lines.push(`Live Check: ${proof.liveCheckLabel || liveCheckLabel(proof.liveCheck)}`);
+  }
+  if (proof.snapshot?.path) {
+    lines.push(`Snapshot: ${snapshotLabel(proof.snapshot)}`);
+  }
+  if (proof.runtimeOutput) {
+    lines.push('Runtime Output (tail):');
+    lines.push('```text');
+    lines.push(fencedProofText(proof.runtimeOutput));
+    lines.push('```');
+  }
+  if (proof.ledger?.length) {
+    lines.push('Ledger:');
+    lines.push(...proof.ledger.slice(0, 5).map((entry) => `- ${proofLedgerEntryLine(entry)}`));
+  }
+  return lines.join('\n');
+}
+
+function proofPackTimestamp(date) {
+  return date.toISOString().replace(/[:.]/g, '-');
+}
+
+function proofPackPathForProject(projectPath, generatedAt) {
+  const slug = sanitizeProjectName(projectDisplayLabel(projectPath)) || 'workspace';
+  const directory = projectPath === '.' ? '.pixelbox/proof-packs' : `${projectPath}/.pixelbox/proof-packs`;
+  return `${directory}/${slug}-${proofPackTimestamp(generatedAt)}.md`;
+}
+
+function proofPackText(proof, packPath, generatedAt) {
+  const lines = [
+    '# Pixelbox Proof Pack',
+    '',
+    `Generated: ${generatedAt.toISOString()}`,
+    `Pack: ${packPath}`,
+    '',
+    '## Run',
+    '',
+    `- Project: ${proof.project}`,
+    `- Status: ${proof.status}`,
+    `- Command: ${proof.command}`,
+    `- URL: ${proof.url || 'about:blank'}`,
+  ];
+  if (proof.liveCheck) {
+    lines.push(`- Live Check: ${liveCheckLabel(proof.liveCheck)}`);
+  }
+  if (proof.snapshot?.path) {
+    lines.push(`- Snapshot: ${snapshotLabel(proof.snapshot)}`);
+  }
+  if (proof.verification?.workspace?.fingerprint) {
+    lines.push(`- Workspace: ${proof.verification.workspace.fingerprint}`);
+    lines.push(`- Evidence scope: ${proof.verification.workspace.scope}`);
+  }
+
+  lines.push('', '## Files', '');
+  lines.push(...(proof.files.length > 0 ? proof.files.map((file) => `- ${file}`) : ['- n/a']));
+
+  if (proof.runtimeOutput) {
+    lines.push('', '## Runtime Output Tail', '', '```text', fencedProofText(proof.runtimeOutput), '```');
+  }
+
+  lines.push('', '## Ledger', '');
+  lines.push(...(proof.ledger.length > 0 ? proof.ledger.map((entry) => `- ${proofLedgerEntryLine(entry)}`) : ['- n/a']));
+  lines.push('');
+  return lines.join('\n');
+}
+
+function liveCheckLabel(check) {
+  if (!check) return '';
+  const status = check.status ? `${check.status}${check.ok ? ' OK' : ''}` : (check.statusText || 'Failed');
+  const latency = Number.isFinite(Number(check.latencyMs)) ? `${Math.round(Number(check.latencyMs))} ms` : '';
+  const title = check.title || check.heading || '';
+  return [status, latency, title].filter(Boolean).join(' · ');
+}
+
+function snapshotLabel(snapshot) {
+  if (!snapshot) return '';
+  const size = snapshot.width && snapshot.height ? `${snapshot.width}x${snapshot.height}` : '';
+  const bytes = Number(snapshot.bytes) ? `${Math.round(Number(snapshot.bytes) / 1024)} KB` : '';
+  return [snapshot.path, size, bytes].filter(Boolean).join(' · ');
+}
+
+function proofSnapshotHistory(proof) {
+  const snapshots = [];
+  const seen = new Set();
+  const addSnapshot = (snapshot, at = '') => {
+    if (!snapshot?.path || seen.has(snapshot.path)) return;
+    seen.add(snapshot.path);
+    snapshots.push({
+      ...snapshot,
+      capturedAt: snapshot.capturedAt || at,
+    });
+  };
+
+  addSnapshot(proof?.snapshot);
+  for (const entry of proof?.ledger || []) {
+    if (!entry.snapshot) continue;
+    addSnapshot(entry.snapshot, entry.at);
+  }
+  return snapshots;
+}
+
+function snapshotShortName(snapshot) {
+  return String(snapshot?.path || '').split('/').pop() || 'snapshot';
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+}
+
+function handoffLatestBlock(proof) {
+  const lines = [
+    '## Latest',
+    '- lane: runtime',
+    `- status: ${proof.status}`,
+    `- project: ${proof.project}`,
+    `- command: ${proof.command}`,
+    `- url: ${proof.url || 'about:blank'}`,
+    `- files: ${proof.files.length > 0 ? proof.files.join(', ') : 'n/a'}`,
+  ];
+  if (proof.liveCheck) {
+    lines.push(`- live check: ${liveCheckLabel(proof.liveCheck)}`);
+  }
+  if (proof.snapshot?.path) {
+    lines.push(`- snapshot: ${snapshotLabel(proof.snapshot)}`);
+  }
+  if (proof.runtimeOutput) {
+    lines.push(`- runtime output: ${singleLine(proof.runtimeOutput, 260)}`);
+  }
+  lines.push('- next: continue from the copied Ship Brief and verify the next product improvement in Pixelbox');
+  return lines.join('\n');
+}
+
+function handoffHistoryEntry(proof) {
+  const lines = [
+    `## Ship Brief - ${new Date().toISOString()}`,
+    `- status: ${proof.status}`,
+    `- command: ${proof.command}`,
+    `- url: ${proof.url || 'about:blank'}`,
+    `- files: ${proof.files.length > 0 ? proof.files.join(', ') : 'n/a'}`,
+  ];
+  if (proof.liveCheck) {
+    lines.push(`- live check: ${liveCheckLabel(proof.liveCheck)}`);
+  }
+  if (proof.snapshot?.path) {
+    lines.push(`- snapshot: ${snapshotLabel(proof.snapshot)}`);
+  }
+  if (proof.runtimeOutput) {
+    lines.push(`- runtime output: ${singleLine(proof.runtimeOutput, 260)}`);
+  }
+  return lines.join('\n');
+}
+
+function updateHandoffContent(existingContent, proof) {
+  const existing = String(existingContent || '').trimEnd();
+  const base = existing || '# Pixelbox Agent Handoff\n\nUse this file to coordinate between editor/runtime lanes.';
+  const latest = handoffLatestBlock(proof);
+  const latestPattern = /(^|\n)## Latest\n[\s\S]*?(?=\n## |$)/;
+  const updated = latestPattern.test(base)
+    ? base.replace(latestPattern, (match, leadingNewline) => `${leadingNewline}${latest}\n`)
+    : `${base}\n\n${latest}`;
+  return `${updated}\n\n${handoffHistoryEntry(proof)}\n`;
+}
+
+function shipBriefText(proof, handoffContent) {
+  const handoffExcerpt = String(handoffContent || '')
+    .trim()
+    .slice(0, 1800) || 'No handoff notes yet.';
+  return [
+    'Pixelbox Ship Brief',
+    '',
+    'You are inside Pixelbox. Continue from the live running product state below.',
+    '',
+    proofText(proof),
+    '',
+    'Current handoff:',
+    handoffExcerpt,
+    '',
+    'Task:',
+    '- Inspect the live preview before changing code.',
+    '- Make one high-impact usability or product-momentum improvement.',
+    '- Keep local run commands deterministic and embeddable in Pixelbox.',
+    '- Update CHANGELOG.md with the shipped update.',
+    '- Verify with tests and real product use.',
+    '- When done, report changed files, commands run, and the exact local URL.',
+  ].join('\n');
+}
+
+async function copyProofToClipboard() {
+  const proof = proofForProject(selectedProjectPath);
+  if (!proof) return;
+  try {
+    await copyTextToClipboard(proofText(proof));
+    if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Copied';
+  } catch {
+    if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Copy failed';
+  }
+}
+
+async function copyShipBriefToClipboard() {
+  const proof = proofForProject(selectedProjectPath);
+  if (!proof) return;
+  if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Writing handoff...';
+  const handoffPath = handoffPathForProject(selectedProjectPath);
+  const { content } = await window.api.readFile(handoffPath);
+  const nextHandoff = updateHandoffContent(content, proof);
+  await window.api.writeFile(handoffPath, nextHandoff);
+  await copyTextToClipboard(shipBriefText(proof, nextHandoff));
+  const currentConfig = projectRuntimeConfig.get(selectedProjectPath) || defaultRuntimeConfig();
+  projectRuntimeConfig.set(selectedProjectPath, {
+    ...currentConfig,
+    proofLedger: appendProofLedgerEntry(currentConfig, shipBriefLedgerEntry(proof)),
+    proofUpdatedAt: Date.now(),
+  });
+  await persistPreviewState(selectedProjectPath);
+  renderProofForProject(selectedProjectPath);
+  if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Brief copied + handoff updated';
+}
+
+async function saveProofPack() {
+  const projectPath = selectedProjectPath;
+  const proof = proofForProject(projectPath);
+  if (!proof) return;
+  const generatedAt = new Date();
+  const packPath = proofPackPathForProject(projectPath, generatedAt);
+  if (proofPackEl) proofPackEl.disabled = true;
+  if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Writing proof pack...';
+  try {
+    await window.api.writeFile(packPath, proofPackText(proof, packPath, generatedAt));
+    const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+    projectRuntimeConfig.set(projectPath, {
+      ...currentConfig,
+      proofLedger: appendProofLedgerEntry(currentConfig, proofPackLedgerEntry(proof, packPath, generatedAt)),
+      proofUpdatedAt: Date.now(),
+    });
+    await persistPreviewState(projectPath);
+    if (projectPath === selectedProjectPath) {
+      renderProofForProject(projectPath);
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = `Proof pack saved: ${packPath}`;
+      await openProofFileModal(packPath);
+    }
+    return packPath;
+  } catch (error) {
+    const message = error && error.message ? error.message : 'Proof pack failed';
+    if (proofCopyStatusEl) proofCopyStatusEl.textContent = message;
+    return null;
+  } finally {
+    if (proofPackEl) proofPackEl.disabled = false;
+  }
+}
+
+async function executeProofLiveCheck(projectPath, options = {}) {
+  const {
+    statusText = 'Checking live URL...',
+    failureText = 'Live Check failed',
+    manageButton = projectPath === selectedProjectPath,
+    recordLedger = true,
+    dedupeLedgerMs = 0,
+  } = options;
+  const proof = proofForProject(projectPath);
+  if (!proof?.url) return;
+  const shouldUpdateUi = projectPath === selectedProjectPath;
+  if (shouldUpdateUi && proofCheckStatusEl) proofCheckStatusEl.textContent = statusText;
+  if (manageButton && proofCheckEl) proofCheckEl.disabled = true;
+  try {
+    const result = await window.api.probePreviewUrl(proof.url, {
+      timeoutMs: 2500,
+      attempts: 6,
+      retryDelayMs: 300,
+    });
+    const config = {
+      ...(projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig()),
+      proofLiveCheck: result,
+      proofUpdatedAt: Date.now(),
+    };
+    if (recordLedger) {
+      config.proofLedger = appendProofLedgerEntryIfNew(config, liveCheckLedgerEntry(proof, result), {
+        dedupeRecentMs: dedupeLedgerMs,
+      });
+    }
+    projectRuntimeConfig.set(projectPath, config);
+    await persistPreviewState(projectPath);
+    if (shouldUpdateUi) renderProofForProject(projectPath);
+    return result;
+  } catch (error) {
+    const message = error && error.message ? error.message : failureText;
+    if (shouldUpdateUi && proofCheckStatusEl) proofCheckStatusEl.textContent = message;
+    return null;
+  } finally {
+    if (manageButton && proofCheckEl) proofCheckEl.disabled = false;
+  }
+}
+
+async function runProofLiveCheck() {
+  await executeProofLiveCheck(selectedProjectPath, {
+    statusText: 'Checking live URL...',
+    failureText: 'Live Check failed',
+    manageButton: true,
+  });
+}
+
+function scheduleAutoLiveCheck(projectPath) {
+  const status = projectRuntimeStatus.get(projectPath) || { running: false };
+  const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+  if (!status.running || config.sourceType !== 'server') return;
+  const runId = projectRuntimeRunId.get(projectPath) || 0;
+  const checkKey = `${projectPath}:${runId}`;
+  if (autoLiveCheckInFlight.has(checkKey) || autoLiveCheckCompleted.has(checkKey)) return;
+  if (autoLiveCheckTimers.has(projectPath)) {
+    return;
+  }
+  const timer = setTimeout(() => {
+    autoLiveCheckTimers.delete(projectPath);
+    runAutoLiveCheck(projectPath, runId).catch(() => {});
+  }, 450);
+  autoLiveCheckTimers.set(projectPath, timer);
+}
+
+async function runAutoLiveCheck(projectPath, runId) {
+  if (runId !== (projectRuntimeRunId.get(projectPath) || 0)) return;
+  const status = projectRuntimeStatus.get(projectPath) || { running: false };
+  const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+  if (!status.running || config.sourceType !== 'server') return;
+  const proof = proofForProject(projectPath);
+  if (!proof?.url) return;
+  const checkKey = `${projectPath}:${runId}`;
+  if (autoLiveCheckInFlight.has(checkKey) || autoLiveCheckCompleted.has(checkKey)) return;
+  autoLiveCheckInFlight.add(checkKey);
+  try {
+    await executeProofLiveCheck(projectPath, {
+      statusText: 'Auto checking live URL...',
+      failureText: 'Auto Live Check failed',
+      manageButton: projectPath === selectedProjectPath,
+      dedupeLedgerMs: 60000,
+    });
+    autoLiveCheckCompleted.add(checkKey);
+  } finally {
+    autoLiveCheckInFlight.delete(checkKey);
+  }
+}
+
+function clearPreviewAgentRecovery(projectPath) {
+  const timer = previewAgentRecoveryTimers.get(projectPath);
+  if (timer) clearTimeout(timer);
+  previewAgentRecoveryTimers.delete(projectPath);
+}
+
+function schedulePreviewAgentRecovery(projectPath, delayMs = 1400) {
+  const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+  if (config.sourceType !== 'server' || config.autoStart === false || config.agentPaused) return;
+  if (previewAgentRecoveryTimers.has(projectPath)) return;
+  const timer = setTimeout(async () => {
+    previewAgentRecoveryTimers.delete(projectPath);
+    const latestConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+    const latestStatus = projectRuntimeStatus.get(projectPath) || { running: false };
+    if (latestStatus.running || latestConfig.agentPaused || latestConfig.autoStart === false) return;
+    try {
+      await applyRuntimeConfig(projectPath, latestConfig, { forceStart: true, agentRecovery: true });
+    } catch {
+      schedulePreviewAgentRecovery(projectPath, Math.min(delayMs * 2, 12000));
+    }
+  }, delayMs);
+  previewAgentRecoveryTimers.set(projectPath, timer);
+}
+
+function schedulePreviewAgentHealthCheck(projectPath, delayMs = 8000) {
+  const prior = previewAgentHealthTimers.get(projectPath);
+  if (prior) clearTimeout(prior);
+  const timer = setTimeout(async () => {
+    previewAgentHealthTimers.delete(projectPath);
+    const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+    const status = projectRuntimeStatus.get(projectPath) || { running: false };
+    if (config.sourceType !== 'server' || config.agentPaused || config.autoStart === false) return;
+    const url = currentPreviewUrl(ensurePreviewState(projectPath)) || status.url || config.serverUrl;
+    if (!status.running) {
+      schedulePreviewAgentRecovery(projectPath);
+      return;
+    }
+    if (!url) {
+      schedulePreviewAgentHealthCheck(projectPath, 3000);
+      return;
+    }
+    try {
+      await window.api.probePreviewUrl(url, { timeoutMs: 1800, attempts: 2, retryDelayMs: 200 });
+      previewAgentHealthFailures.set(projectPath, 0);
+      if (projectPath === selectedProjectPath) renderRuntimeStatus(projectPath);
+    } catch {
+      const failures = (previewAgentHealthFailures.get(projectPath) || 0) + 1;
+      previewAgentHealthFailures.set(projectPath, failures);
+      if (failures >= 2) {
+        projectRuntimeStatus.set(projectPath, { ...status, running: false });
+        await window.api.stopPreviewRuntime(projectPath);
+        schedulePreviewAgentRecovery(projectPath, 500);
+      }
+    } finally {
+      schedulePreviewAgentHealthCheck(projectPath);
+    }
+  }, delayMs);
+  previewAgentHealthTimers.set(projectPath, timer);
+}
+
+function proofSnapshotCaptureSize() {
+  const rect = previewFrameEl.getBoundingClientRect();
+  return {
+    width: Math.round(rect.width || previewViewportEl?.clientWidth || 1280),
+    height: Math.round(rect.height || previewViewportEl?.clientHeight || 720),
+  };
+}
+
+async function runProofSnapshotCapture(options = {}) {
+  const {
+    projectPath = selectedProjectPath,
+    statusText = 'Capturing visual snapshot...',
+    openModal = true,
+    manageButton = true,
+    recordLedger = true,
+  } = options;
+  const proof = proofForProject(projectPath);
+  if (!proof?.url) return;
+  if (manageButton && proofSnapshotEl) proofSnapshotEl.disabled = true;
+  if (proofCopyStatusEl) proofCopyStatusEl.textContent = statusText;
+  try {
+    const result = await window.api.capturePreviewSnapshot(projectPath, proof.url, {
+      ...proofSnapshotCaptureSize(),
+      timeoutMs: 10000,
+      waitAfterLoadMs: 350,
+    });
+    const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+    const nextConfig = {
+      ...currentConfig,
+      proofSnapshot: result,
+      proofUpdatedAt: Date.now(),
+    };
+    if (recordLedger) {
+      nextConfig.proofLedger = appendProofLedgerEntry(nextConfig, snapshotLedgerEntry(proof, result));
+    }
+    projectRuntimeConfig.set(projectPath, nextConfig);
+    await persistPreviewState(projectPath);
+    if (projectPath === selectedProjectPath) renderProofForProject(projectPath);
+    if (proofCopyStatusEl) proofCopyStatusEl.textContent = `Snapshot saved: ${result.path}`;
+    if (openModal) openProofSnapshotModal(result);
+    return result;
+  } catch (error) {
+    const message = error && error.message ? error.message : 'Snapshot failed';
+    if (proofCopyStatusEl) proofCopyStatusEl.textContent = message;
+    return null;
+  } finally {
+    if (manageButton && proofSnapshotEl) proofSnapshotEl.disabled = false;
+  }
+}
+
+async function runProofVerify() {
+  const projectPath = selectedProjectPath;
+  if (reentryVerificationInFlight.has(projectPath)) return;
+  const proof = proofForProject(projectPath);
+  if (!proof?.url) return;
+  reentryVerificationInFlight.add(projectPath);
+  renderProofForProject(projectPath);
+  if (proofVerifyEl) proofVerifyEl.disabled = true;
+  if (proofCheckEl) proofCheckEl.disabled = true;
+  if (proofSnapshotEl) proofSnapshotEl.disabled = true;
+  if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Verifying live preview...';
+  try {
+    const before = await refreshWorkspaceFingerprint(projectPath, { render: false, fresh: true });
+    if (!before?.complete) {
+      throw new Error('Workspace fingerprint unavailable before Verify');
+    }
+    const liveCheck = await executeProofLiveCheck(projectPath, {
+      statusText: 'Verifying live URL...',
+      failureText: 'Verify failed',
+      manageButton: false,
+      recordLedger: false,
+    });
+    if (!liveCheck?.ok) {
+      const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+      projectRuntimeConfig.set(projectPath, {
+        ...currentConfig,
+        proofVerificationFailure: {
+          at: new Date().toISOString(),
+          reason: 'live_check_failed',
+        },
+        proofUpdatedAt: Date.now(),
+      });
+      await persistPreviewState(projectPath);
+      if (proofCopyStatusEl) {
+        proofCopyStatusEl.textContent = liveCheck ? `Verify failed: ${liveCheckLabel(liveCheck)}` : 'Verify failed';
+      }
+      return;
+    }
+    const snapshot = await runProofSnapshotCapture({
+      projectPath,
+      statusText: 'Capturing verified snapshot...',
+      openModal: false,
+      manageButton: false,
+      recordLedger: false,
+    });
+    if (!snapshot?.path || !snapshot?.digest) {
+      throw new Error('Verified snapshot missing');
+    }
+    const after = await refreshWorkspaceFingerprint(projectPath, {
+      render: false,
+      fresh: true,
+      evidence: { path: snapshot.path, digest: snapshot.digest },
+    });
+    const outcome = proofReentry.createVerification({
+      before,
+      after,
+      context: proofContextForProject(projectPath, proof),
+      liveCheck: {
+        ...liveCheck,
+        label: liveCheckLabel(liveCheck),
+      },
+      snapshot,
+      evidenceValid: after?.evidenceValid === true,
+    });
+    if (!outcome.ok) {
+      const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+      projectRuntimeConfig.set(projectPath, {
+        ...currentConfig,
+        proofVerificationFailure: {
+          at: new Date().toISOString(),
+          reason: outcome.reason,
+        },
+        proofUpdatedAt: Date.now(),
+      });
+      await persistPreviewState(projectPath);
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = proofReentry.reasonLabel(outcome.reason);
+      return;
+    }
+
+    const verification = outcome.verification;
+    const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+    const proofFiles = uniqueList([
+      ...uniqueList([
+        ...verification.workspace.changedFiles,
+        ...verification.workspace.evidenceFiles,
+      ]).map((file) => projectRelativePath(projectPath, file)),
+      ...proofFilesForProject(projectPath, currentConfig),
+    ]);
+    const verifiedProof = { ...proof, files: proofFiles };
+    projectWorkspaceFingerprints.set(projectPath, after);
+    projectRuntimeConfig.set(projectPath, {
+      ...currentConfig,
+      proofVerification: verification,
+      proofVerificationFailure: null,
+      proofLedger: appendProofLedgerEntry(
+        currentConfig,
+        verificationLedgerEntry(verifiedProof, liveCheck, snapshot, verification)
+      ),
+      proofUpdatedAt: Date.now(),
+    });
+    await persistPreviewState(projectPath);
+    if (projectPath === selectedProjectPath) {
+      renderProofForProject(projectPath);
+      openProofSnapshotModal(snapshot);
+    }
+    if (proofCopyStatusEl) proofCopyStatusEl.textContent = `Ready · proof bound to ${after.fingerprint.slice(0, 20)}…`;
+  } catch (error) {
+    const message = error && error.message ? error.message : 'Verify could not be bound';
+    const reason = /snapshot/i.test(message)
+      ? 'snapshot_missing'
+      : /fingerprint/i.test(message)
+        ? 'fingerprint_unavailable'
+        : 'verification_invalid';
+    const currentConfig = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
+    projectRuntimeConfig.set(projectPath, {
+      ...currentConfig,
+      proofVerificationFailure: {
+        at: new Date().toISOString(),
+        reason,
+      },
+      proofUpdatedAt: Date.now(),
+    });
+    await persistPreviewState(projectPath).catch(() => {});
+    if (proofCopyStatusEl) {
+      proofCopyStatusEl.textContent = message;
+    }
+  } finally {
+    reentryVerificationInFlight.delete(projectPath);
+    if (projectPath === selectedProjectPath) renderProofForProject(projectPath);
+    if (proofVerifyEl) proofVerifyEl.disabled = false;
+    if (proofCheckEl) proofCheckEl.disabled = false;
+    if (proofSnapshotEl) proofSnapshotEl.disabled = false;
+  }
+}
+
+function closeProofFileModal() {
+  if (!proofFileModalEl) return;
+  proofFileModalEl.hidden = true;
+  activeProofFile = null;
+  if (proofFileStatusEl) proofFileStatusEl.textContent = '';
+}
+
+async function openProofFileModal(filePath) {
+  if (!proofFileModalEl || !proofFileContentEl || !proofFilePathEl) return;
+  const cleanedPath = String(filePath || '').trim();
+  if (!cleanedPath) return;
+  activeProofFile = { path: cleanedPath, content: '' };
+  proofFileModalEl.hidden = false;
+  if (proofFileTitleEl) proofFileTitleEl.textContent = 'File Peek';
+  proofFilePathEl.textContent = cleanedPath;
+  proofFileContentEl.textContent = 'Loading...';
+  if (proofFileStatusEl) proofFileStatusEl.textContent = '';
+  window.__pwProofFilePeek = { path: cleanedPath, content: '', loading: true };
+  requestAnimationFrame(() => proofFileContentEl.focus());
+
+  try {
+    const { content } = await window.api.readFile(cleanedPath);
+    if (!activeProofFile || activeProofFile.path !== cleanedPath) return;
+    activeProofFile.content = content || '';
+    proofFileContentEl.textContent = activeProofFile.content || '(empty file)';
+    if (proofFileStatusEl) proofFileStatusEl.textContent = 'Loaded from workspace';
+    window.__pwProofFilePeek = { path: cleanedPath, content: activeProofFile.content, loading: false };
+  } catch (error) {
+    const message = error && error.message ? error.message : 'Could not read file';
+    proofFileContentEl.textContent = message;
+    if (proofFileStatusEl) proofFileStatusEl.textContent = 'Load failed';
+    window.__pwProofFilePeek = { path: cleanedPath, content: '', loading: false, error: message };
+  }
+}
+
+async function copyActiveProofFilePath() {
+  if (!activeProofFile?.path) return;
+  await copyTextToClipboard(activeProofFile.path);
+  if (proofFileStatusEl) proofFileStatusEl.textContent = 'Path copied';
+}
+
+async function copyActiveProofFileContent() {
+  if (!activeProofFile) return;
+  await copyTextToClipboard(activeProofFile.content || '');
+  if (proofFileStatusEl) proofFileStatusEl.textContent = 'File copied';
+}
+
+function runtimeOutputForProject(projectPath) {
+  return projectRuntimeOutput.get(projectPath) || '';
+}
+
+function appendPreviewRuntimeOutput(projectPath, data) {
+  const chunk = String(data || '');
+  if (!chunk) return;
+  const next = `${runtimeOutputForProject(projectPath)}${chunk}`.slice(-MAX_PROJECT_RUNTIME_OUTPUT);
+  projectRuntimeOutput.set(projectPath, next);
+  if (projectPath !== selectedProjectPath) return;
+  if (proofOutputEl) proofOutputEl.disabled = next.trim().length === 0;
+  if (proofOutputModalEl && !proofOutputModalEl.hidden) {
+    renderProofOutputModal(projectPath);
+  }
+}
+
+function renderProofOutputModal(projectPath) {
+  if (!proofOutputContentEl) return;
+  const output = runtimeOutputForProject(projectPath);
+  const hasOutput = output.trim().length > 0;
+  proofOutputContentEl.textContent = hasOutput ? output : 'No managed runtime output captured yet.';
+  if (proofOutputSubtitleEl) {
+    proofOutputSubtitleEl.textContent = hasOutput
+      ? `${projectDisplayLabel(projectPath)} · ${output.length.toLocaleString()} chars`
+      : projectDisplayLabel(projectPath);
+  }
+  if (proofOutputStatusEl) {
+    proofOutputStatusEl.textContent = hasOutput
+      ? 'Captured from the managed preview runtime'
+      : 'Start or restart a server runtime to capture output';
+  }
+  window.__pwProofOutputModal = {
+    open: Boolean(proofOutputModalEl && !proofOutputModalEl.hidden),
+    project: projectPath,
+    output,
+  };
+}
+
+function closeProofOutputModal() {
+  if (!proofOutputModalEl) return;
+  proofOutputModalEl.hidden = true;
+  if (proofOutputStatusEl) proofOutputStatusEl.textContent = '';
+  window.__pwProofOutputModal = { open: false, project: selectedProjectPath, output: runtimeOutputForProject(selectedProjectPath) };
+}
+
+function openProofOutputModal() {
+  if (!proofOutputModalEl || !proofOutputContentEl) return;
+  proofOutputModalEl.hidden = false;
+  if (proofOutputStatusEl) proofOutputStatusEl.textContent = '';
+  renderProofOutputModal(selectedProjectPath);
+  requestAnimationFrame(() => proofOutputContentEl.focus());
+}
+
+async function copyProofOutputToClipboard() {
+  const output = runtimeOutputForProject(selectedProjectPath);
+  if (!output.trim()) return;
+  await copyTextToClipboard(output);
+  if (proofOutputStatusEl) proofOutputStatusEl.textContent = 'Runtime output copied';
+}
+
+function closeProofLedgerModal() {
+  if (!proofLedgerModalEl) return;
+  proofLedgerModalEl.hidden = true;
+  if (proofLedgerStatusEl) proofLedgerStatusEl.textContent = '';
+  window.__pwProofLedgerModal = { open: false, count: window.__pwProofLedger?.length || 0 };
+}
+
+function renderProofLedgerModal(proof) {
+  if (!proofLedgerListEl) return;
+  const ledger = proof?.ledger || [];
+  proofLedgerListEl.innerHTML = '';
+  window.__pwProofLedgerModal = { open: !proofLedgerModalEl?.hidden, count: ledger.length };
+  if (proofLedgerCopyEl) proofLedgerCopyEl.disabled = ledger.length === 0;
+  if (!ledger.length) {
+    const empty = document.createElement('div');
+    empty.className = 'proof-ledger-empty';
+    empty.textContent = 'No proof events yet.';
+    proofLedgerListEl.appendChild(empty);
+    return;
+  }
+
+  for (const entry of ledger) {
+    const item = document.createElement('article');
+    item.className = `proof-ledger-item proof-ledger-item-${entry.type}`;
+    if (entry.liveCheck?.ok === false) item.dataset.tone = 'error';
+    if (entry.type === 'verification' && entry.liveCheck?.ok === true) item.dataset.tone = 'success';
+
+    const meta = document.createElement('div');
+    meta.className = 'proof-ledger-meta';
+
+    const kind = document.createElement('strong');
+    kind.textContent = proofLedgerKindLabel(entry);
+    meta.appendChild(kind);
+
+    const time = document.createElement('span');
+    time.textContent = proofLedgerTimeLabel(entry.at);
+    meta.appendChild(time);
+    item.appendChild(meta);
+
+    const detail = document.createElement('div');
+    detail.className = 'proof-ledger-detail';
+    detail.textContent = proofLedgerDetail(entry);
+    item.appendChild(detail);
+
+    if (entry.url || entry.command) {
+      const context = document.createElement('div');
+      context.className = 'proof-ledger-context';
+      if (entry.command) {
+        const command = document.createElement('code');
+        command.textContent = entry.command;
+        context.appendChild(command);
+      }
+      if (entry.url) {
+        const url = document.createElement('span');
+        url.textContent = previewDisplayUrl(entry.url);
+        context.appendChild(url);
+      }
+      item.appendChild(context);
+    }
+
+    if (entry.files.length > 0) {
+      const files = document.createElement('div');
+      files.className = 'proof-ledger-files';
+      for (const file of entry.files) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'proof-ledger-file-chip';
+        chip.title = `Open ${file}`;
+        chip.addEventListener('click', () => {
+          closeProofLedgerModal();
+          openProofFileModal(file).catch(() => {
+            if (proofFileStatusEl) proofFileStatusEl.textContent = 'Load failed';
+          });
+        });
+        const code = document.createElement('code');
+        code.textContent = file;
+        chip.appendChild(code);
+        files.appendChild(chip);
+      }
+      item.appendChild(files);
+    }
+
+    proofLedgerListEl.appendChild(item);
+  }
+}
+
+function openProofLedgerModal() {
+  if (!proofLedgerModalEl) return;
+  const proof = proofForProject(selectedProjectPath);
+  proofLedgerModalEl.hidden = false;
+  if (proofLedgerStatusEl) proofLedgerStatusEl.textContent = '';
+  renderProofLedgerModal(proof);
+}
+
+async function copyProofLedgerToClipboard() {
+  const proof = proofForProject(selectedProjectPath);
+  if (!proof?.ledger?.length) return;
+  await copyTextToClipboard(proofLedgerText(proof.ledger));
+  if (proofLedgerStatusEl) proofLedgerStatusEl.textContent = 'Ledger copied';
+}
+
+function closeProofSnapshotModal() {
+  if (!proofSnapshotModalEl) return;
+  proofSnapshotModalEl.hidden = true;
+  activeProofSnapshot = null;
+  if (proofSnapshotImageEl) proofSnapshotImageEl.removeAttribute('src');
+  if (proofSnapshotStatusEl) proofSnapshotStatusEl.textContent = '';
+  window.__pwProofSnapshotModal = { open: false, path: '' };
+}
+
+function openProofSnapshotModal(snapshot) {
+  if (!proofSnapshotModalEl || !proofSnapshotImageEl || !snapshot?.path) return;
+  activeProofSnapshot = snapshot;
+  proofSnapshotModalEl.hidden = false;
+  setEvidenceImageSource(proofSnapshotImageEl, snapshot);
+  proofSnapshotImageEl.alt = `Captured preview snapshot ${snapshot.path}`;
+  if (proofSnapshotPathEl) proofSnapshotPathEl.textContent = snapshot.path;
+  if (proofSnapshotStatusEl) proofSnapshotStatusEl.textContent = snapshotLabel(snapshot);
+  window.__pwProofSnapshotModal = { open: true, path: snapshot.path, imageUrl: snapshot.previewUrl || '' };
+}
+
+async function copyActiveProofSnapshotPath() {
+  if (!activeProofSnapshot?.path) return;
+  await copyTextToClipboard(activeProofSnapshot.path);
+  if (proofSnapshotStatusEl) proofSnapshotStatusEl.textContent = 'Snapshot path copied';
+}
+
+function closeProofCompareModal() {
+  if (!proofCompareModalEl) return;
+  proofCompareModalEl.hidden = true;
+  activeProofCompare = null;
+  if (proofCompareBeforeEl) proofCompareBeforeEl.removeAttribute('src');
+  if (proofCompareAfterEl) proofCompareAfterEl.removeAttribute('src');
+  if (proofCompareStatusEl) proofCompareStatusEl.textContent = '';
+  window.__pwProofCompareModal = { open: false, latestPath: '', previousPath: '' };
+}
+
+function openProofCompareModal() {
+  if (!proofCompareModalEl || !proofCompareBeforeEl || !proofCompareAfterEl) return;
+  const proof = proofForProject(selectedProjectPath);
+  const [latest, previous] = proofSnapshotHistory(proof);
+  if (!latest || !previous) return;
+
+  activeProofCompare = { latest, previous };
+  proofCompareModalEl.hidden = false;
+  setEvidenceImageSource(proofCompareBeforeEl, previous);
+  setEvidenceImageSource(proofCompareAfterEl, latest);
+  proofCompareBeforeEl.alt = `Previous proof snapshot ${previous.path}`;
+  proofCompareAfterEl.alt = `Latest proof snapshot ${latest.path}`;
+  if (proofCompareBeforeLabelEl) proofCompareBeforeLabelEl.textContent = snapshotShortName(previous);
+  if (proofCompareAfterLabelEl) proofCompareAfterLabelEl.textContent = snapshotShortName(latest);
+  if (proofCompareSummaryEl) {
+    proofCompareSummaryEl.textContent = `${snapshotShortName(previous)} -> ${snapshotShortName(latest)}`;
+  }
+  if (proofCompareStatusEl) {
+    proofCompareStatusEl.textContent = [
+      `Previous: ${snapshotLabel(previous)}`,
+      `Latest: ${snapshotLabel(latest)}`,
+    ].join(' | ');
+  }
+  window.__pwProofCompareModal = {
+    open: true,
+    latestPath: latest.path,
+    previousPath: previous.path,
+  };
+}
+
+async function copyProofComparePaths() {
+  if (!activeProofCompare) return;
+  await copyTextToClipboard([
+    'Proof Snapshot Compare',
+    `Previous: ${activeProofCompare.previous.path}`,
+    `Latest: ${activeProofCompare.latest.path}`,
+  ].join('\n'));
+  if (proofCompareStatusEl) proofCompareStatusEl.textContent = 'Compare paths copied';
+}
+
+function renderProofForProject(projectPath) {
+  if (!proofDockEl) return;
+  const proof = proofForProject(projectPath);
+  const proving = reentryVerificationInFlight.has(projectPath);
+  window.__pwProofSnapshot = proof;
+  window.__pwProofLedger = proof?.ledger || [];
+  if (!proof) {
+    proofDockEl.hidden = true;
+    if (proofStatusDotEl) proofStatusDotEl.dataset.tone = 'idle';
+    if (proofOutputEl) proofOutputEl.hidden = true;
+    if (proofLedgerToggleEl) proofLedgerToggleEl.hidden = true;
+    if (proofSnapshotOpenEl) proofSnapshotOpenEl.hidden = true;
+    if (proofVerifyEl) proofVerifyEl.disabled = true;
+    if (proofPackEl) proofPackEl.disabled = true;
+    if (proofCompareEl) proofCompareEl.hidden = true;
+    return;
+  }
+
+  proofDockEl.hidden = false;
+  if (proofStatusDotEl) proofStatusDotEl.dataset.tone = proofTone(proof);
+  if (proofTitleEl) proofTitleEl.textContent = proof.title;
+  if (proofStatusEl) {
+    proofStatusEl.textContent = proof.updated ? `${proof.status} · ${proof.updated}` : proof.status;
+  }
+  if (proofProjectEl) proofProjectEl.textContent = proof.project;
+  if (proofCommandEl) proofCommandEl.textContent = proof.command;
+  if (proofUrlEl) {
+    const displayUrl = previewDisplayUrl(proof.url);
+    proofUrlEl.textContent = displayUrl;
+    if (proof.url) {
+      proofUrlEl.href = proof.url;
+      proofUrlEl.removeAttribute('aria-disabled');
+    } else {
+      proofUrlEl.href = '#';
+      proofUrlEl.setAttribute('aria-disabled', 'true');
+    }
+  }
+  if (proofCheckEl) {
+    proofCheckEl.disabled = proving || !proof.url;
+  }
+  if (proofVerifyEl) {
+    proofVerifyEl.disabled = proving || !proof.url;
+  }
+  if (proofPackEl) {
+    proofPackEl.disabled = !proof.url;
+  }
+  if (proofOutputEl) {
+    const hasOutput = runtimeOutputForProject(projectPath).trim().length > 0;
+    proofOutputEl.hidden = proof.command === 'Static site render';
+    proofOutputEl.disabled = !hasOutput;
+    proofOutputEl.title = hasOutput
+      ? 'Show managed runtime output'
+      : 'No managed runtime output captured yet';
+  }
+  if (proofSnapshotEl) {
+    proofSnapshotEl.disabled = proving || !proof.url;
+  }
+  if (proofCheckStatusEl) {
+    if (proof.liveCheck) {
+      proofCheckStatusEl.textContent = `Live Check: ${liveCheckLabel(proof.liveCheck)}`;
+      proofCheckStatusEl.dataset.tone = proof.liveCheck.ok ? 'success' : 'error';
+    } else {
+      proofCheckStatusEl.textContent = '';
+      proofCheckStatusEl.dataset.tone = '';
+    }
+  }
+  if (proofLedgerToggleEl) {
+    const count = proof.ledger.length;
+    proofLedgerToggleEl.hidden = count === 0;
+    proofLedgerToggleEl.disabled = count === 0;
+    proofLedgerToggleEl.textContent = `Ledger (${count})`;
+  }
+  if (proofCompareEl) {
+    const snapshotCount = proofSnapshotHistory(proof).length;
+    proofCompareEl.hidden = snapshotCount < 2;
+    proofCompareEl.disabled = snapshotCount < 2;
+    proofCompareEl.textContent = `Compare (${snapshotCount})`;
+  }
+  if (proofLedgerModalEl && !proofLedgerModalEl.hidden) {
+    renderProofLedgerModal(proof);
+  }
+  if (proofSnapshotOpenEl) {
+    proofSnapshotOpenEl.hidden = !proof.snapshot?.path;
+    proofSnapshotOpenEl.textContent = proof.snapshot?.path
+      ? `Snapshot: ${proof.snapshot.path.split('/').pop()}`
+      : 'View latest snapshot';
+    proofSnapshotOpenEl.onclick = () => openProofSnapshotModal(proof.snapshot);
+  }
+  if (proofFilesEl) {
+    proofFilesEl.innerHTML = '';
+    for (const file of proof.files) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'proof-file-chip';
+      item.title = `Peek ${file}`;
+      item.addEventListener('click', () => {
+        openProofFileModal(file).catch(() => {
+          if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'File peek failed';
+        });
+      });
+      const label = document.createElement('code');
+      label.textContent = file;
+      item.appendChild(label);
+      proofFilesEl.appendChild(item);
+    }
+  }
+  if (proofCopyStatusEl) proofCopyStatusEl.textContent = '';
 }
 
 async function persistPreviewState(projectPath) {
@@ -906,6 +2533,12 @@ async function persistPreviewState(projectPath) {
     history: state.history,
     index: state.index,
   };
+  if (payload.sourceType !== 'none' && (!Array.isArray(payload.proofFiles) || payload.proofFiles.length === 0)) {
+    payload.proofFiles = proofFilesForProject(projectPath, payload);
+  }
+  if (payload.sourceType !== 'none' && !payload.proofUpdatedAt && payload.proofFiles.length > 0) {
+    payload.proofUpdatedAt = Date.now();
+  }
   await window.api.writeFile(configPathForProject(projectPath), `${JSON.stringify(payload, null, 2)}\n`);
 }
 
@@ -1683,28 +3316,55 @@ function renderRunningPageFields(sourceType) {
   for (const row of previewFieldRows) {
     row.hidden = row.dataset.source !== sourceType;
   }
-  runningPageStartEl.disabled = sourceType !== 'server';
-  runningPageStopEl.disabled = sourceType !== 'server';
+  const status = projectRuntimeStatus.get(selectedProjectPath) || { running: false };
+  const canManage = sourceType === 'server';
+  runningPageStartEl.disabled = !canManage;
+  runningPageStartEl.textContent = canManage && status.running ? 'Restart' : 'Start';
+  runningPageStartEl.title = canManage && status.running
+    ? 'Restart the managed preview'
+    : 'Start preview management';
+  runningPageStopEl.disabled = !canManage || (!status.running && (projectRuntimeConfig.get(selectedProjectPath)?.agentPaused));
 }
 
 function renderRuntimeStatus(projectPath) {
   const config = projectRuntimeConfig.get(projectPath) || defaultRuntimeConfig();
   const status = projectRuntimeStatus.get(projectPath) || { running: false };
+  if (projectPath === selectedProjectPath) {
+    renderRunningPageFields(config.sourceType);
+  }
   if (config.sourceType === 'none') {
-    runningPageStatusEl.textContent = 'Not configured';
+    runningPageStatusEl.textContent = 'No preview detected';
+    if (previewAgentDotEl) previewAgentDotEl.dataset.tone = 'idle';
+    if (previewAgentSummaryEl) previewAgentSummaryEl.textContent = 'Add a dev script or an index.html, then reopen the project.';
     return;
   }
   if (config.sourceType === 'html') {
-    runningPageStatusEl.textContent = config.htmlPath ? `HTML: ${config.htmlPath}` : 'HTML file missing';
+    const rendered = projectPreviewRendered.has(projectPath);
+    runningPageStatusEl.textContent = config.htmlPath ? (rendered ? 'Rendered' : 'Rendering…') : 'Entry file missing';
+    if (previewAgentDotEl) previewAgentDotEl.dataset.tone = config.htmlPath ? (rendered ? 'live' : 'working') : 'error';
+    if (previewAgentSummaryEl) previewAgentSummaryEl.textContent = config.htmlPath || 'No static entry file found';
+    return;
+  }
+  if (config.agentPaused) {
+    runningPageStatusEl.textContent = 'Paused';
+    if (previewAgentDotEl) previewAgentDotEl.dataset.tone = 'idle';
+    if (previewAgentSummaryEl) previewAgentSummaryEl.textContent = `${config.serverCommand} · automatic recovery is paused`;
     return;
   }
   // Server mode is supervised by an AI CLI agent running with permission
   // checks bypassed — say so instead of implying a plain child process.
   if (status.running) {
-    runningPageStatusEl.textContent = 'Server live (AI agent — autonomous mode)';
+    const checked = config.proofLiveCheck?.ok;
+    runningPageStatusEl.textContent = checked ? 'Live' : 'Starting…';
+    if (previewAgentDotEl) previewAgentDotEl.dataset.tone = checked ? 'live' : 'working';
+    if (previewAgentSummaryEl) {
+      previewAgentSummaryEl.textContent = [config.serverCommand, status.url || config.serverUrl || 'finding local URL'].filter(Boolean).join(' · ');
+    }
     return;
   }
-  runningPageStatusEl.textContent = 'Server stopped (AI agent — autonomous mode)';
+  runningPageStatusEl.textContent = 'Recovering…';
+  if (previewAgentDotEl) previewAgentDotEl.dataset.tone = 'working';
+  if (previewAgentSummaryEl) previewAgentSummaryEl.textContent = stoppedServerLabel(status, 'Restarting the preview server');
 }
 
 let runningPageLogProjectPath = null;
@@ -1757,6 +3417,7 @@ function renderRuntimeConfig(projectPath) {
   if (config.sourceType === 'server') {
     loadRunningPageLog(projectPath);
   }
+  renderProofForProject(projectPath);
 }
 
 async function loadRuntimeConfig(projectPath) {
@@ -1767,6 +3428,16 @@ async function loadRuntimeConfig(projectPath) {
       ...defaultRuntimeConfig(),
       ...parsed,
     };
+    if (config.sourceType === 'none' && !config.agentPaused) {
+      const detected = await detectPreviewAgentConfig(projectPath);
+      if (detected.sourceType !== 'none') {
+        Object.assign(config, detected, {
+          proofLedger: parsed.proofLedger,
+          proofSnapshot: parsed.proofSnapshot,
+          proofLiveCheck: parsed.proofLiveCheck,
+        });
+      }
+    }
     projectRuntimeConfig.set(projectPath, config);
     if (config.sourceType === 'none') {
       replacePreviewHistory(projectPath, [], -1);
@@ -1775,20 +3446,30 @@ async function loadRuntimeConfig(projectPath) {
     }
     return config;
   } catch {
-    const config = defaultRuntimeConfig();
+    const config = await detectPreviewAgentConfig(projectPath);
     projectRuntimeConfig.set(projectPath, config);
     replacePreviewHistory(projectPath, [], -1);
     return config;
   }
 }
 
+async function detectPreviewAgentConfig(projectPath) {
+  return previewAgent.detectConfig(async (relPath) => {
+    const result = await window.api.readFile(projectRelativePath(projectPath, relPath));
+    return result.content;
+  });
+}
+
 function collectRuntimeConfigFromForm() {
   return {
+    ...(projectRuntimeConfig.get(selectedProjectPath) || defaultRuntimeConfig()),
     sourceType: runningPageTypeEl.value,
     htmlPath: runningPageHtmlEl.value.trim(),
     serverCommand: runningPageCommandEl.value.trim(),
     serverUrl: runningPageUrlInputEl.value.trim(),
     autoStart: runningPageAutostartEl.checked,
+    agentManaged: runningPageAutostartEl.checked,
+    agentPaused: false,
   };
 }
 
@@ -1814,6 +3495,8 @@ async function quickStartServerRuntime() {
     sourceType: 'server',
     serverCommand: 'npm run dev',
     autoStart: true,
+    proofFiles: [configPathForProject(selectedProjectPath)],
+    proofUpdatedAt: Date.now(),
   };
   setPreviewQuickStatus('Starting npm run dev...', 'pending');
   await applyRuntimeConfig(selectedProjectPath, config, { forceStart: true });
@@ -1830,15 +3513,17 @@ async function quickCreateHtmlStarter() {
     if (!ok) return;
   }
 
-  setPreviewQuickStatus('Creating HTML starter...', 'pending');
+  setPreviewQuickStatus('Creating static site...', 'pending');
   await window.api.writeFile(targetPath, htmlStarterDocument(selectedProjectPath));
   await applyRuntimeConfig(selectedProjectPath, {
     ...defaultRuntimeConfig(),
     sourceType: 'html',
     htmlPath,
     autoStart: false,
+    proofFiles: [targetPath, configPathForProject(selectedProjectPath)],
+    proofUpdatedAt: Date.now(),
   });
-  setPreviewQuickStatus('HTML starter is live in the preview.', 'success');
+  setPreviewQuickStatus('Static site is rendering.', 'success');
 }
 
 async function writeAndRunServerStarter({ variant = 'server', label = 'server starter' } = {}) {
@@ -1879,6 +3564,8 @@ async function writeAndRunServerStarter({ variant = 'server', label = 'server st
     serverCommand: 'npm run dev',
     serverUrl: `http://127.0.0.1:${QUICK_SERVER_STARTER_PORT}`,
     autoStart: true,
+    proofFiles: [packagePath, serverPath, configPathForProject(selectedProjectPath)],
+    proofUpdatedAt: Date.now(),
   }, { forceStart: true });
   await waitForSelectedPreviewUrlReachable(8000);
 }
@@ -1922,12 +3609,15 @@ async function waitForSelectedPreviewUrlReachable(timeoutMs) {
 
 async function runPreviewQuickAction(action) {
   setPreviewQuickActionsDisabled(true);
+  let succeeded = false;
   try {
     await action();
+    succeeded = true;
   } catch (error) {
     setPreviewQuickStatus(error && error.message ? error.message : String(error), 'error');
   } finally {
     setPreviewQuickActionsDisabled(false);
+    if (succeeded) focusPreviewOnNarrowScreen();
   }
 }
 
@@ -1936,10 +3626,11 @@ async function applyRuntimeConfig(projectPath, config, options = {}) {
 
   if (config.sourceType === 'html') {
     if (!config.htmlPath) {
-      throw new Error('HTML file path is required');
+      throw new Error('A static entry file is required');
     }
     const basePath = projectPath === '.' ? config.htmlPath : `${projectPath}/${config.htmlPath}`;
     const resolved = await window.api.resolvePreviewHtmlFile(basePath);
+    projectPreviewRendered.delete(projectPath);
     replacePreviewHistory(projectPath, [resolved.url], 0);
     projectRuntimeStatus.set(projectPath, { running: false, sourceType: 'html', url: resolved.url });
     await window.api.stopPreviewRuntime(projectPath);
@@ -1966,13 +3657,16 @@ async function applyRuntimeConfig(projectPath, config, options = {}) {
       url: config.serverUrl,
     });
     const shouldAutoStart = options.forceStart ? true : config.autoStart;
-    const syncResult = await window.api.syncPreviewRuntime(projectPath, {
+    const runtimeOptions = {
       sourceType: 'server',
       command: config.serverCommand,
       url: config.serverUrl,
       autoStart: shouldAutoStart,
       aiCli: selectedAiCli,
-    });
+    };
+    const syncResult = options.forceStart
+      ? await window.api.startPreviewRuntime(projectPath, runtimeOptions)
+      : await window.api.syncPreviewRuntime(projectPath, runtimeOptions);
     if (!syncResult?.running) {
       replacePreviewHistory(projectPath, explicitUrls, explicitUrls.length > 0 ? 0 : -1);
     }
@@ -1993,6 +3687,10 @@ async function applyRuntimeConfig(projectPath, config, options = {}) {
   if (projectPath === selectedProjectPath) {
     renderRuntimeConfig(projectPath);
     renderPreviewForProject(projectPath);
+    if (options.forceStart && config.sourceType === 'server') {
+      await waitForSelectedPreviewUrlReachable(12000);
+      reloadActivePreview();
+    }
   }
 }
 
@@ -2002,6 +3700,7 @@ async function saveRunningPageConfig() {
   // fails the same way; its message surfaces through the catch below.
   try {
     await applyRuntimeConfig(selectedProjectPath, config);
+    if (config.sourceType !== 'none') focusPreviewOnNarrowScreen();
   } catch (error) {
     window.alert(error.message);
   }
@@ -2010,17 +3709,31 @@ async function saveRunningPageConfig() {
 async function startConfiguredRuntime() {
   const config = collectRuntimeConfigFromForm();
   if (config.sourceType !== 'server') return;
+  const status = projectRuntimeStatus.get(selectedProjectPath) || { running: false };
   try {
+    config.agentPaused = false;
+    config.autoStart = true;
+    config.agentManaged = true;
+    runningPageStatusEl.textContent = status.running ? 'Restarting server...' : 'Starting server...';
+    runningPageStartEl.disabled = true;
     await applyRuntimeConfig(selectedProjectPath, config, { forceStart: true });
+    focusPreviewOnNarrowScreen();
   } catch (error) {
     window.alert(error.message);
+    renderRuntimeConfig(selectedProjectPath);
   }
 }
 
 async function stopConfiguredRuntime() {
   const config = {
     ...(projectRuntimeConfig.get(selectedProjectPath) || defaultRuntimeConfig()),
+    agentPaused: true,
   };
+  projectRuntimeConfig.set(selectedProjectPath, config);
+  clearPreviewAgentRecovery(selectedProjectPath);
+  const healthTimer = previewAgentHealthTimers.get(selectedProjectPath);
+  if (healthTimer) clearTimeout(healthTimer);
+  previewAgentHealthTimers.delete(selectedProjectPath);
   await window.api.stopPreviewRuntime(selectedProjectPath);
   projectRuntimeStatus.set(selectedProjectPath, {
     running: false,
@@ -2028,6 +3741,8 @@ async function stopConfiguredRuntime() {
     url: config.serverUrl || currentPreviewUrl(ensurePreviewState(selectedProjectPath)) || '',
   });
   renderRuntimeStatus(selectedProjectPath);
+  renderProofForProject(selectedProjectPath);
+  await persistPreviewState(selectedProjectPath);
 }
 
 async function bootTerminalForPath(relPath, shouldRunStartup = false, forceStartup = false) {
@@ -2208,6 +3923,7 @@ async function selectProject(relPath, options = {}) {
     removeProjectFromSelectionHistory(relPath);
   }
   selectedProjectPath = projectPath;
+  invalidateWorkspaceFingerprint(projectPath);
   persistLastSelectedProject(projectPath);
   if (recordHistory) {
     recordProjectSelection(projectPath);
@@ -2243,6 +3959,10 @@ async function selectProject(relPath, options = {}) {
     renderPreviewForProject(projectPath);
   }
   await setupPromise;
+  if (selectedProjectPath === projectPath) {
+    await window.api.watchWorkspace(projectPath).catch(() => {});
+    await refreshWorkspaceFingerprint(projectPath);
+  }
 }
 
 async function createProject() {
@@ -2364,6 +4084,7 @@ window.api.onTerminalData(({ key, data }) => {
   // The mini terminal has its own handler further down.
   if (isWatchdogTerminalKey(key)) return;
   appendTerminalOutput(key, data);
+  scheduleWorkspaceFingerprintRefresh(key, 500);
 
   const runtimeConfig = projectRuntimeConfig.get(key) || defaultRuntimeConfig();
   const shouldDetectPreviewUrl =
@@ -2381,42 +4102,78 @@ window.api.onTerminalData(({ key, data }) => {
   }
 });
 
-window.api.onPreviewStatus(({ key, running, url, configuredUrl, sourceType }) => {
+window.api.onPreviewStatus(({ key, running, url, configuredUrl, sourceType, exitCode, signal }) => {
+  const previousStatus = projectRuntimeStatus.get(key) || { running: false };
+  if (running && !previousStatus.running) {
+    projectRuntimeRunId.set(key, (projectRuntimeRunId.get(key) || 0) + 1);
+    projectRuntimeOutput.set(key, '');
+    if (key === selectedProjectPath && proofOutputModalEl && !proofOutputModalEl.hidden) {
+      renderProofOutputModal(key);
+    }
+  }
   projectRuntimeStatus.set(key, {
     running,
     sourceType,
     url: url || configuredUrl || '',
+    exitCode: Number.isInteger(exitCode) ? exitCode : null,
+    signal: typeof signal === 'string' ? signal : '',
   });
+  if (running) {
+    clearPreviewAgentRecovery(key);
+    schedulePreviewAgentHealthCheck(key);
+  } else if (sourceType === 'server') {
+    schedulePreviewAgentRecovery(key);
+  }
+
+  const handlePreviewStatusReady = () => {
+    if (key === selectedProjectPath) {
+      renderRuntimeConfig(key);
+    }
+    if (running && sourceType === 'server') {
+      scheduleAutoLiveCheck(key);
+    }
+  };
 
   if (url) {
     pushPreviewUrl(key, url)
-      .then(() => {
-        if (key === selectedProjectPath) {
-          renderRuntimeConfig(key);
-        }
-      })
+      .then(handlePreviewStatusReady)
       .catch(() => {});
   } else if (configuredUrl && sourceType === 'server') {
     pushPreviewUrl(key, configuredUrl)
-      .then(() => {
-        if (key === selectedProjectPath) {
-          renderRuntimeConfig(key);
-        }
-      })
+      .then(handlePreviewStatusReady)
       .catch(() => {});
+  } else {
+    handlePreviewStatusReady();
   }
 
   if (key === selectedProjectPath) {
     renderRuntimeStatus(key);
+    renderProofForProject(key);
   }
 });
+
+if (window.api.onPreviewLog) {
+  window.api.onPreviewLog(({ key, data }) => {
+    appendPreviewRuntimeOutput(key, data);
+  });
+}
 
 window.api.onPreviewHtmlChanged(({ key }) => {
   if (key !== selectedProjectPath) return;
   const config = projectRuntimeConfig.get(key) || defaultRuntimeConfig();
   if (config.sourceType !== 'html') return;
+  invalidateWorkspaceFingerprint(key);
+  scheduleWorkspaceFingerprintRefresh(key, 120);
   refreshSelectedHtmlPreview().catch(() => {});
 });
+
+if (window.api.onWorkspaceChanged) {
+  window.api.onWorkspaceChanged(({ key }) => {
+    if (!key) return;
+    invalidateWorkspaceFingerprint(key);
+    scheduleWorkspaceFingerprintRefresh(key, 220);
+  });
+}
 
 window.api.onTerminalExit(({ key }) => {
   if (!key) return;
@@ -2520,14 +4277,10 @@ newProjectNameEl.addEventListener('keydown', (event) => {
   }
 });
 projectsToggleEl.addEventListener('click', () => {
-  projectsPanelHidden = !projectsPanelHidden;
-  persistProjectsPanelHidden();
-  renderProjectsPanelVisibility();
+  setProjectsPanelHidden(!projectsPanelHidden);
 });
 projectsMinimizeEl.addEventListener('click', () => {
-  projectsPanelHidden = true;
-  persistProjectsPanelHidden();
-  renderProjectsPanelVisibility();
+  setProjectsPanelHidden(true);
 });
 if (hiddenProjectsToggleEl) {
   hiddenProjectsToggleEl.addEventListener('click', () => {
@@ -2542,6 +4295,128 @@ if (hiddenProjectsModalEl) {
     if (event.target === hiddenProjectsModalEl) {
       closeHiddenProjectsModal();
     }
+  });
+}
+if (proofFileCloseEl) {
+  proofFileCloseEl.addEventListener('click', closeProofFileModal);
+}
+if (proofFileModalEl) {
+  proofFileModalEl.addEventListener('click', (event) => {
+    if (event.target === proofFileModalEl) {
+      closeProofFileModal();
+    }
+  });
+}
+if (proofFileCopyPathEl) {
+  proofFileCopyPathEl.addEventListener('click', () => {
+    copyActiveProofFilePath().catch(() => {
+      if (proofFileStatusEl) proofFileStatusEl.textContent = 'Copy failed';
+    });
+  });
+}
+if (proofFileCopyContentEl) {
+  proofFileCopyContentEl.addEventListener('click', () => {
+    copyActiveProofFileContent().catch(() => {
+      if (proofFileStatusEl) proofFileStatusEl.textContent = 'Copy failed';
+    });
+  });
+}
+if (proofOutputEl) {
+  proofOutputEl.addEventListener('click', openProofOutputModal);
+}
+if (proofOutputCloseEl) {
+  proofOutputCloseEl.addEventListener('click', closeProofOutputModal);
+}
+if (proofOutputModalEl) {
+  proofOutputModalEl.addEventListener('click', (event) => {
+    if (event.target === proofOutputModalEl) {
+      closeProofOutputModal();
+    }
+  });
+}
+if (proofOutputCopyEl) {
+  proofOutputCopyEl.addEventListener('click', () => {
+    copyProofOutputToClipboard().catch(() => {
+      if (proofOutputStatusEl) proofOutputStatusEl.textContent = 'Copy failed';
+    });
+  });
+}
+if (proofVerifyEl) {
+  proofVerifyEl.addEventListener('click', () => {
+    runProofVerify().catch(() => {
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Verify failed';
+    });
+  });
+}
+if (proofPackEl) {
+  proofPackEl.addEventListener('click', () => {
+    saveProofPack().catch(() => {
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Proof pack failed';
+    });
+  });
+}
+if (proofSnapshotEl) {
+  proofSnapshotEl.addEventListener('click', () => {
+    runProofSnapshotCapture().catch(() => {
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Snapshot failed';
+    });
+  });
+}
+if (proofCompareEl) {
+  proofCompareEl.addEventListener('click', openProofCompareModal);
+}
+if (proofLedgerToggleEl) {
+  proofLedgerToggleEl.addEventListener('click', openProofLedgerModal);
+}
+if (proofLedgerCloseEl) {
+  proofLedgerCloseEl.addEventListener('click', closeProofLedgerModal);
+}
+if (proofLedgerModalEl) {
+  proofLedgerModalEl.addEventListener('click', (event) => {
+    if (event.target === proofLedgerModalEl) {
+      closeProofLedgerModal();
+    }
+  });
+}
+if (proofLedgerCopyEl) {
+  proofLedgerCopyEl.addEventListener('click', () => {
+    copyProofLedgerToClipboard().catch(() => {
+      if (proofLedgerStatusEl) proofLedgerStatusEl.textContent = 'Copy failed';
+    });
+  });
+}
+if (proofSnapshotCloseEl) {
+  proofSnapshotCloseEl.addEventListener('click', closeProofSnapshotModal);
+}
+if (proofSnapshotModalEl) {
+  proofSnapshotModalEl.addEventListener('click', (event) => {
+    if (event.target === proofSnapshotModalEl) {
+      closeProofSnapshotModal();
+    }
+  });
+}
+if (proofSnapshotCopyPathEl) {
+  proofSnapshotCopyPathEl.addEventListener('click', () => {
+    copyActiveProofSnapshotPath().catch(() => {
+      if (proofSnapshotStatusEl) proofSnapshotStatusEl.textContent = 'Copy failed';
+    });
+  });
+}
+if (proofCompareCloseEl) {
+  proofCompareCloseEl.addEventListener('click', closeProofCompareModal);
+}
+if (proofCompareModalEl) {
+  proofCompareModalEl.addEventListener('click', (event) => {
+    if (event.target === proofCompareModalEl) {
+      closeProofCompareModal();
+    }
+  });
+}
+if (proofCompareCopyEl) {
+  proofCompareCopyEl.addEventListener('click', () => {
+    copyProofComparePaths().catch(() => {
+      if (proofCompareStatusEl) proofCompareStatusEl.textContent = 'Copy failed';
+    });
   });
 }
 if (agentMonitorRefreshEl) {
@@ -2909,6 +4784,36 @@ window.addEventListener('message', (event) => {
 });
 
 window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && proofFileModalEl && !proofFileModalEl.hidden) {
+    event.preventDefault();
+    closeProofFileModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && proofOutputModalEl && !proofOutputModalEl.hidden) {
+    event.preventDefault();
+    closeProofOutputModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && proofLedgerModalEl && !proofLedgerModalEl.hidden) {
+    event.preventDefault();
+    closeProofLedgerModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && proofSnapshotModalEl && !proofSnapshotModalEl.hidden) {
+    event.preventDefault();
+    closeProofSnapshotModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && proofCompareModalEl && !proofCompareModalEl.hidden) {
+    event.preventDefault();
+    closeProofCompareModal();
+    return;
+  }
+
   if (event.key === 'Escape' && hiddenProjectsModalEl && !hiddenProjectsModalEl.hidden) {
     event.preventDefault();
     closeHiddenProjectsModal();
@@ -2986,6 +4891,27 @@ if (quickSurpriseEl) {
 if (quickOpenTerminalEl) {
   quickOpenTerminalEl.addEventListener('click', openPanel);
 }
+if (proofCheckEl) {
+  proofCheckEl.addEventListener('click', () => {
+    runProofLiveCheck().catch(() => {
+      if (proofCheckStatusEl) proofCheckStatusEl.textContent = 'Live Check failed';
+    });
+  });
+}
+if (proofBriefEl) {
+  proofBriefEl.addEventListener('click', () => {
+    copyShipBriefToClipboard().catch(() => {
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Brief failed';
+    });
+  });
+}
+if (proofCopyEl) {
+  proofCopyEl.addEventListener('click', () => {
+    copyProofToClipboard().catch(() => {
+      if (proofCopyStatusEl) proofCopyStatusEl.textContent = 'Copy failed';
+    });
+  });
+}
 if (aiCliSelectEl) {
   aiCliSelectEl.addEventListener('change', () => {
     if (!SUPPORTED_AI_CLIS.includes(aiCliSelectEl.value)) return;
@@ -3051,7 +4977,7 @@ function reloadActivePreview() {
     setPreviewMeta(url, 'Live preview');
     return;
   }
-  previewFrameEl.src = url;
+  previewFrameEl.src = cacheBustedUrl(url);
   setPreviewMeta(url, 'Live preview');
 }
 
@@ -3071,6 +4997,12 @@ previewFrameEl.addEventListener('dom-ready', () => {
 
 previewFrameEl.addEventListener('load', () => {
   updateProjectNavigationControls();
+  const url = currentPreviewUrl(ensurePreviewState(selectedProjectPath));
+  const renderedUrl = sanitizePreviewUrl(previewFrameEl.src || '');
+  if (url && url !== 'about:blank' && renderedUrl === sanitizePreviewUrl(url)) {
+    projectPreviewRendered.add(selectedProjectPath);
+    renderRuntimeStatus(selectedProjectPath);
+  }
 });
 
 if (previewReloadEl) {
@@ -3151,6 +5083,13 @@ maybeShowSupervisorOnboarding().catch(() => {});
     if (document.hidden || activeWorkspaceView !== 'office') return;
     refreshMunderOffice().catch(() => {});
   }, 10000);
+  if (workspaceFingerprintPollTimer) {
+    clearInterval(workspaceFingerprintPollTimer);
+  }
+  workspaceFingerprintPollTimer = setInterval(() => {
+    if (document.hidden) return;
+    refreshWorkspaceFingerprint(selectedProjectPath).catch(() => {});
+  }, 15000);
   await window.api.startRendererWatch();
   await loadExternalProjects();
   selectedProjectPath = visibleProjectPath(loadLastSelectedProject());

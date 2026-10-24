@@ -45,56 +45,72 @@
         </div>
         <div id="active-project">Active: workspace root</div>
         <div id="projects-list"></div>
-        <section id="running-page-panel" aria-label="Running Page">
+        <section id="running-page-panel" aria-label="Preview Agent">
           <div class="running-page-header">
-            <strong>Running Page</strong>
-            <div id="running-page-status">Not configured</div>
+            <div class="preview-agent-heading">
+              <span id="preview-agent-dot" aria-hidden="true"></span>
+              <div>
+                <strong>Preview Agent</strong>
+                <div id="running-page-status">Detecting project…</div>
+              </div>
+            </div>
+            <div class="preview-agent-actions">
+              <button id="running-page-start" type="button">Start</button>
+              <button id="running-page-stop" type="button">Pause</button>
+            </div>
           </div>
-          <label class="running-field">
-            <span>Source</span>
-            <select id="running-page-type">
-              <option value="none">None</option>
-              <option value="html">HTML file</option>
-              <option value="server">Node/server command</option>
-              <option value="native">Native app command</option>
-            </select>
-          </label>
-          <label class="running-field" data-source="html">
-            <span>HTML file</span>
-            <input id="running-page-html" type="text" placeholder="generated/landing.html" />
-          </label>
-          <label class="running-field" data-source="server">
-            <span>Server command</span>
-            <input id="running-page-command" type="text" placeholder="npm run dev" />
-          </label>
-          <label class="running-field" data-source="server">
-            <span>Server URL</span>
-            <input id="running-page-url-input" type="text" placeholder="localhost target" />
-          </label>
-          <label class="running-field" data-source="native">
-            <span>Run command</span>
-            <input id="running-page-native-command" type="text" placeholder="npm run dev" />
-          </label>
-          <label class="running-field" data-source="native">
-            <span>Capture command</span>
-            <input id="running-page-native-capture" type="text" placeholder="npm run dev:mac:inspect" />
-          </label>
-          <label class="running-field" data-source="native">
-            <span>Image file</span>
-            <input id="running-page-native-image" type="text" placeholder=".pixelbox/mac-screen.png" />
-          </label>
-          <label id="running-page-autostart-field" class="running-checkbox" data-source="server">
-            <input id="running-page-autostart" type="checkbox" checked />
-            <span>Auto-start when this project opens</span>
-          </label>
-          <label class="running-checkbox" data-source="native">
-            <input id="running-page-native-autostart" type="checkbox" checked />
-            <span>Auto-start when this project opens</span>
-          </label>
-          <div id="running-page-actions">
-            <button id="running-page-save" type="button">Save</button>
-            <button id="running-page-start" type="button">Start</button>
-            <button id="running-page-stop" type="button">Stop</button>
+          <div id="preview-agent-summary">I’ll detect, launch, check, and recover this project’s preview.</div>
+          <details id="preview-agent-details">
+            <summary>Advanced settings</summary>
+            <div class="preview-agent-settings">
+              <label class="running-field">
+                <span>Preview type</span>
+                <select id="running-page-type">
+                  <option value="none">Not detected</option>
+                  <option value="html">Static site</option>
+                  <option value="server">Dev server</option>
+                  <option value="native">Native app</option>
+                </select>
+              </label>
+              <label class="running-field" data-source="html"><span>Entry file</span><input id="running-page-html" type="text" placeholder="index.html" /></label>
+              <label class="running-field" data-source="server"><span>Start command</span><input id="running-page-command" type="text" placeholder="npm run dev" /></label>
+              <label class="running-field" data-source="server"><span>Expected URL</span><input id="running-page-url-input" type="text" placeholder="Detected from server output" /></label>
+              <label class="running-field" data-source="native"><span>Run command</span><input id="running-page-native-command" type="text" placeholder="npm run dev" /></label>
+              <label class="running-field" data-source="native"><span>Capture command</span><input id="running-page-native-capture" type="text" placeholder="npm run dev:mac:inspect" /></label>
+              <label class="running-field" data-source="native"><span>Image file</span><input id="running-page-native-image" type="text" placeholder=".pixelbox/mac-screen.png" /></label>
+              <label id="running-page-autostart-field" class="running-checkbox" data-source="server"><input id="running-page-autostart" type="checkbox" checked /><span>Manage and recover automatically</span></label>
+              <label class="running-checkbox" data-source="native"><input id="running-page-native-autostart" type="checkbox" checked /><span>Manage and recover automatically</span></label>
+              <div id="running-page-actions"><button id="running-page-save" type="button">Save settings</button></div>
+            </div>
+          </details>
+        </section>
+
+        <section id="proof-dock" aria-label="Run proof" hidden>
+          <header class="proof-header">
+            <span class="proof-status-dot" aria-hidden="true"></span>
+            <div class="proof-title-group">
+              <strong id="proof-title">No proof yet</strong>
+              <span id="proof-status">Not configured</span>
+            </div>
+            <div class="proof-actions">
+              <button id="proof-check" type="button" title="Probe the live preview URL">Check</button>
+              <button id="proof-output" type="button" title="Show managed runtime output">Output</button>
+              <button id="proof-brief" type="button" title="Copy agent-ready ship brief and update handoff">Brief</button>
+              <button id="proof-copy" type="button">Copy</button>
+            </div>
+          </header>
+          <dl class="proof-grid">
+            <div><dt>Project</dt><dd id="proof-project">workspace root</dd></div>
+            <div><dt>Command</dt><dd><code id="proof-command">n/a</code></dd></div>
+            <div><dt>URL</dt><dd><a id="proof-url" href="#" target="_blank" rel="noreferrer">about:blank</a></dd></div>
+          </dl>
+          <div id="proof-check-status" aria-live="polite"></div>
+          <div class="proof-evidence-actions">
+            <button id="proof-verify" class="proof-evidence-button proof-verify-button" type="button" title="Run a live check and capture a proof snapshot">Verify</button>
+            <button id="proof-pack" class="proof-evidence-button" type="button" title="Save a Markdown proof pack">Pack</button>
+            <button id="proof-snapshot" class="proof-evidence-button" type="button" title="Capture a visual proof snapshot">Snapshot</button>
+            <button id="proof-compare" class="proof-evidence-button" type="button" hidden>Compare</button>
+            <button id="proof-ledger-toggle" class="proof-evidence-button" type="button" hidden>Ledger</button>
           </div>
           <div id="running-page-log-panel" class="running-field" data-source="server">
             <pre id="running-page-log"></pre>
@@ -103,6 +119,9 @@
               <button id="running-page-log-send" type="button">Send</button>
             </div>
           </div>
+          <button id="proof-snapshot-open" class="proof-snapshot-chip" type="button" hidden>View latest snapshot</button>
+          <div id="proof-files" aria-label="Proof files"></div>
+          <div id="proof-copy-status" role="status" aria-live="polite"></div>
         </section>
 
         <section id="codex-launch-panel" aria-label="AI Launch">
@@ -153,7 +172,7 @@
               <p>Start a dev server, create a static page, or open the terminal for a custom setup.</p>
               <div class="preview-quick-actions" aria-label="Preview quick actions">
                 <button id="quick-start-server" type="button" disabled>Start npm dev</button>
-                <button id="quick-create-html" type="button" disabled>Create HTML starter</button>
+                <button id="quick-create-html" type="button" disabled>Create static site</button>
                 <button id="quick-create-server" type="button" disabled>Create server starter</button>
                 <button id="quick-surprise" type="button" disabled>Surprise me</button>
                 <button id="quick-open-terminal" type="button" disabled>Open terminal</button>
@@ -254,6 +273,134 @@
       </section>
     </div>
 
+    <div id="proof-file-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="proof-file-title" hidden>
+      <section class="modal-panel proof-file-modal-panel">
+        <header class="modal-header">
+          <div class="proof-file-heading">
+            <strong id="proof-file-title">File Peek</strong>
+            <span id="proof-file-path">No file selected</span>
+          </div>
+          <div class="proof-file-actions">
+            <button id="proof-file-copy-path" type="button">Copy path</button>
+            <button id="proof-file-copy-content" type="button">Copy file</button>
+            <button id="proof-file-close" class="icon-button panel-icon-button" type="button" aria-label="Close file peek" title="Close">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12" />
+                <path d="M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+        </header>
+        <pre id="proof-file-content" tabindex="0"></pre>
+        <div id="proof-file-status" role="status" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <div id="proof-output-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="proof-output-title" hidden>
+      <section class="modal-panel proof-output-modal-panel">
+        <header class="modal-header">
+          <div class="proof-output-heading">
+            <strong id="proof-output-title">Runtime Output</strong>
+            <span id="proof-output-subtitle">No output captured</span>
+          </div>
+          <div class="proof-output-actions">
+            <button id="proof-output-copy" type="button">Copy output</button>
+            <button id="proof-output-close" class="icon-button panel-icon-button" type="button" aria-label="Close runtime output" title="Close">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12" />
+                <path d="M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+        </header>
+        <pre id="proof-output-content" tabindex="0"></pre>
+        <div id="proof-output-status" role="status" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <div id="proof-ledger-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="proof-ledger-title" hidden>
+      <section class="modal-panel proof-ledger-modal-panel">
+        <header class="modal-header">
+          <div class="proof-ledger-heading">
+            <strong id="proof-ledger-title">Proof Ledger</strong>
+            <span id="proof-ledger-subtitle">Recent run evidence</span>
+          </div>
+          <div class="proof-ledger-actions">
+            <button id="proof-ledger-copy" type="button">Copy ledger</button>
+            <button id="proof-ledger-close" class="icon-button panel-icon-button" type="button" aria-label="Close proof ledger" title="Close">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12" />
+                <path d="M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+        </header>
+        <div id="proof-ledger-list"></div>
+        <div id="proof-ledger-status" role="status" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <div id="proof-snapshot-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="proof-snapshot-title" hidden>
+      <section class="modal-panel proof-snapshot-modal-panel">
+        <header class="modal-header">
+          <div class="proof-snapshot-heading">
+            <strong id="proof-snapshot-title">Proof Snapshot</strong>
+            <span id="proof-snapshot-path">No snapshot selected</span>
+          </div>
+          <div class="proof-snapshot-actions">
+            <button id="proof-snapshot-copy-path" type="button">Copy path</button>
+            <button id="proof-snapshot-close" class="icon-button panel-icon-button" type="button" aria-label="Close proof snapshot" title="Close">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12" />
+                <path d="M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+        </header>
+        <div class="proof-snapshot-stage">
+          <img id="proof-snapshot-image" alt="Captured preview snapshot" />
+        </div>
+        <div id="proof-snapshot-status" role="status" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <div id="proof-compare-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="proof-compare-title" hidden>
+      <section class="modal-panel proof-compare-modal-panel">
+        <header class="modal-header">
+          <div class="proof-compare-heading">
+            <strong id="proof-compare-title">Snapshot Compare</strong>
+            <span id="proof-compare-summary">Latest visual proof against previous proof</span>
+          </div>
+          <div class="proof-compare-actions">
+            <button id="proof-compare-copy" type="button">Copy paths</button>
+            <button id="proof-compare-close" class="icon-button panel-icon-button" type="button" aria-label="Close snapshot compare" title="Close">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12" />
+                <path d="M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+        </header>
+        <div class="proof-compare-grid">
+          <figure>
+            <figcaption>
+              <strong>Previous</strong>
+              <span id="proof-compare-before-label">No previous snapshot</span>
+            </figcaption>
+            <img id="proof-compare-before" alt="Previous proof snapshot" />
+          </figure>
+          <figure>
+            <figcaption>
+              <strong>Latest</strong>
+              <span id="proof-compare-after-label">No latest snapshot</span>
+            </figcaption>
+            <img id="proof-compare-after" alt="Latest proof snapshot" />
+          </figure>
+        </div>
+        <div id="proof-compare-status" role="status" aria-live="polite"></div>
+      </section>
+    </div>
+
     <section id="chat-panel" aria-label="Terminal panel">
       <header id="chat-header">
         <span>Directory Terminal</span>
@@ -306,6 +453,8 @@
 
     <script src="./zero-api.js"></script>
     <script src="./quick-start-templates.js"></script>
+    <script src="./preview-agent.js"></script>
+    <script src="./proof-reentry.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

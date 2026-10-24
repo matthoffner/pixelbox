@@ -148,6 +148,12 @@ body::before {
   text-decoration: none;
 }
 
+.topbar-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .topbar-actions a:hover,
 .secondary:hover {
   color: var(--text);
