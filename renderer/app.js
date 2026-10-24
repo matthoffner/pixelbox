@@ -17,6 +17,13 @@ const newProjectFormEl = document.getElementById('new-project-form');
 const newProjectNameEl = document.getElementById('new-project-name');
 const newProjectCreateEl = document.getElementById('new-project-create');
 const newProjectCancelEl = document.getElementById('new-project-cancel');
+const openFolderBtn = document.getElementById('open-folder');
+const openFolderFormEl = document.getElementById('open-folder-form');
+const openFolderPathEl = document.getElementById('open-folder-path');
+const openFolderBrowseEl = document.getElementById('open-folder-browse');
+const openFolderConfirmEl = document.getElementById('open-folder-confirm');
+const openFolderCancelEl = document.getElementById('open-folder-cancel');
+const openFolderStatusEl = document.getElementById('open-folder-status');
 const projectsToggleEl = document.getElementById('projects-toggle');
 const projectsMinimizeEl = document.getElementById('projects-minimize');
 const hiddenProjectsToggleEl = document.getElementById('hidden-projects-toggle');
@@ -26,12 +33,17 @@ const hiddenProjectsListEl = document.getElementById('hidden-projects-list');
 const headlineEl = document.getElementById('headline');
 const previewFrameHostEl = document.getElementById('preview-frame-host');
 const previewViewportEl = document.getElementById('preview-viewport');
+const previewNavEl = document.getElementById('preview-nav');
 const previewBackEl = document.getElementById('preview-back');
 const previewForwardEl = document.getElementById('preview-forward');
 const previewReloadEl = document.getElementById('preview-reload');
 const previewSubtitleEl = document.getElementById('preview-subtitle');
 const previewUrlEl = document.getElementById('preview-url');
 const previewEmptyStateEl = document.getElementById('preview-empty-state');
+const munderFrameHostEl = document.getElementById('munder-frame-host');
+const munderFrameEl = document.getElementById('munder-frame');
+const projectViewToggleEl = document.getElementById('project-view-toggle');
+const munderViewToggleEl = document.getElementById('munder-view-toggle');
 const quickStartServerEl = document.getElementById('quick-start-server');
 const quickCreateHtmlEl = document.getElementById('quick-create-html');
 const quickCreateServerEl = document.getElementById('quick-create-server');
@@ -83,8 +95,13 @@ let reloadTimer;
 let selectedProjectPath = '.';
 let startResult;
 let projectsPanelHidden = false;
+let activeWorkspaceView = 'project';
+let munderRefreshPromise = null;
+let munderLastState = null;
+let nativeTerminalSessions = [];
 let openProjectActionsPath = null;
 const hiddenProjects = new Set();
+let externalProjects = [];
 const projectPreviewState = new Map();
 const projectRuntimeConfig = new Map();
 const projectRuntimeStatus = new Map();
@@ -101,6 +118,7 @@ let terminalMouseDrag = null;
 let projectsDragPointer = null;
 let projectsMouseDrag = null;
 let agentMonitorPollTimer = null;
+let munderOfficePollTimer = null;
 let previewCaptureRegionRaf = 0;
 const agentMonitorStoppingPids = new Set();
 let selectedAiCli = 'codex';
@@ -128,6 +146,7 @@ const PROJECTS_PANEL_HIDDEN_KEY = 'pixelbox.projectsPanelHidden';
 const PROJECTS_PANEL_POSITION_KEY = 'pixelbox.projectsPanelPosition';
 const AI_CLI_KEY = 'pixelbox.aiCli';
 const CODEX_DANGEROUS_BYPASS_KEY = 'pixelbox.codexDangerouslyBypassPermissions';
+const WORKSPACE_VIEW_KEY = 'pixelbox.workspaceView';
 const SUPPORTED_AI_CLIS = ['codex', 'claude', 'gemini', 'hermes', 'openclaw', 'custom'];
 const terminalGridState = {
   cols: 120,
@@ -147,6 +166,33 @@ previewFrameEl.setAttribute('title', 'Preview');
 previewFrameEl.setAttribute('referrerpolicy', 'no-referrer');
 previewFrameHostEl.appendChild(previewFrameEl);
 
+// Folders opened from anywhere on disk are addressed by absolute path; the
+// workspace's own projects stay relative (`.` or `projects/<name>`).
+function isExternalProjectPath(projectPath) {
+  const value = String(projectPath || '');
+  return value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value);
+}
+
+function isKnownProjectPath(projectPath) {
+  return projectPath === '.' || projectPath.startsWith('projects/') || isExternalProjectPath(projectPath);
+}
+
+function projectDisplayName(projectPath) {
+  const value = String(projectPath || '');
+  const parts = value.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] || value;
+}
+
+async function loadExternalProjects() {
+  try {
+    const entries = await window.api.listExternalProjects();
+    externalProjects = Array.isArray(entries) ? entries : [];
+  } catch {
+    externalProjects = [];
+  }
+  return externalProjects;
+}
+
 function loadHiddenProjects() {
   try {
     const raw = window.localStorage.getItem('pixelbox.hiddenProjects');
@@ -154,7 +200,7 @@ function loadHiddenProjects() {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return;
     for (const entry of parsed) {
-      if (typeof entry === 'string' && entry.startsWith('projects/')) {
+      if (typeof entry === 'string' && entry !== '.' && isKnownProjectPath(entry)) {
         hiddenProjects.add(entry);
       }
     }
@@ -171,7 +217,7 @@ function loadLastSelectedProject() {
   try {
     const value = window.localStorage.getItem(LAST_SELECTED_PROJECT_KEY);
     if (!value) return '.';
-    if (value === '.' || value.startsWith('projects/')) return value;
+    if (isKnownProjectPath(value)) return value;
   } catch {}
   return '.';
 }
@@ -254,6 +300,20 @@ function persistCodexDangerouslyBypassPermissions() {
       CODEX_DANGEROUS_BYPASS_KEY,
       codexDangerouslyBypassPermissions ? '1' : '0'
     );
+  } catch {}
+}
+
+function loadWorkspaceView() {
+  try {
+    return window.localStorage.getItem(WORKSPACE_VIEW_KEY) === 'office' ? 'office' : 'project';
+  } catch {
+    return 'project';
+  }
+}
+
+function persistWorkspaceView() {
+  try {
+    window.localStorage.setItem(WORKSPACE_VIEW_KEY, activeWorkspaceView);
   } catch {}
 }
 
@@ -352,6 +412,32 @@ function nativeTerminalBridgeAvailable() {
 
 function nativeTerminalExclusive() {
   return nativeTerminalBridgeAvailable();
+}
+
+function normalizeTerminalTty(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^\/dev\//, '');
+}
+
+function updateNativeTerminalSessions(payload) {
+  const sessions = Array.isArray(payload?.sessions) ? payload.sessions : [];
+  nativeTerminalSessions = sessions
+    .map((session) => ({
+      owner: 'native',
+      key: typeof session?.key === 'string' ? session.key : '',
+      tty: normalizeTerminalTty(session?.tty),
+      foregroundPid: Number(session?.foregroundPid) || 0,
+    }))
+    .filter((session) => session.key && (session.tty || session.foregroundPid));
+}
+
+if (window.zero && typeof window.zero.on === 'function') {
+  window.zero.on('pixelbox.terminal.sessions', updateNativeTerminalSessions);
+} else {
+  window.addEventListener('zero-native:pixelbox.terminal.sessions', (event) => {
+    updateNativeTerminalSessions(event.detail);
+  });
 }
 
 function syncTerminalPresentationMode() {
@@ -687,6 +773,47 @@ function schedulePreviewCaptureRegionPublish() {
   });
 }
 
+function renderActiveWorkspaceView(options = {}) {
+  const { refresh = true } = options;
+  const officeActive = activeWorkspaceView === 'office';
+  document.body.classList.toggle('workspace-view-office', officeActive);
+  document.body.dataset.workspaceView = activeWorkspaceView;
+
+  if (projectViewToggleEl) {
+    projectViewToggleEl.setAttribute('aria-pressed', String(!officeActive));
+  }
+  if (munderViewToggleEl) {
+    munderViewToggleEl.setAttribute('aria-pressed', String(officeActive));
+  }
+  if (previewNavEl) {
+    previewNavEl.setAttribute('aria-hidden', String(officeActive));
+  }
+  if (previewFrameHostEl) {
+    previewFrameHostEl.setAttribute('aria-hidden', String(officeActive));
+  }
+  if (munderFrameHostEl) {
+    munderFrameHostEl.setAttribute('aria-hidden', String(!officeActive));
+  }
+
+  if (officeActive && refresh) {
+    refreshMunderOffice().catch(() => {});
+  }
+  requestAnimationFrame(() => {
+    schedulePreviewCaptureRegionPublish();
+    queueNativeTerminalPanelSync();
+  });
+}
+
+function setActiveWorkspaceView(view, options = {}) {
+  const nextView = view === 'office' ? 'office' : 'project';
+  const changed = nextView !== activeWorkspaceView;
+  activeWorkspaceView = nextView;
+  if (options.persist !== false) {
+    persistWorkspaceView();
+  }
+  renderActiveWorkspaceView({ refresh: changed || options.refresh === true });
+}
+
 function previewDisplayUrl(rawUrl) {
   const url = sanitizePreviewUrl(rawUrl);
   if (!url) return 'about:blank';
@@ -915,6 +1042,7 @@ function renderAgentMonitor(processes, detailsByPid = new Map()) {
       } finally {
         agentMonitorStoppingPids.delete(processInfo.pid);
         refreshAgentMonitor().catch(() => {});
+        refreshMunderOffice().catch(() => {});
       }
     });
     actions.appendChild(stopButton);
@@ -971,6 +1099,275 @@ async function refreshAgentMonitor() {
     }
     agentMonitorStatusEl.textContent = `Monitor error: ${message}`;
   }
+}
+
+function munderProjectLabel(projectPath = selectedProjectPath) {
+  if (!projectPath || projectPath === '.') return 'Workspace root';
+  const parts = projectPath.split('/').filter(Boolean);
+  return parts[parts.length - 1] || projectPath;
+}
+
+function postMunderState(state) {
+  munderLastState = state;
+  if (!munderFrameEl?.contentWindow) return;
+  const targetOrigin = window.location.origin === 'null' ? '*' : window.location.origin;
+  munderFrameEl.contentWindow.postMessage(
+    {
+      type: 'pixelbox:munder-state',
+      ...state,
+    },
+    targetOrigin
+  );
+}
+
+function postMunderTerminalResult(pid, ok, message) {
+  if (!munderFrameEl?.contentWindow) return;
+  const targetOrigin = window.location.origin === 'null' ? '*' : window.location.origin;
+  munderFrameEl.contentWindow.postMessage(
+    {
+      type: 'pixelbox:munder-terminal-result',
+      pid: Number(pid) || 0,
+      ok: ok === true,
+      message: singleLine(message, 220),
+    },
+    targetOrigin
+  );
+}
+
+function normalizedBridgeTerminalTarget(target) {
+  if (target?.owner !== 'bridge' || typeof target.key !== 'string' || !target.key) return null;
+  return {
+    owner: 'bridge',
+    key: target.key,
+    kind: target.kind === 'watchdog' || isWatchdogTerminalKey(target.key) ? 'watchdog' : 'project',
+  };
+}
+
+function nativeTerminalTargetForIdentity(identity = {}) {
+  const tty = normalizeTerminalTty(identity.tty);
+  const lineage = new Set(
+    [identity.pid, identity.pgid, ...(Array.isArray(identity.ancestors) ? identity.ancestors : [])]
+      .map((value) => Number(value) || 0)
+      .filter(Boolean)
+  );
+  const ttyMatches = tty ? nativeTerminalSessions.filter((session) => session.tty === tty) : [];
+  const pidMatches = nativeTerminalSessions.filter(
+    (session) => session.foregroundPid && lineage.has(session.foregroundPid)
+  );
+  const matches = ttyMatches.length > 0 ? ttyMatches : pidMatches;
+  if (matches.length !== 1) return null;
+  return {
+    owner: 'native',
+    key: matches[0].key,
+    kind: 'project',
+  };
+}
+
+function munderTerminalOwnership(resolution = {}) {
+  const bridgeTarget = normalizedBridgeTerminalTarget(resolution.target);
+  if (bridgeTarget?.kind === 'watchdog') {
+    return { target: bridgeTarget, unavailableReason: '' };
+  }
+
+  if (nativeTerminalExclusive()) {
+    const nativeTarget = nativeTerminalTargetForIdentity(resolution);
+    if (nativeTarget) return { target: nativeTarget, unavailableReason: '' };
+    if (bridgeTarget) {
+      return {
+        target: null,
+        unavailableReason: 'This agent belongs to a browser terminal session, not this Pixelbox window.',
+      };
+    }
+  } else if (bridgeTarget) {
+    return { target: bridgeTarget, unavailableReason: '' };
+  }
+
+  return {
+    target: null,
+    unavailableReason: 'This agent is running outside a Pixelbox-managed terminal.',
+  };
+}
+
+async function resolveMunderTerminalOwnership(pid, options = {}) {
+  if (nativeTerminalExclusive() && options.syncNative !== false) {
+    await syncNativeTerminalPanel();
+  }
+  const resolution = await window.api.resolveTerminalForPid(pid);
+  return munderTerminalOwnership(resolution);
+}
+
+function serializeMunderAgent(processInfo, details = {}, ownership = {}) {
+  return {
+    pid: Number(processInfo.pid) || 0,
+    cli: processInfo.cli || processInfo.engine || 'agent',
+    kind: processInfo.kind || 'agent',
+    cpu: Number(processInfo.cpu) || 0,
+    mem: Number(processInfo.mem) || 0,
+    elapsed: singleLine(processInfo.elapsed, 24),
+    command: singleLine(processInfo.command, 220),
+    cwd: singleLine(details.cwd, 220),
+    transcriptSummary: singleLine(details.transcriptSummary, 320),
+    terminalTarget: ownership.target || null,
+    terminalUnavailableReason: singleLine(ownership.unavailableReason, 220),
+  };
+}
+
+async function refreshMunderOffice(options = {}) {
+  if (activeWorkspaceView !== 'office' && options.force !== true) return munderLastState;
+  if (munderRefreshPromise) return munderRefreshPromise;
+
+  const projectPath = selectedProjectPath;
+  const projectLabel = munderProjectLabel(projectPath);
+  munderRefreshPromise = (async () => {
+    try {
+      const cwdPrefix = await window.api.resolveWorkspacePath(projectPath);
+      if (nativeTerminalExclusive()) {
+        await syncNativeTerminalPanel();
+      }
+      const processes = await window.api.codexMonitorList({ cwdPrefix });
+      const detailEntriesPromise = Promise.all(
+        processes.map(async (processInfo) => {
+          try {
+            return [processInfo.pid, await window.api.codexMonitorDetails(processInfo.pid)];
+          } catch {
+            return [processInfo.pid, {}];
+          }
+        })
+      );
+      const ownershipEntriesPromise = Promise.all(
+        processes.map(async (processInfo) => {
+          try {
+            return [processInfo.pid, await resolveMunderTerminalOwnership(processInfo.pid, { syncNative: false })];
+          } catch {
+            return [
+              processInfo.pid,
+              {
+                target: null,
+                unavailableReason: 'The terminal session could not be resolved. Refresh the Office and try again.',
+              },
+            ];
+          }
+        })
+      );
+      const [detailEntries, ownershipEntries] = await Promise.all([
+        detailEntriesPromise,
+        ownershipEntriesPromise,
+      ]);
+      const detailsByPid = new Map(detailEntries);
+      const ownershipByPid = new Map(ownershipEntries);
+      const state = {
+        projectLabel,
+        projectPath,
+        agents: processes.map((processInfo) =>
+          serializeMunderAgent(
+            processInfo,
+            detailsByPid.get(processInfo.pid),
+            ownershipByPid.get(processInfo.pid)
+          )
+        ),
+        refreshedAt: new Date().toISOString(),
+        error: '',
+      };
+      if (selectedProjectPath === projectPath) {
+        postMunderState(state);
+      }
+      return state;
+    } catch (error) {
+      const state = {
+        projectLabel,
+        projectPath,
+        agents: [],
+        refreshedAt: new Date().toISOString(),
+        error: error && error.message ? error.message : 'Unable to scan active agents.',
+      };
+      if (selectedProjectPath === projectPath) {
+        postMunderState(state);
+      }
+      return state;
+    }
+  })();
+
+  try {
+    return await munderRefreshPromise;
+  } finally {
+    munderRefreshPromise = null;
+    if (activeWorkspaceView === 'office' && selectedProjectPath !== projectPath) {
+      refreshMunderOffice().catch(() => {});
+    }
+  }
+}
+
+function projectPathForMunderTarget(target) {
+  if (target?.kind === 'watchdog' || isWatchdogTerminalKey(target?.key)) {
+    return String(target.key || '').slice(WATCHDOG_TERMINAL_KEY_PREFIX.length) || '.';
+  }
+  return typeof target?.key === 'string' ? target.key : '';
+}
+
+function assertMunderTargetCanSelectProject(projectPath) {
+  if (!isKnownProjectPath(projectPath)) {
+    throw new Error('That terminal is not attached to a Pixelbox project.');
+  }
+  if (isHiddenProjectPath(projectPath)) {
+    throw new Error('That terminal belongs to a hidden project. Restore the project before opening it.');
+  }
+}
+
+async function openMunderAgentTerminal(pid) {
+  const numericPid = Number(pid);
+  const agent = munderLastState?.agents?.find((candidate) => Number(candidate.pid) === numericPid);
+  if (!Number.isInteger(numericPid) || numericPid <= 0 || !agent) {
+    throw new Error('That agent is no longer on the active Office floor. Refresh and try again.');
+  }
+
+  const ownership = await resolveMunderTerminalOwnership(numericPid);
+  const target = ownership.target;
+  if (!target) {
+    throw new Error(ownership.unavailableReason || 'This agent has no Pixelbox-managed terminal.');
+  }
+  const cachedTarget = agent.terminalTarget;
+  if (
+    !cachedTarget ||
+    cachedTarget.owner !== target.owner ||
+    cachedTarget.key !== target.key ||
+    cachedTarget.kind !== target.kind
+  ) {
+    throw new Error('That agent changed terminal sessions. Refresh the Office and try again.');
+  }
+
+  const projectPath = projectPathForMunderTarget(target);
+  assertMunderTargetCanSelectProject(projectPath);
+
+  if (target.kind === 'watchdog') {
+    closePanel();
+    setActiveWorkspaceView('project');
+    if (selectedProjectPath !== projectPath) {
+      await selectProject(projectPath, { recordHistory: true, reuseTerminalSession: true });
+    } else {
+      await loadRunningPageLog(projectPath);
+    }
+    projectsPanelHidden = false;
+    persistProjectsPanelHidden();
+    renderProjectsPanelVisibility();
+    requestAnimationFrame(() => {
+      runningPageLogEl?.scrollIntoView({ block: 'nearest' });
+      runningPageLogInputEl?.focus();
+    });
+    return `Opened ${munderProjectLabel(projectPath)} runtime terminal.`;
+  }
+
+  if (target.owner === 'native' && !nativeTerminalExclusive()) {
+    throw new Error('That native terminal is not available in this Pixelbox window.');
+  }
+  if (target.owner === 'bridge' && nativeTerminalExclusive()) {
+    throw new Error('That browser terminal is not available in this Pixelbox window.');
+  }
+
+  if (selectedProjectPath !== projectPath) {
+    await selectProject(projectPath, { recordHistory: true, reuseTerminalSession: true });
+  }
+  openPanel();
+  return `Opened ${munderProjectLabel(projectPath)} terminal.`;
 }
 
 function estimateTerminalGrid() {
@@ -1135,7 +1532,8 @@ async function removeProject(relPath, label) {
   }
 }
 
-function projectButton(label, relPath, active, clickHandler) {
+function projectButton(label, relPath, active, clickHandler, options = {}) {
+  const { external = false } = options;
   const row = document.createElement('div');
   row.className = 'project-item';
 
@@ -1143,6 +1541,9 @@ function projectButton(label, relPath, active, clickHandler) {
   btn.type = 'button';
   btn.className = `project-btn${active ? ' active' : ''}`;
   btn.textContent = label;
+  if (external) {
+    btn.title = relPath;
+  }
   btn.addEventListener('click', () => clickHandler(relPath));
   row.appendChild(btn);
 
@@ -1175,6 +1576,22 @@ function projectButton(label, relPath, active, clickHandler) {
       const menu = document.createElement('div');
       menu.className = 'project-actions-menu';
       menu.addEventListener('click', (event) => event.stopPropagation());
+
+      if (external) {
+        const forgetBtn = document.createElement('button');
+        forgetBtn.type = 'button';
+        forgetBtn.className = 'project-menu-item';
+        forgetBtn.textContent = 'Remove from list';
+        forgetBtn.title = 'Stops showing this folder in Pixelbox. Files are left untouched.';
+        forgetBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          openProjectActionsPath = null;
+          forgetExternalProject(relPath).catch(() => {});
+        });
+        menu.appendChild(forgetBtn);
+        row.appendChild(menu);
+        return row;
+      }
 
       const hideBtn = document.createElement('button');
       hideBtn.type = 'button';
@@ -1707,7 +2124,10 @@ async function listSelectableProjectPaths() {
     .filter((entry) => entry.type === 'directory')
     .filter((entry) => !hiddenProjects.has(entry.path))
     .map((entry) => entry.path);
-  return ['.', ...projects];
+  const folders = (await loadExternalProjects())
+    .map((entry) => entry.path)
+    .filter((entryPath) => !hiddenProjects.has(entryPath));
+  return ['.', ...projects, ...folders];
 }
 
 function shouldIgnoreProjectSwitchShortcut(direction) {
@@ -1765,17 +2185,24 @@ async function renderProjects() {
       projectButton(project.name, project.path, selectedProjectPath === project.path, selectProject)
     );
   }
+  for (const folder of await loadExternalProjects()) {
+    projectsListEl.appendChild(
+      projectButton(folder.name, folder.path, selectedProjectPath === folder.path, selectProject, { external: true })
+    );
+  }
   renderHiddenProjects(projects);
 
   const activeLabel = selectedProjectPath === '.' ? 'workspace root' : selectedProjectPath;
   activeProjectEl.textContent = `Active: ${activeLabel}`;
-  headlineEl.textContent = selectedProjectPath === '.' ? 'Build Directly From The App' : `Project: ${activeLabel}`;
+  headlineEl.textContent = selectedProjectPath === '.'
+    ? 'Build Directly From The App'
+    : `Project: ${projectDisplayName(selectedProjectPath)}`;
 
   applyLayoutVariant(0);
 }
 
 async function selectProject(relPath, options = {}) {
-  const { recordHistory = true } = options;
+  const { recordHistory = true, reuseTerminalSession = false } = options;
   const projectPath = visibleProjectPath(relPath);
   if (projectPath !== relPath) {
     removeProjectFromSelectionHistory(relPath);
@@ -1788,9 +2215,14 @@ async function selectProject(relPath, options = {}) {
     updateProjectNavigationControls();
   }
   refreshAgentMonitor().catch(() => {});
+  refreshMunderOffice().catch(() => {});
 
   await renderProjects();
-  const bootPromise = bootTerminalForPath(projectPath, true, projectSessionExited.has(projectPath));
+  const bootPromise = bootTerminalForPath(
+    projectPath,
+    !reuseTerminalSession,
+    !reuseTerminalSession && projectSessionExited.has(projectPath)
+  );
   const configPromise = loadRuntimeConfig(projectPath);
   const setupPromise = Promise.all([
     ensurePixelboxProjectContext(projectPath),
@@ -1837,6 +2269,92 @@ async function createProject() {
   newProjectNameEl.value = '';
   newProjectFormEl.hidden = true;
   await selectProject(relPath, { recordHistory: true });
+}
+
+function setOpenFolderStatus(message) {
+  if (!openFolderStatusEl) return;
+  openFolderStatusEl.textContent = message || '';
+  openFolderStatusEl.hidden = !message;
+}
+
+function showOpenFolderForm() {
+  if (!openFolderFormEl) return;
+  newProjectFormEl.hidden = true;
+  openFolderFormEl.hidden = false;
+  setOpenFolderStatus('');
+  requestAnimationFrame(() => openFolderPathEl.focus());
+}
+
+function hideOpenFolderForm() {
+  if (!openFolderFormEl) return;
+  openFolderFormEl.hidden = true;
+  openFolderPathEl.value = '';
+  setOpenFolderStatus('');
+}
+
+async function openFolderPath(targetPath) {
+  const value = String(targetPath || '').trim();
+  if (!value) {
+    setOpenFolderStatus('Enter a folder path.');
+    return;
+  }
+
+  let entry;
+  try {
+    entry = await window.api.addExternalProject(value);
+  } catch (error) {
+    setOpenFolderStatus(error && error.message ? error.message : 'Could not open that folder.');
+    return;
+  }
+
+  await loadExternalProjects();
+  hiddenProjects.delete(entry.path);
+  persistHiddenProjects();
+  hideOpenFolderForm();
+  await selectProject(entry.path, { recordHistory: true });
+}
+
+async function browseForFolder() {
+  setOpenFolderStatus('Waiting for the folder picker…');
+  let result;
+  try {
+    result = await window.api.chooseFolder();
+  } catch (error) {
+    setOpenFolderStatus(error && error.message ? error.message : 'Folder picker failed.');
+    return;
+  }
+  if (result && result.path) {
+    openFolderPathEl.value = result.path;
+    await openFolderPath(result.path);
+    return;
+  }
+  if (result && result.unavailable) {
+    setOpenFolderStatus(`${result.reason || 'No folder picker available.'} Type a path instead.`);
+    return;
+  }
+  setOpenFolderStatus('');
+}
+
+async function forgetExternalProject(projectPath) {
+  try {
+    await window.api.removeExternalProject(projectPath);
+  } catch {}
+  await loadExternalProjects();
+  hiddenProjects.delete(projectPath);
+  persistHiddenProjects();
+  removeProjectFromSelectionHistory(projectPath);
+  projectPreviewState.delete(projectPath);
+  projectRuntimeConfig.delete(projectPath);
+  projectRuntimeStatus.delete(projectPath);
+  projectTerminalOutput.delete(projectPath);
+  projectNativeStartupCommand.delete(projectPath);
+  projectSessionBootstrapped.delete(projectPath);
+  projectSessionExited.delete(projectPath);
+  if (selectedProjectPath === projectPath) {
+    await selectProject('.', { recordHistory: true });
+  } else {
+    await renderProjects();
+  }
 }
 
 window.api.onTerminalData(({ key, data }) => {
@@ -1947,9 +2465,42 @@ if (chatDockBottomEl) {
   chatDockBottomEl.addEventListener('click', () => toggleTerminalDockMode('bottom'));
 }
 newProjectBtn.addEventListener('click', () => {
+  if (openFolderFormEl) hideOpenFolderForm();
   newProjectFormEl.hidden = false;
   requestAnimationFrame(() => newProjectNameEl.focus());
 });
+if (openFolderBtn) {
+  openFolderBtn.addEventListener('click', () => {
+    showOpenFolderForm();
+  });
+}
+if (openFolderBrowseEl) {
+  openFolderBrowseEl.addEventListener('click', () => {
+    browseForFolder().catch(() => {});
+  });
+}
+if (openFolderConfirmEl) {
+  openFolderConfirmEl.addEventListener('click', () => {
+    openFolderPath(openFolderPathEl.value).catch(() => {});
+  });
+}
+if (openFolderCancelEl) {
+  openFolderCancelEl.addEventListener('click', () => {
+    hideOpenFolderForm();
+  });
+}
+if (openFolderPathEl) {
+  openFolderPathEl.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      openFolderPath(openFolderPathEl.value).catch(() => {});
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      hideOpenFolderForm();
+    }
+  });
+}
 newProjectCreateEl.addEventListener('click', () => {
   createProject().catch(() => {});
 });
@@ -2310,10 +2861,68 @@ if (projectsHeaderEl && projectsPanelEl) {
   });
 }
 
+if (projectViewToggleEl) {
+  projectViewToggleEl.addEventListener('click', () => {
+    setActiveWorkspaceView('project');
+  });
+}
+
+if (munderViewToggleEl) {
+  munderViewToggleEl.addEventListener('click', () => {
+    setActiveWorkspaceView('office', { refresh: true });
+  });
+}
+
+window.addEventListener('message', (event) => {
+  if (!munderFrameEl?.contentWindow || event.source !== munderFrameEl.contentWindow) return;
+  if (window.location.origin !== 'null' && event.origin !== window.location.origin) return;
+  const type = event.data?.type;
+  if (type === 'munder:ready') {
+    if (munderLastState) {
+      postMunderState(munderLastState);
+    } else if (activeWorkspaceView === 'office') {
+      refreshMunderOffice({ force: true }).catch(() => {});
+    }
+    return;
+  }
+  if (type === 'munder:refresh') {
+    refreshMunderOffice({ force: true }).catch(() => {});
+    return;
+  }
+  if (type === 'munder:open-terminal') {
+    const pid = Number(event.data?.pid) || 0;
+    openMunderAgentTerminal(pid)
+      .then((message) => postMunderTerminalResult(pid, true, message))
+      .catch((error) => {
+        postMunderTerminalResult(
+          pid,
+          false,
+          error && error.message ? error.message : 'Unable to open that terminal session.'
+        );
+        refreshMunderOffice({ force: true }).catch(() => {});
+      });
+    return;
+  }
+  if (type === 'munder:show-project') {
+    setActiveWorkspaceView('project');
+  }
+});
+
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && hiddenProjectsModalEl && !hiddenProjectsModalEl.hidden) {
     event.preventDefault();
     closeHiddenProjectsModal();
+    return;
+  }
+
+  const isOfficeShortcut =
+    !event.repeat &&
+    event.shiftKey &&
+    (event.metaKey || event.ctrlKey) &&
+    event.key.toLowerCase() === 'o';
+  if (isOfficeShortcut) {
+    event.preventDefault();
+    setActiveWorkspaceView(activeWorkspaceView === 'office' ? 'project' : 'office', { refresh: true });
     return;
   }
 
@@ -2425,6 +3034,10 @@ if (previewForwardEl) {
 }
 
 function reloadActivePreview() {
+  if (activeWorkspaceView === 'office') {
+    refreshMunderOffice({ force: true }).catch(() => {});
+    return;
+  }
   const state = ensurePreviewState(selectedProjectPath);
   const url = currentPreviewUrl(state);
   if (!url) return;
@@ -2519,6 +3132,7 @@ maybeShowSupervisorOnboarding().catch(() => {});
   loadTerminalLayoutState();
   selectedAiCli = loadSelectedAiCli();
   codexDangerouslyBypassPermissions = loadCodexDangerouslyBypassPermissions();
+  activeWorkspaceView = loadWorkspaceView();
   syncTerminalPresentationMode();
   renderTerminalDockMode();
   renderCodexLaunchConfig();
@@ -2530,12 +3144,28 @@ maybeShowSupervisorOnboarding().catch(() => {});
     if (document.hidden) return;
     refreshAgentMonitor().catch(() => {});
   }, 30000);
+  if (munderOfficePollTimer) {
+    clearInterval(munderOfficePollTimer);
+  }
+  munderOfficePollTimer = setInterval(() => {
+    if (document.hidden || activeWorkspaceView !== 'office') return;
+    refreshMunderOffice().catch(() => {});
+  }, 10000);
   await window.api.startRendererWatch();
+  await loadExternalProjects();
   selectedProjectPath = visibleProjectPath(loadLastSelectedProject());
+  // An opened folder can be unregistered (or removed on disk) between runs.
+  if (isExternalProjectPath(selectedProjectPath)
+    && !externalProjects.some((entry) => entry.path === selectedProjectPath)) {
+    selectedProjectPath = '.';
+    persistLastSelectedProject('.');
+  }
   projectSelectionHistory[0] = selectedProjectPath;
   projectSelectionIndex = 0;
+  renderActiveWorkspaceView({ refresh: false });
   await renderProjects();
   await selectProject(selectedProjectPath, { recordHistory: false });
+  refreshMunderOffice().catch(() => {});
   setPreviewQuickActionsDisabled(false);
   renderProjectsPanelVisibility();
   renderProjectsPanelPosition();

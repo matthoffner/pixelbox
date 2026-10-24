@@ -77,12 +77,27 @@ pub fn main(init: std.process.Init) !void {
     const cwd = try std.process.currentPathAlloc(init.io, allocator);
     defer allocator.free(cwd);
 
+    // Pixelbox is often launched from inside a Claude Code session (e.g. via
+    // `zig build run`), which leaves CLAUDE_CODE_* markers in the inherited
+    // process environment. Don't hand those down to the bridge/server.js
+    // child (its own spawned terminals strip them further in
+    // lib/terminalSession.js). Note: we deliberately do NOT unsetenv() the
+    // real process environment here — std.process.spawn's internal environ
+    // scan assumes the environ array's shape is unchanged since process
+    // start, and unsetenv() compacts that array, crashing any later spawn
+    // or even std.debug.print's stderr locking. The embedded native Ghostty
+    // terminal is handled separately via ghostty_surface_config_s.env_vars
+    // in appkit_host.m, which overrides per-surface without touching the
+    // process-wide environment.
     var env = std.process.Environ.Map.init(allocator);
     defer env.deinit();
     {
         const keys = init.environ_map.keys();
         const values = init.environ_map.values();
-        for (keys, values) |key, value| try env.put(key, value);
+        for (keys, values) |key, value| {
+            if (std.mem.startsWith(u8, key, "CLAUDE_CODE_")) continue;
+            try env.put(key, value);
+        }
     }
 
     const port = env.get("PIXELBOX_BACKEND_PORT") orelse default_backend_port;

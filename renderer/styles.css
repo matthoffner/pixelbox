@@ -18,11 +18,15 @@
   --window-wash: rgba(8, 17, 31, 0.82);
   --window-wash-strong: rgba(8, 17, 31, 0.9);
   --glass-highlight: rgba(255, 255, 255, 0.08);
-  --terminal-glass: rgba(8, 14, 24, 0.42);
-  --terminal-glass-strong: rgba(8, 14, 24, 0.2);
+  /* Matches the embedded native terminal's own config
+     (background-opacity = 0.62 in ZeroNativeGhosttyEmbeddedConfigPath) so
+     the DOM chrome around it doesn't look lighter/more see-through than
+     the terminal content itself. */
+  --terminal-glass: rgba(8, 14, 24, 0.62);
+  --terminal-glass-strong: rgba(8, 14, 24, 0.48);
   --projects-glass: rgba(10, 22, 38, 0.5);
   --projects-glass-strong: rgba(10, 22, 38, 0.28);
-  --window-drag-height: 88px;
+  --window-drag-height: var(--titlebar-safe-top);
 }
 
 * {
@@ -70,7 +74,7 @@ body.vibrant-window::after {
   top: 0;
   left: 0;
   right: 0;
-  height: max(var(--window-drag-height), calc(var(--titlebar-safe-top) + 18px));
+  height: var(--window-drag-height);
   z-index: 45;
   -webkit-app-region: drag;
 }
@@ -402,9 +406,22 @@ input {
   background: transparent;
 }
 
-#new-project-form {
+#new-project-form,
+#open-folder-form {
   display: grid;
   gap: 8px;
+}
+
+/* The ID rules above outrank the UA `[hidden]` default, so restore it. */
+#new-project-form[hidden],
+#open-folder-form[hidden] {
+  display: none;
+}
+
+.open-folder-status {
+  font-size: 11px;
+  color: color-mix(in srgb, var(--text), transparent 30%);
+  overflow-wrap: anywhere;
 }
 
 .new-project-form-actions {
@@ -744,6 +761,97 @@ body.vibrant-window #preview-frame {
 #preview-frame {
   border: 0;
   background: #0c1420;
+}
+
+#munder-frame-host {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: none;
+  background: #191512;
+}
+
+#munder-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #191512;
+}
+
+body.workspace-view-office #munder-frame-host {
+  display: block;
+}
+
+body.workspace-view-office #preview-frame-host,
+body.workspace-view-office #preview-empty-state,
+body.workspace-view-office #preview-native-host {
+  display: none !important;
+}
+
+body.workspace-view-office #preview-nav {
+  display: none;
+}
+
+#workspace-view-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 10px;
+  margin-right: 2px;
+  border-right: 1px solid color-mix(in srgb, var(--border), white 8%);
+}
+
+.view-switch-button {
+  min-width: 76px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.view-switch-button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.view-switch-button[aria-pressed='true'] {
+  color: white;
+  border-color: color-mix(in srgb, white 20%, var(--cta));
+  background: color-mix(in srgb, var(--cta), black 4%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.view-switch-mark {
+  width: 19px;
+  height: 19px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.view-switch-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, white 55%, var(--cta));
+  outline-offset: 2px;
 }
 
 #primary-action {
@@ -1425,6 +1533,24 @@ body.terminal-active.terminal-dock-bottom #preview-viewport {
 }
 
 @media (max-width: 720px) {
+  .view-switch-button {
+    min-width: 44px;
+    width: 44px;
+    padding: 0;
+  }
+
+  .view-switch-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   #chat-header {
     column-gap: 6px;
     padding: 0 8px;

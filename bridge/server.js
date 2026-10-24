@@ -7,9 +7,12 @@ const { execFile } = require('node:child_process');
 const { EventEmitter } = require('node:events');
 
 const { createWorkspaceFs } = require('../lib/workspaceFs');
+const { createExternalProjectStore } = require('../lib/externalProjects');
+const { chooseFolder } = require('../lib/folderPicker');
 const { PreviewRuntimeManager } = require('../lib/previewRuntimeManager');
 const { TerminalManager } = require('../lib/terminalManager');
 const { TerminalSession, defaultShell } = require('../lib/terminalSession');
+const { resolveTerminalForPid } = require('../lib/terminalOwnership');
 const codexMonitor = require('../lib/codexMonitor');
 const { buildAiCliDefinitions } = require('../lib/aiCliDefinitions');
 const { DevServerWatchdog } = require('../lib/devServerWatchdog');
@@ -29,7 +32,13 @@ function resolveWorkspaceRoot() {
 
 const workspaceRoot = resolveWorkspaceRoot();
 fs.mkdirSync(workspaceRoot, { recursive: true });
-const workspaceFs = createWorkspaceFs(workspaceRoot);
+const externalProjects = createExternalProjectStore({
+  storePath: path.join(workspaceRoot, '.pixelbox', 'external-projects.json'),
+  workspaceRoot,
+});
+const workspaceFs = createWorkspaceFs(workspaceRoot, {
+  isAllowedExternalPath: (absolutePath) => externalProjects.isAllowedPath(absolutePath),
+});
 
 let rendererWatcher;
 let rendererChangeDebounce;
@@ -162,12 +171,15 @@ function workspaceUrlForPath(relPath) {
   const cleaned = String(relPath || '.')
     .split(path.sep)
     .join('/');
+  // Opened folders live outside the workspace root, so their leading slash has
+  // to survive into the URL or /__workspace__ would re-root them.
+  const absolutePrefix = cleaned.startsWith('/') ? '/' : '';
   const encoded = cleaned
     .split('/')
     .filter(Boolean)
     .map((part) => encodeURIComponent(part))
     .join('/');
-  return `http://${host}:${port}/__workspace__/${encoded}`;
+  return `http://${host}:${port}/__workspace__/${absolutePrefix}${encoded}`;
 }
 
 function resolveWorkspaceFile(relPath) {
@@ -288,6 +300,18 @@ async function handleApi(req, res, pathname) {
   }
   if (pathname === '/api/workspace/resolvePath') {
     return sendJson(res, 200, workspaceFs.resolveWorkspacePath(body.path || '.'));
+  }
+  if (pathname === '/api/workspace/listExternalProjects') {
+    return sendJson(res, 200, externalProjects.list());
+  }
+  if (pathname === '/api/workspace/addExternalProject') {
+    return sendJson(res, 200, await externalProjects.add(body.path));
+  }
+  if (pathname === '/api/workspace/removeExternalProject') {
+    return sendJson(res, 200, await externalProjects.remove(body.path));
+  }
+  if (pathname === '/api/workspace/chooseFolder') {
+    return sendJson(res, 200, await chooseFolder());
   }
   if (pathname === '/api/fs/listDir') {
     return sendJson(res, 200, await workspaceFs.listDir(body.path || '.'));
@@ -436,6 +460,13 @@ async function handleApi(req, res, pathname) {
   if (pathname === '/api/terminal/kill') {
     terminalManager.kill(body.key);
     return sendJson(res, 200, { ok: true });
+  }
+  if (pathname === '/api/terminal/resolveForPid') {
+    const numericPid = Number(body.pid);
+    if (!Number.isSafeInteger(numericPid) || numericPid <= 0) {
+      return sendJson(res, 400, { error: 'A valid pid is required.' });
+    }
+    return sendJson(res, 200, resolveTerminalForPid(numericPid, terminalManager.listSessions()));
   }
   if (pathname === '/api/renderer/watchStart') {
     watchRendererFiles();

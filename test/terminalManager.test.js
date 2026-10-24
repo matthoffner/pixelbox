@@ -3,12 +3,14 @@ const assert = require('node:assert/strict');
 
 const { TerminalManager } = require('../lib/terminalManager');
 
-function createFakeSession(label) {
+function createFakeSession(label, identity = {}) {
   let dataHandler = () => {};
   let exitHandler = () => {};
 
   return {
     label,
+    rootPid: identity.rootPid ?? null,
+    tty: identity.tty ?? null,
     hasPseudoTTY: label === 'new',
     killed: false,
     onData(handler) {
@@ -121,4 +123,36 @@ test('start reuses an existing session for the same project without affecting ot
 
   sessions[0].emitExit();
   assert.deepEqual(exits, [{ key: 'project-a' }]);
+});
+
+test('listSessions returns safe identity snapshots without exposing sessions', () => {
+  const sessions = [];
+  const manager = new TerminalManager({
+    createSession(options) {
+      const session = createFakeSession(options.label, options.identity);
+      sessions.push(session);
+      return session;
+    },
+    sendData() {},
+    sendExit() {},
+  });
+
+  manager.start('project-a', {
+    label: 'project',
+    identity: { rootPid: 1234, tty: '/dev/ttys007' },
+  });
+  manager.start('watchdog:project-a', {
+    label: 'watchdog',
+    identity: { rootPid: 'invalid', tty: '??' },
+  });
+
+  const inventory = manager.listSessions();
+  assert.deepEqual(inventory, [
+    { key: 'project-a', rootPid: 1234, tty: 'ttys007' },
+    { key: 'watchdog:project-a', rootPid: null, tty: null },
+  ]);
+  assert.notEqual(inventory[0], sessions[0]);
+
+  inventory[0].rootPid = 9999;
+  assert.equal(manager.listSessions()[0].rootPid, 1234);
 });

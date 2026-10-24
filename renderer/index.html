@@ -18,6 +18,7 @@
           <strong>Projects</strong>
           <div class="projects-actions">
             <button id="new-project" type="button">New Project</button>
+            <button id="open-folder" type="button">Open Folder</button>
             <button id="hidden-projects-toggle" type="button" aria-haspopup="dialog" hidden>Hidden</button>
             <button id="projects-minimize" class="icon-button panel-icon-button" type="button" aria-label="Hide menu">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -32,6 +33,15 @@
             <button id="new-project-create" type="button">Create</button>
             <button id="new-project-cancel" type="button">Cancel</button>
           </div>
+        </div>
+        <div id="open-folder-form" hidden>
+          <input id="open-folder-path" type="text" placeholder="/path/to/folder" spellcheck="false" />
+          <div class="new-project-form-actions">
+            <button id="open-folder-browse" type="button">Browse…</button>
+            <button id="open-folder-confirm" type="button">Open</button>
+            <button id="open-folder-cancel" type="button">Cancel</button>
+          </div>
+          <div id="open-folder-status" class="open-folder-status" hidden></div>
         </div>
         <div id="active-project">Active: workspace root</div>
         <div id="projects-list"></div>
@@ -155,6 +165,14 @@
           <div id="preview-native-host" hidden>
             <img id="preview-native-image" alt="Native app preview" />
           </div>
+          <div id="munder-frame-host" aria-live="polite">
+            <iframe
+              id="munder-frame"
+              src="./munder-difflin/index.html"
+              title="Munder Difflin office"
+              referrerpolicy="no-referrer"
+            ></iframe>
+          </div>
         </div>
       </section>
 
@@ -162,6 +180,30 @@
     </main>
 
     <div id="control-rail" aria-label="Workspace controls">
+      <div id="workspace-view-switcher" role="group" aria-label="Workspace view">
+        <button
+          id="project-view-toggle"
+          class="view-switch-button"
+          type="button"
+          aria-label="Show project view"
+          aria-pressed="true"
+          title="Project view"
+        >
+          <span class="view-switch-mark" aria-hidden="true">P</span>
+          <span class="view-switch-label">Project</span>
+        </button>
+        <button
+          id="munder-view-toggle"
+          class="view-switch-button"
+          type="button"
+          aria-label="Show Munder Difflin office"
+          aria-pressed="false"
+          title="Munder Difflin office (⌘⇧O)"
+        >
+          <span class="view-switch-mark" aria-hidden="true">M</span>
+          <span class="view-switch-label">Office</span>
+        </button>
+      </div>
       <div id="preview-nav" aria-label="Preview navigation">
         <button id="preview-back" class="icon-button rail-button" type="button" aria-label="Go back" title="Back">
           <svg viewBox="0 0 24 24" aria-hidden="true">

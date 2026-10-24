@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Munder Difflin · Pixelbox Office</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="office-app">
+      <header class="office-topbar">
+        <div class="brand-lockup">
+          <span class="paper-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+          <div>
+            <p class="brand-kicker">Pixelbox Office</p>
+            <h1>Munder Difflin</h1>
+          </div>
+        </div>
+        <div class="project-chip" aria-label="Selected project">
+          <span class="project-chip-light" aria-hidden="true"></span>
+          <span id="project-label">Workspace root</span>
+        </div>
+      </header>
+
+      <main class="office-workspace">
+        <section class="floor-panel" aria-labelledby="floor-heading">
+          <header class="floor-panel-header">
+            <div>
+              <p class="section-kicker">Live floor</p>
+              <h2 id="floor-heading">Agent bullpen</h2>
+            </div>
+            <div class="floor-status" role="status" aria-live="polite">
+              <span class="live-light" aria-hidden="true"></span>
+              <span id="floor-status-text">Connecting to Pixelbox…</span>
+            </div>
+          </header>
+
+          <div class="office-floor">
+            <div class="floor-window floor-window-left" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div class="floor-window floor-window-right" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div class="manager-room" aria-hidden="true">
+              <span class="room-sign">LEAD</span>
+              <span class="manager-desk"><i></i></span>
+              <span class="office-plant"><i></i><i></i><i></i></span>
+            </div>
+            <div id="desk-grid" class="desk-grid" role="group" aria-label="Agent desks"></div>
+            <div class="common-room" aria-hidden="true">
+              <span class="coffee-counter"><i></i><i></i></span>
+              <span class="common-label">BREAK ROOM</span>
+            </div>
+          </div>
+        </section>
+
+        <aside class="activity-panel" aria-labelledby="activity-heading">
+          <header class="activity-header">
+            <div>
+              <p class="section-kicker">Command center</p>
+              <h2 id="activity-heading">Activity</h2>
+            </div>
+            <button id="refresh-office" class="icon-text-button" type="button" aria-label="Refresh office data">
+              <span aria-hidden="true">↻</span>
+              Refresh
+            </button>
+          </header>
+
+          <div class="office-metrics" aria-label="Office summary">
+            <div><strong id="agent-count">0</strong><span>Agents</span></div>
+            <div><strong id="engine-count">0</strong><span>Engines</span></div>
+            <div><strong id="cpu-total">0.0%</strong><span>CPU</span></div>
+          </div>
+
+          <div id="office-message" class="office-message" role="status" aria-live="polite">
+            <span class="message-loader" aria-hidden="true"></span>
+            <span>Scanning the selected project for active agents…</span>
+          </div>
+
+          <div id="activity-list" class="activity-list" role="group" aria-label="Active agents"></div>
+
+          <section id="agent-detail" class="agent-detail" aria-labelledby="agent-detail-title" hidden>
+            <div class="detail-heading">
+              <div>
+                <p class="section-kicker">Selected desk</p>
+                <h3 id="agent-detail-title">Agent</h3>
+              </div>
+              <span id="agent-detail-state" class="detail-state">Working</span>
+            </div>
+            <dl>
+              <div><dt>Engine</dt><dd id="agent-detail-engine">—</dd></div>
+              <div><dt>Process</dt><dd id="agent-detail-process">—</dd></div>
+              <div><dt>Elapsed</dt><dd id="agent-detail-elapsed">—</dd></div>
+              <div><dt>Directory</dt><dd id="agent-detail-cwd">—</dd></div>
+            </dl>
+            <p id="agent-detail-summary" class="detail-summary"></p>
+          </section>
+
+          <div class="activity-footer">
+            <button id="open-terminal" class="terminal-button" type="button">
+              <span aria-hidden="true">›_</span>
+              <span id="open-terminal-label">Open Pixelbox terminal</span>
+            </button>
+            <p id="terminal-status" class="terminal-status" role="status" aria-live="polite"></p>
+            <p id="last-refreshed">Waiting for first scan</p>
+            <a href="https://github.com/chaitanyagiri/munder-difflin" target="_blank" rel="noreferrer">
+              Inspired by Munder Difflin ↗
+            </a>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
